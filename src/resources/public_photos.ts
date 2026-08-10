@@ -6,13 +6,16 @@ import { BaseResource } from './base.js';
 import type { ListParams, Page } from '../pagination.js';
 import type { PublicPhoto, PublicPhotoCreate, PublicPhotoUpdate } from '../types/index.js';
 
-export interface PublicPhotosListParams extends ListParams {}
+export type PublicPhotosListParams = ListParams;
 
 export class PublicPhotosResource extends BaseResource<PublicPhoto> {
   constructor(http: HttpClient) {
-    super(http, { resourcePath: 'public_photos', singleKey: undefined, listKey: 'public_photos', createType: 'raw', paginated: true });
+    super(http, { resourcePath: 'public_photos', singleKey: 'public_photo', listKey: 'public_photos', createType: 'raw', paginated: true });
   }
-  async get(id: number): Promise<PublicPhoto> {
+  async get(id: number, opts?: { download?: boolean }): Promise<PublicPhoto | Blob> {
+    if (opts?.download) {
+      return this.http.request<Blob>({ method: 'GET', path: `/public_photos/${id}`, query: { download: true } });
+    }
     return this.getOne<PublicPhoto>(id);
   }
   list(params?: PublicPhotosListParams): AsyncIterable<PublicPhoto> {

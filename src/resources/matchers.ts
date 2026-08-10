@@ -7,11 +7,11 @@ import type { ListParams, Page } from '../pagination.js';
 import type { Matcher, MatcherUpdate } from '../types/index.js';
 
 export interface MatchersListParams extends ListParams {
-  integration_id: number;
-  matched: boolean;
-  sync_id: number;
-  identifier: string;
-  company_id: number;
+  integration_id?: number;
+  matched?: boolean;
+  sync_id?: number;
+  identifier?: string;
+  company_id?: number;
 }
 
 export class MatchersResource extends BaseResource<Matcher> {

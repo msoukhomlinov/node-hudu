@@ -7,16 +7,16 @@ import type { ListParams, Page } from '../pagination.js';
 import type { Company, CompanyCreate, CompanyUpdate } from '../types/index.js';
 
 export interface CompaniesListParams extends ListParams {
-  name: string;
-  phone_number: string;
-  website: string;
-  city: string;
-  id_number: string;
-  state: string;
-  slug: string;
-  search: string;
-  id_in_integration: string;
-  updated_at: string;
+  name?: string;
+  phone_number?: string;
+  website?: string;
+  city?: string;
+  id_number?: string;
+  state?: string;
+  slug?: string;
+  search?: string;
+  id_in_integration?: string;
+  updated_at?: string;
 }
 
 export class CompaniesResource extends BaseResource<Company> {
@@ -50,6 +50,13 @@ export class CompaniesResource extends BaseResource<Company> {
   }
   async unarchive(id: number): Promise<void> {
     return this.setArchived(id, false);
+  }
+
+  /**
+   * GET /companies/jump — follows the 302 redirect and returns the final location URL.
+   */
+  async jump(params: { integration_slug: string; integration_id?: string; integration_identifier?: string }): Promise<string> {
+    return this.followRedirect('/companies/jump', params);
   }
 
   listPages(params?: CompaniesListParams): AsyncIterable<Page<Company>> {

@@ -7,10 +7,10 @@ import type { ListParams, Page } from '../pagination.js';
 import type { AssetLayout, AssetLayoutCreate, AssetLayoutUpdate } from '../types/index.js';
 
 export interface AssetLayoutsListParams extends ListParams {
-  name: string;
-  slug: string;
-  active: boolean;
-  updated_at: string;
+  name?: string;
+  slug?: string;
+  active?: boolean;
+  updated_at?: string;
 }
 
 export class AssetLayoutsResource extends BaseResource<AssetLayout> {

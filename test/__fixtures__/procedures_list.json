@@ -1,0 +1,27 @@
+{
+  "procedures": [
+    {
+      "id": 5,
+      "slug": "server-setup",
+      "name": "Server Setup",
+      "description": "Provision a new server",
+      "total": 4,
+      "completed": 2,
+      "url": "/procedures/server-setup",
+      "object_type": "Process",
+      "company_id": 1,
+      "company_name": "Acme Corp",
+      "completion_percentage": "50.0%",
+      "created_at": "2024-01-01T00:00:00.000Z",
+      "updated_at": "2024-01-02T00:00:00.000Z",
+      "parent_procedure": null,
+      "run": false,
+      "parent_process_id": 0,
+      "process_type": "company",
+      "status": "In Progress",
+      "asset": null,
+      "share_url": "",
+      "procedure_tasks_attributes": []
+    }
+  ]
+}

@@ -7,12 +7,12 @@ import type { ListParams, Page } from '../pagination.js';
 import type { AssetPassword, AssetPasswordCreate, AssetPasswordUpdate } from '../types/index.js';
 
 export interface AssetPasswordsListParams extends ListParams {
-  name: string;
-  company_id: number;
-  archived: boolean;
-  slug: string;
-  search: string;
-  updated_at: string;
+  name?: string;
+  company_id?: number;
+  archived?: boolean;
+  slug?: string;
+  search?: string;
+  updated_at?: string;
 }
 
 export class AssetPasswordsResource extends BaseResource<AssetPassword> {

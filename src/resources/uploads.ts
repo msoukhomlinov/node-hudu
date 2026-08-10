@@ -6,7 +6,7 @@ import { BaseResource } from './base.js';
 import type { ListParams, Page } from '../pagination.js';
 import type { Upload } from '../types/index.js';
 
-export interface UploadsListParams extends ListParams {}
+export type UploadsListParams = ListParams;
 
 export class UploadsResource extends BaseResource<Upload> {
   constructor(http: HttpClient) {

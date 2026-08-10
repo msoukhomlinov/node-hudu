@@ -7,10 +7,10 @@ import type { ListParams, Page } from '../pagination.js';
 import type { Folder, FolderCreate, FolderUpdate } from '../types/index.js';
 
 export interface FoldersListParams extends ListParams {
-  name: string;
-  company_id: number;
-  in_company: boolean;
-  folder_type: string;
+  name?: string;
+  company_id?: number;
+  in_company?: boolean;
+  folder_type?: string;
 }
 
 export class FoldersResource extends BaseResource<Folder> {

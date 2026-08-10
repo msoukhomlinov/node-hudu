@@ -7,11 +7,11 @@ import type { ListParams, Page } from '../pagination.js';
 import type { Expiration, ExpirationUpdate } from '../types/index.js';
 
 export interface ExpirationsListParams extends ListParams {
-  company_id: number;
-  expiration_type: string;
-  resource_id: number;
-  resource_type: string;
-  archived: boolean;
+  company_id?: number;
+  expiration_type?: string;
+  resource_id?: number;
+  resource_type?: string;
+  archived?: boolean;
 }
 
 export class ExpirationsResource extends BaseResource<Expiration> {

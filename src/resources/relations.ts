@@ -7,19 +7,19 @@ import type { ListParams, Page } from '../pagination.js';
 import type { Relation, RelationCreate } from '../types/index.js';
 
 export interface RelationsListParams extends ListParams {
-  fromable_type: string;
-  fromable_id: number;
-  toable_type: string;
-  toable_id: number;
-  is_inverse: boolean;
-  description: string;
-  created_at: string;
-  updated_at: string;
+  fromable_type?: string;
+  fromable_id?: number;
+  toable_type?: string;
+  toable_id?: number;
+  is_inverse?: boolean;
+  description?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export class RelationsResource extends BaseResource<Relation> {
   constructor(http: HttpClient) {
-    super(http, { resourcePath: 'relations', singleKey: undefined, listKey: 'relations', createType: 'wrapped', paginated: true });
+    super(http, { resourcePath: 'relations', singleKey: 'relation', listKey: 'relations', createType: 'wrapped', paginated: true });
   }
 
   /** Stream relations across pages. */

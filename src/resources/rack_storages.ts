@@ -7,13 +7,13 @@ import type { ListParams, Page } from '../pagination.js';
 import type { RackStorage, RackStorageCreate, RackStorageUpdate } from '../types/index.js';
 
 export interface RackStoragesListParams extends ListParams {
-  company_id: number;
-  location_id: number;
-  height: number;
-  min_width: number;
-  max_width: number;
-  created_at: string;
-  updated_at: string;
+  company_id?: number;
+  location_id?: number;
+  height?: number;
+  min_width?: number;
+  max_width?: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export class RackStoragesResource extends BaseResource<RackStorage> {

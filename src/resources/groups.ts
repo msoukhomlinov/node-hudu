@@ -7,9 +7,9 @@ import type { ListParams, Page } from '../pagination.js';
 import type { Group } from '../types/index.js';
 
 export interface GroupsListParams extends ListParams {
-  name: string;
-  default: boolean;
-  search: string;
+  name?: string;
+  default?: boolean;
+  search?: string;
 }
 
 export class GroupsResource extends BaseResource<Group> {

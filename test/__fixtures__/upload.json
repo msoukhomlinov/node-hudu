@@ -1,0 +1,12 @@
+{
+  "id": 3,
+  "url": "/uploads/3",
+  "name": "manual.txt",
+  "ext": "txt",
+  "mime": "text/plain",
+  "size": "1024",
+  "created_date": "2024-01-01",
+  "archived_at": null,
+  "uploadable_id": 5,
+  "uploadable_type": "Article"
+}

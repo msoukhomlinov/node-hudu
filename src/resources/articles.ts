@@ -7,13 +7,13 @@ import type { ListParams, Page } from '../pagination.js';
 import type { Article, ArticleCreate, ArticleUpdate } from '../types/index.js';
 
 export interface ArticlesListParams extends ListParams {
-  name: string;
-  company_id: number;
-  draft: boolean;
-  enable_sharing: boolean;
-  slug: string;
-  search: string;
-  updated_at: string;
+  name?: string;
+  company_id?: number;
+  draft?: boolean;
+  enable_sharing?: boolean;
+  slug?: string;
+  search?: string;
+  updated_at?: string;
 }
 
 export class ArticlesResource extends BaseResource<Article> {

@@ -7,8 +7,8 @@ import type { ListParams, Page } from '../pagination.js';
 import type { List, ListCreate, ListUpdate } from '../types/index.js';
 
 export interface ListsListParams extends ListParams {
-  query: string;
-  name: string;
+  query?: string;
+  name?: string;
 }
 
 export class ListsResource extends BaseResource<List> {

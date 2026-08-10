@@ -7,14 +7,14 @@ import type { ListParams, Page } from '../pagination.js';
 import type { IpAddress, IpAddressCreate, IpAddressUpdate } from '../types/index.js';
 
 export interface IpAddressesListParams extends ListParams {
-  network_id: number;
-  address: string;
-  status: string;
-  fqdn: string;
-  asset_id: number;
-  company_id: number;
-  created_at: string;
-  updated_at: string;
+  network_id?: number;
+  address?: string;
+  status?: string;
+  fqdn?: string;
+  asset_id?: number;
+  company_id?: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export class IpAddressesResource extends BaseResource<IpAddress> {

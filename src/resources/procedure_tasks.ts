@@ -7,9 +7,9 @@ import type { ListParams, Page } from '../pagination.js';
 import type { ProcedureTask, ProcedureTaskCreate, ProcedureTaskUpdate } from '../types/index.js';
 
 export interface ProcedureTasksListParams extends ListParams {
-  procedure_id: number;
-  name: string;
-  company_id: number;
+  procedure_id?: number;
+  name?: string;
+  company_id?: number;
 }
 
 export class ProcedureTasksResource extends BaseResource<ProcedureTask> {

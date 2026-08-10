@@ -17,11 +17,18 @@ export interface ListParams {
 
 type PageFetcher<T> = (page: number, pageSize: number) => Promise<Page<T>>;
 
+export interface PaginateOptions {
+  /** Starting page (default 1). */
+  page?: number;
+  /** Page size (default 25). */
+  page_size?: number;
+}
+
 /** Yield pages one at a time until hasMore is false or a page is short. */
-export async function* paginate<T>(fetchPage: PageFetcher<T>): AsyncGenerator<Page<T>> {
-  let page = 1;
-  const pageSize = 25;
-  // eslint-disable-next-line no-constant-condition
+export async function* paginate<T>(fetchPage: PageFetcher<T>, opts: PaginateOptions = {}): AsyncGenerator<Page<T>> {
+  let page = opts.page ?? 1;
+  const pageSize = opts.page_size ?? 25;
+   
   while (true) {
     const p = await fetchPage(page, pageSize);
     yield p;
@@ -31,16 +38,16 @@ export async function* paginate<T>(fetchPage: PageFetcher<T>): AsyncGenerator<Pa
 }
 
 /** Yield items one at a time across pages. */
-export async function* paginateItems<T>(fetchPage: PageFetcher<T>): AsyncGenerator<T> {
-  for await (const page of paginate(fetchPage)) {
+export async function* paginateItems<T>(fetchPage: PageFetcher<T>, opts: PaginateOptions = {}): AsyncGenerator<T> {
+  for await (const page of paginate(fetchPage, opts)) {
     for (const item of page.items) yield item;
   }
 }
 
 /** Collect every item across all pages into an array. */
-export async function collectAll<T>(fetchPage: PageFetcher<T>): Promise<T[]> {
+export async function collectAll<T>(fetchPage: PageFetcher<T>, opts: PaginateOptions = {}): Promise<T[]> {
   const all: T[] = [];
-  for await (const page of paginate(fetchPage)) {
+  for await (const page of paginate(fetchPage, opts)) {
     all.push(...page.items);
     if (!page.hasMore || page.items.length < page.page_size) break;
   }

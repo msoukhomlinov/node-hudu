@@ -6,7 +6,7 @@ import { BaseResource } from './base.js';
 import type { ListParams, Page } from '../pagination.js';
 import type { Export } from '../types/index.js';
 
-export interface ExportsListParams extends ListParams {}
+export type ExportsListParams = ListParams;
 
 export class ExportsResource extends BaseResource<Export> {
   constructor(http: HttpClient) {

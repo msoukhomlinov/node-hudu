@@ -7,11 +7,11 @@ import type { ListParams, Page } from '../pagination.js';
 import type { LabelType, LabelTypeCreate, LabelTypeUpdate } from '../types/index.js';
 
 export interface LabelTypesListParams extends ListParams {
-  name: string;
-  color: string;
-  slug: string;
-  created_at: string;
-  updated_at: string;
+  name?: string;
+  color?: string;
+  slug?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export class LabelTypesResource extends BaseResource<LabelType> {

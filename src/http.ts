@@ -28,12 +28,8 @@ export function unwrapByKey<T>(data: unknown, key?: string): T {
 
 /** For list responses: expects data[key] to be an array; otherwise passes body through as T[]. */
 export function unwrapList<T>(data: unknown, key?: string): T[] {
-  if (isRecord(data) && key && Array.isArray(data[key])) return data[key] as T[];
   if (Array.isArray(data)) return data as T[];
-  if (isRecord(data)) {
-    const arr = Object.values(data).find((v) => Array.isArray(v));
-    if (arr) return arr as T[];
-  }
+  if (isRecord(data) && key && Array.isArray(data[key])) return data[key] as T[];
   return [];
 }
 
@@ -78,7 +74,7 @@ export class HttpClient {
     const maxAttempts = retries && isIdempotent ? this.config.maxRetries + 1 : 1;
 
     let attempt = 0;
-    // eslint-disable-next-line no-constant-condition
+     
     while (true) {
       await this.consumeToken();
       const init: RequestInit = {

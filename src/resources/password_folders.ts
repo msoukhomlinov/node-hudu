@@ -7,9 +7,9 @@ import type { ListParams, Page } from '../pagination.js';
 import type { PasswordFolder, PasswordFolderCreate, PasswordFolderUpdate } from '../types/index.js';
 
 export interface PasswordFoldersListParams extends ListParams {
-  name: string;
-  company_id: number;
-  search: string;
+  name?: string;
+  company_id?: number;
+  search?: string;
 }
 
 export class PasswordFoldersResource extends BaseResource<PasswordFolder> {

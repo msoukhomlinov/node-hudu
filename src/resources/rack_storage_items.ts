@@ -7,14 +7,14 @@ import type { ListParams, Page } from '../pagination.js';
 import type { RackStorageItem, RackStorageItemCreate, RackStorageItemUpdate } from '../types/index.js';
 
 export interface RackStorageItemsListParams extends ListParams {
-  rack_storage_role_id: number;
-  asset_id: number;
-  start_unit: number;
-  end_unit: number;
-  status: number;
-  side: string;
-  created_at: string;
-  updated_at: string;
+  rack_storage_role_id?: number;
+  asset_id?: number;
+  start_unit?: number;
+  end_unit?: number;
+  status?: number;
+  side?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export class RackStorageItemsResource extends BaseResource<RackStorageItem> {

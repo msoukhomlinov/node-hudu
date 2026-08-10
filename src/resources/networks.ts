@@ -7,15 +7,15 @@ import type { ListParams, Page } from '../pagination.js';
 import type { Network, NetworkCreate, NetworkUpdate } from '../types/index.js';
 
 export interface NetworksListParams extends ListParams {
-  company_id: number;
-  slug: string;
-  name: string;
-  network_type: number;
-  address: string;
-  location_id: number;
-  created_at: string;
-  updated_at: string;
-  archived: boolean;
+  company_id?: number;
+  slug?: string;
+  name?: string;
+  network_type?: number;
+  address?: string;
+  location_id?: number;
+  created_at?: string;
+  updated_at?: string;
+  archived?: boolean;
 }
 
 export class NetworksResource extends BaseResource<Network> {

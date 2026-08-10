@@ -7,13 +7,13 @@ import type { ListParams, Page } from '../pagination.js';
 import type { Vlan, VlanCreate, VlanUpdate } from '../types/index.js';
 
 export interface VlansListParams extends ListParams {
-  company_id: number;
-  vlan_zone_id: number;
-  name: string;
-  vlan_id: number;
-  created_at: string;
-  updated_at: string;
-  archived: boolean;
+  company_id?: number;
+  vlan_zone_id?: number;
+  name?: string;
+  vlan_id?: number;
+  created_at?: string;
+  updated_at?: string;
+  archived?: boolean;
 }
 
 export class VlansResource extends BaseResource<Vlan> {

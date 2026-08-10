@@ -22,11 +22,11 @@
     "resolveJsonModule": true
   },
   "include": [
-    "src/**/*.ts",
-    "test/**/*.ts"
+    "src/**/*.ts"
   ],
   "exclude": [
     "dist",
-    "node_modules"
+    "node_modules",
+    "test"
   ]
 }

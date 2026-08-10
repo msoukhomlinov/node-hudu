@@ -21,4 +21,14 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'error',
     },
   },
+  {
+    files: ['test/**/*.ts'],
+    rules: {
+      // Tests frequently assert side effects via `await expect(...).rejects`; sync
+      // variables bound for clarity are acceptable.
+      '@typescript-eslint/no-unused-vars': 'off',
+      // Test data-driven resource accessors use `as any` to index resource fields.
+      '@typescript-eslint/no-explicit-any': 'off',
+    },
+  },
 );

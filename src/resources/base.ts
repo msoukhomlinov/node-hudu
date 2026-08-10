@@ -65,19 +65,26 @@ export abstract class BaseResource<T = unknown> {
     };
   }
 
+  /** Extract pagination opts from user params (page, page_size). */
+  private paginationOpts(params: ListParams): { page?: number; page_size?: number } {
+    const page = typeof params.page === 'number' ? params.page : undefined;
+    const page_size = typeof params.page_size === 'number' ? params.page_size : undefined;
+    return { page, page_size: page_size ?? 25 };
+  }
+
   /** Async iterator of items (used by subclass 'list'). */
   protected items(params: ListParams, extraQuery?: Record<string, unknown>): AsyncIterable<T> {
-    return paginateItems<T>(this.pageFetcher(params, extraQuery));
+    return paginateItems<T>(this.pageFetcher(params, extraQuery), this.paginationOpts(params));
   }
 
   /** Collect everything (used by subclass 'listAll'). */
   protected async all(params: ListParams, extraQuery?: Record<string, unknown>): Promise<T[]> {
-    return collectAll<T>(this.pageFetcher(params, extraQuery));
+    return collectAll<T>(this.pageFetcher(params, extraQuery), this.paginationOpts(params));
   }
 
   /** Async iterator of pages (used by subclass 'listPages'). */
   protected pageIter(params: ListParams, extraQuery?: Record<string, unknown>): AsyncIterable<Page<T>> {
-    return paginate<T>(this.pageFetcher(params, extraQuery));
+    return paginate<T>(this.pageFetcher(params, extraQuery), this.paginationOpts(params));
   }
 
   /**
@@ -126,7 +133,7 @@ export abstract class BaseResource<T = unknown> {
     return this.createType === 'wrapped' ? this.unwrapSingle<U>(body) : (body as U);
   }
 
-  /** PUT update, envelope-normalised. */
+  /** PUT update, envelope-normalised. PUT responses are ALWAYS wrapped by singleKey (when set). */
   protected async updateOne<U = T>(id: number | string, data: unknown, query?: Record<string, unknown>): Promise<U> {
     const body = await this.http.request<unknown>({
       method: 'PUT',
@@ -134,7 +141,8 @@ export abstract class BaseResource<T = unknown> {
       body: data,
       query,
     });
-    return this.createType === 'wrapped' ? this.unwrapSingle<U>(body) : (body as U);
+    // Always unwrap by singleKey on PUT; when singleKey is undefined this is a pass-through.
+    return this.unwrapSingle<U>(body);
   }
 
   /** DELETE returning void. */

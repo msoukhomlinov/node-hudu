@@ -7,11 +7,11 @@ import type { ListParams, Page } from '../pagination.js';
 import type { FlagType, FlagTypeCreate, FlagTypeUpdate } from '../types/index.js';
 
 export interface FlagTypesListParams extends ListParams {
-  name: string;
-  color: string;
-  slug: string;
-  created_at: string;
-  updated_at: string;
+  name?: string;
+  color?: string;
+  slug?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export class FlagTypesResource extends BaseResource<FlagType> {

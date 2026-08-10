@@ -7,13 +7,13 @@ import type { ListParams, Page } from '../pagination.js';
 import type { User } from '../types/index.js';
 
 export interface UsersListParams extends ListParams {
-  first_name: string;
-  last_name: string;
-  search: string;
-  portal_member_company_id: number;
-  archived: boolean;
-  email: string;
-  security_level: string;
+  first_name?: string;
+  last_name?: string;
+  search?: string;
+  portal_member_company_id?: number;
+  archived?: boolean;
+  email?: string;
+  security_level?: string;
 }
 
 export class UsersResource extends BaseResource<User> {

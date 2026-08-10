@@ -1,0 +1,17 @@
+{
+  "assets": [
+    {
+      "id": 10,
+      "company_id": 1,
+      "slug": "laptop-001",
+      "name": "Laptop-001",
+      "primary_serial": "SN-123",
+      "asset_layout_id": 7,
+      "archived": false,
+      "created_at": "2024-01-01T00:00:00.000Z",
+      "updated_at": "2024-01-02T00:00:00.000Z",
+      "fields": [],
+      "custom_fields": []
+    }
+  ]
+}

@@ -7,10 +7,10 @@ import type { ListParams, Page } from '../pagination.js';
 import type { Website, WebsiteCreate, WebsiteUpdate } from '../types/index.js';
 
 export interface WebsitesListParams extends ListParams {
-  name: string;
-  slug: string;
-  search: string;
-  updated_at: string;
+  name?: string;
+  slug?: string;
+  search?: string;
+  updated_at?: string;
 }
 
 export class WebsitesResource extends BaseResource<Website> {
