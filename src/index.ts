@@ -21,6 +21,8 @@ export {
 export type { Page, ListParams } from './pagination.js';
 export { paginate, paginateItems, collectAll, toArray } from './pagination.js';
 
+export { isRecord } from './utils.js';
+
 export type { Logger } from './logger.js';
 export { NOOP_LOGGER } from './logger.js';
 

@@ -28,7 +28,7 @@ export class ExpirationsResource extends BaseResource<Expiration> {
     return this.all(params ?? {});
   }
   async update(id: number, data: ExpirationUpdate): Promise<Expiration> {
-    return this.updateOne<Expiration>(id, data);
+    return this.updateOne<Expiration>(id, { expiration: data });
   }
   async delete(id: number): Promise<void> {
     return this.deleteOne(id);

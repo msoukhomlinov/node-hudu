@@ -273,22 +273,22 @@ class AssetLayoutsResource {
   update(id: number, data: AssetLayoutUpdate): Promise<AssetLayout>;
   // no delete — the API has no DELETE for asset layouts
 }
-// AssetLayoutsListParams = ListParams & { name: string; slug: string; active: boolean; updated_at: string }
+// AssetLayoutsListParams = ListParams & { name?: string; slug?: string; active?: boolean; updated_at?: string }
 ```
 
 ### AssetPasswordsResource
 
 ```ts
 class AssetPasswordsResource {
-  get(id?: number): Promise<AssetPassword>;
+  get(id: number): Promise<AssetPassword>;
   list(params?: AssetPasswordsListParams): AsyncIterable<AssetPassword>;
   listPages(params?: AssetPasswordsListParams): AsyncIterable<Page<AssetPassword>>;
   listAll(params?: AssetPasswordsListParams): Promise<AssetPassword[]>;
   create(data: AssetPasswordCreate): Promise<AssetPassword>;  // wrapped
   update(id?: number, data: AssetPasswordUpdate): Promise<AssetPassword>;
-  delete(id?: number): Promise<void>;
-  archive(id?: number): Promise<void>;
-  unarchive(id?: number): Promise<void>;
+  delete(id: number): Promise<void>;
+  archive(id: number): Promise<void>;
+  unarchive(id: number): Promise<void>;
 }
 // AssetPasswordsListParams = ListParams & {
 //   name?: string; company_id?: number; archived?: boolean; slug?: string; search?: string; updated_at?: string
@@ -312,7 +312,10 @@ class AssetsResource {
   archive(companyId: number, id: number): Promise<void>;
   unarchive(companyId: number, id: number): Promise<void>;
   moveLayout(companyId: number, id: number, data: { asset_layout_id: number }): Promise<Asset>;
-  listAllAcrossCompanies(params?: AccountAssetsListParams): Promise<Asset[]>; // GET /assets
+  // Account-wide (GET /assets):
+  listAllAcrossCompanies(params?: AccountAssetsListParams): Promise<Asset[]>;
+  listAcrossCompanies(params?: AccountAssetsListParams): AsyncIterable<Asset>;
+  listAcrossCompaniesPages(params?: AccountAssetsListParams): AsyncIterable<Page<Asset>>;
 }
 // CompanyAssetsListParams = ListParams & { archived?: boolean }
 // AccountAssetsListParams = ListParams & {
@@ -348,7 +351,7 @@ class ExportsResource {
   list(params?: ExportsListParams): AsyncIterable<Export>;
   listPages(params?: ExportsListParams): AsyncIterable<Page<Export>>;
   listAll(params?: ExportsListParams): Promise<Export[]>;
-  create(data: Record<string, unknown>): Promise<void>;
+  create(data: ExportCreate): Promise<void>;
   get(id: number, opts?: { download?: boolean }): Promise<Export | Blob>;
 }
 // ExportsListParams = ListParams  (no extra filters)
@@ -373,13 +376,13 @@ class FlagTypesResource {
 
 ```ts
 class FlagsResource {
-  get(id?: number): Promise<Flag>;
+  get(id: number): Promise<Flag>;
   list(params?: FlagsListParams): AsyncIterable<Flag>;
   listPages(params?: FlagsListParams): AsyncIterable<Page<Flag>>;
   listAll(params?: FlagsListParams): Promise<Flag[]>;
   create(data: FlagCreate): Promise<Flag>;            // wrapped
   update(id?: number, data: FlagUpdate): Promise<Flag>;
-  delete(id?: number): Promise<void>;
+  delete(id: number): Promise<void>;
 }
 // FlagsListParams = ListParams & {
 //   flag_type_id?: number; flagable_type?: string; flagable_id?: number; description?: string;
@@ -408,7 +411,7 @@ Read-only.
 
 ```ts
 class GroupsResource {
-  get(id?: number): Promise<Group>;
+  get(id: number): Promise<Group>;
   list(params?: GroupsListParams): AsyncIterable<Group>;
   listPages(params?: GroupsListParams): AsyncIterable<Page<Group>>;
   listAll(params?: GroupsListParams): Promise<Group[]>;
@@ -422,13 +425,13 @@ Non-paginated (`paginated: false`).
 
 ```ts
 class IpAddressesResource {
-  get(id?: number): Promise<IpAddress>;
+  get(id: number): Promise<IpAddress>;
   list(params?: IpAddressesListParams): AsyncIterable<IpAddress>;
   listPages(params?: IpAddressesListParams): AsyncIterable<Page<IpAddress>>;
   listAll(params?: IpAddressesListParams): Promise<IpAddress[]>;
   create(data: IpAddressCreate): Promise<IpAddress>;  // raw
   update(id?: number, data: IpAddressUpdate): Promise<IpAddress>;
-  delete(id?: number): Promise<void>;
+  delete(id: number): Promise<void>;
 }
 // IpAddressesListParams = ListParams & {
 //   network_id?: number; address?: string; status?: string; fqdn?: string; asset_id?: number;
@@ -455,13 +458,13 @@ class LabelTypesResource {
 
 ```ts
 class LabelsResource {
-  get(id?: number): Promise<Label>;
+  get(id: number): Promise<Label>;
   list(params?: LabelsListParams): AsyncIterable<Label>;
   listPages(params?: LabelsListParams): AsyncIterable<Page<Label>>;
   listAll(params?: LabelsListParams): Promise<Label[]>;
   create(data: LabelCreate): Promise<Label>;          // wrapped
   update(id?: number, data: LabelUpdate): Promise<Label>;
-  delete(id?: number): Promise<void>;
+  delete(id: number): Promise<void>;
 }
 // LabelsListParams = ListParams & {
 //   label_type_id?: number; labelable_type?: string; labelable_id?: number; user_id?: number;
@@ -494,9 +497,9 @@ class MagicDashResource {
   listPages(params?: MagicDashListParams): AsyncIterable<Page<MagicDash>>;
   listAll(params?: MagicDashListParams): Promise<MagicDash[]>;
   create(data: MagicDashCreate): Promise<MagicDash>;  // raw; POST may create or update
-  delete(): Promise<void>;                            // DELETE /magic_dash (no id)
-  deleteById(id?: number): Promise<void>;              // DELETE /magic_dash/{id}
-  updatePositions(data: { items: Array<{ id?: number; position?: number }> }): Promise<{ success?: boolean }>;
+  delete(data: { title: string; company_name: string }): Promise<void>;  // DELETE /magic_dash — title + company_name required, urlencoded
+  deleteById(id: number): Promise<void>;              // DELETE /magic_dash/{id}
+  updatePositions(data: { company_id: number; positions: Array<{ id: number; position: number }> }): Promise<{ success: boolean }>;
 }
 // MagicDashListParams = ListParams & { title?: string; company_id?: number }
 ```
@@ -508,14 +511,14 @@ path segment.
 
 ```ts
 class MatchersResource {
-  list(params?: MatchersListParams): AsyncIterable<Matcher>;
-  listPages(params?: MatchersListParams): AsyncIterable<Page<Matcher>>;
-  listAll(params?: MatchersListParams): Promise<Matcher[]>;
-  update(id?: number, data: MatcherUpdate): Promise<Matcher>;
-  delete(id?: number): Promise<void>;
+  list(params: MatchersListParams): AsyncIterable<Matcher>;
+  listPages(params: MatchersListParams): AsyncIterable<Page<Matcher>>;
+  listAll(params: MatchersListParams): Promise<Matcher[]>;
+  update(id: number, data: MatcherUpdate): Promise<Matcher>;
+  delete(id: number): Promise<void>;
 }
 // MatchersListParams = ListParams & {
-//   integration_id?: number; matched?: boolean; sync_id?: number; identifier?: string; company_id?: number
+//   integration_id: number; matched?: boolean; sync_id?: number; identifier?: string; company_id?: number
 // }
 ```
 
@@ -556,18 +559,19 @@ class PasswordFoldersResource {
 
 ### PhotosResource
 
-`create` is multipart (`file` + optional `caption`, `company_id`, `photoable_type`,
-`photoable_id`, `folder_id`, `pinned`); `get` with `download: true` returns a `Blob`.
+`create` is multipart (`file` + required `caption`, plus optional `company_id`,
+`photoable_type`, `photoable_id`, `folder_id`, `pinned`); `update` wraps the body in
+`{ photo }`; `get` with `download: true` returns a `Blob`.
 
 ```ts
 class PhotosResource {
-  get(id?: number, opts?: { download?: boolean }): Promise<Photo | Blob>;
+  get(id: number, opts?: { download?: boolean }): Promise<Photo | Blob>;
   list(params?: PhotosListParams): AsyncIterable<Photo>;
   listPages(params?: PhotosListParams): AsyncIterable<Page<Photo>>;
   listAll(params?: PhotosListParams): Promise<Photo[]>;
-  create(data: Record<string, unknown>): Promise<Photo>;   // multipart, wrapped
-  update(id?: number, data: Record<string, unknown>): Promise<Photo>;
-  delete(id?: number): Promise<void>;
+  create(data: PhotoCreate): Promise<Photo>;   // multipart (file + required caption)
+  update(id: number, data: PhotoUpdate): Promise<Photo>;
+  delete(id: number): Promise<void>;
 }
 // PhotosListParams = ListParams & {
 //   company_id?: number; photoable_type?: string; photoable_id?: number; folder_id?: number;
@@ -596,17 +600,17 @@ class ProcedureTasksResource {
 
 ```ts
 class ProceduresResource {
-  get(id?: number): Promise<Procedure>;
+  get(id: number): Promise<Procedure>;
   list(params?: ProceduresListParams): AsyncIterable<Procedure>;
   listPages(params?: ProceduresListParams): AsyncIterable<Page<Procedure>>;
   listAll(params?: ProceduresListParams): Promise<Procedure[]>;
   create(data: ProcedureCreate): Promise<Procedure>;  // raw
-  update(id?: number, data: ProcedureUpdate): Promise<Procedure>;
-  delete(id?: number): Promise<void>;
+  update(id: number, data: ProcedureUpdate): Promise<Procedure>;
+  delete(id: number): Promise<void>;
   // Special ops (all POST):
-  duplicate(id?: number, opts?: { company_id?: number; name?: string; description?: string }): Promise<Procedure>;
-  createFromTemplate(id?: number, opts?: { company_id?: number; name?: string; description?: string }): Promise<Procedure>;
-  kickoff(id?: number, opts?: { asset_id?: number; name?: string }): Promise<{ message?: string }>;
+  duplicate(id: number, opts: { company_id: number; name?: string; description?: string }): Promise<Procedure>;
+  createFromTemplate(id: number, opts?: { company_id?: number; name?: string; description?: string }): Promise<Procedure>;
+  kickoff(id: number, opts?: { asset_id?: number; name?: string }): Promise<{ message: string }>;
 }
 // ProceduresListParams = ListParams & {
 //   type?: string; process_scope?: string; parent_process_id?: number; name?: string; company_id?: number;
@@ -617,11 +621,12 @@ class ProceduresResource {
 
 ### PublicPhotosResource
 
-Multipart `create` (`file` + optional `record_type`/`record_id`). No `delete`.
+Multipart `create`/`update` (field `photo` + required `record_type`/`record_id` for
+create; `record_type`/`record_id` required for update). No `delete`.
 
 ```ts
 class PublicPhotosResource {
-  get(id: number): Promise<PublicPhoto>;
+  get(id: number, opts?: { download?: boolean }): Promise<PublicPhoto | Blob>;
   list(params?: PublicPhotosListParams): AsyncIterable<PublicPhoto>;
   listPages(params?: PublicPhotosListParams): AsyncIterable<Page<PublicPhoto>>;
   listAll(params?: PublicPhotosListParams): Promise<PublicPhoto[]>;
@@ -755,13 +760,13 @@ Non-paginated (`paginated: false`).
 
 ```ts
 class VlansResource {
-  get(id?: number): Promise<Vlan>;
+  get(id: number): Promise<Vlan>;
   list(params?: VlansListParams): AsyncIterable<Vlan>;
   listPages(params?: VlansListParams): AsyncIterable<Page<Vlan>>;
   listAll(params?: VlansListParams): Promise<Vlan[]>;
   create(data: VlanCreate): Promise<Vlan>;            // raw
   update(id?: number, data: VlanUpdate): Promise<Vlan>;
-  delete(id?: number): Promise<void>;
+  delete(id: number): Promise<void>;
 }
 // VlansListParams = ListParams & {
 //   company_id?: number; vlan_zone_id?: number; name?: string; vlan_id?: number; created_at?: string; updated_at?: string; archived?: boolean
@@ -801,7 +806,7 @@ class ActivityLogsResource {
   list(params?: ActivityLogsListParams): AsyncIterable<ActivityLog>;
   listPages(params?: ActivityLogsListParams): AsyncIterable<Page<ActivityLog>>;
   listAll(params?: ActivityLogsListParams): Promise<ActivityLog[]>;
-  deleteAll(): Promise<void>;   // DELETE /activity_logs — deletes ALL logs. Caller beware.
+  deleteAll(params: { datetime: string; delete_unassigned_logs?: boolean }): Promise<void>;  // DELETE /activity_logs — deletes ALL logs from a datetime. Caller beware.
 }
 // ActivityLogsListParams = ListParams & {
 //   user_id?: number; user_email?: string; resource_id?: number; resource_type?: string;

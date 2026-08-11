@@ -5,11 +5,11 @@ export interface MagicDash {
   id: number; // The unique identifier for the MagicDash item
   title: string; // The title of the MagicDash item
   message: string; // The message content of the MagicDash item
-  shade: string; // The background shade of the MagicDash item (optional). Can Be null.
-  content_link: string; // The link associated with the MagicDash item's content (optional). Can Be null.
-  content: string; // The MagicDash item's content (optional). Can Be null.
-  icon: string; // The icon associated with the MagicDash item (optional). Can Be null.
-  image_url: string; // The URL of the image associated with the MagicDash item (optional). Can Be null.
+  shade: string | null; // The background shade of the MagicDash item (optional). Can Be null.
+  content_link: string | null; // The link associated with the MagicDash item's content (optional). Can Be null.
+  content: string | null; // The MagicDash item's content (optional). Can Be null.
+  icon: string | null; // The icon associated with the MagicDash item (optional). Can Be null.
+  image_url: string | null; // The URL of the image associated with the MagicDash item (optional). Can Be null.
   company_id: number; // The unique identifier of the associated company
   company_name: string; // The name of the associated company
   position: number; // The position/order of the Magic Dash Item

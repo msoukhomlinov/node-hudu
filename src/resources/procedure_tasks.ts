@@ -35,8 +35,11 @@ export class ProcedureTasksResource extends BaseResource<ProcedureTask> {
   async update(id: number, data: ProcedureTaskUpdate): Promise<ProcedureTask> {
     return this.updateOne<ProcedureTask>(id, data);
   }
+  /** DELETE /procedure_tasks/{id}. */
   async delete(id: number): Promise<void> {
-    return this.deleteOne(id);
+    // The spec's 200 response body is not guaranteed to be present; return void
+    // so an empty body (undefined) is never mis-typed as `{ message }` (R4).
+    await this.deleteOne(id);
   }
 
   listPages(params?: ProcedureTasksListParams): AsyncIterable<Page<ProcedureTask>> {

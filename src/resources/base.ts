@@ -5,6 +5,7 @@ import type { HttpClient, RequestOptions } from '../http.js';
 import { unwrapByKey, unwrapList } from '../http.js';
 import type { ListParams, Page } from '../pagination.js';
 import { collectAll, paginate, paginateItems } from '../pagination.js';
+import { HuduConfigError } from '../errors.js';
 
 export interface BaseResourceConfig {
   /** Plural URL path under basePath, e.g. 'companies'. */
@@ -19,8 +20,6 @@ export interface BaseResourceConfig {
   paginated?: boolean;
 }
 
-/** A the list request carries query filters and pagination params. */
-export type ListParamsWithFilters = ListParams;
 
 export abstract class BaseResource<T = unknown> {
   protected readonly http: HttpClient;
@@ -37,13 +36,25 @@ export abstract class BaseResource<T = unknown> {
     this.listKey = cfg.listKey;
     this.createType = cfg.createType ?? 'raw';
     this.paginated = cfg.paginated ?? true;
+    // A wrapped create that cannot be unwrapped would silently return the
+    // envelope typed as the resource. Require a singleKey to make that contract
+    // explicit (A15).
+    if (this.createType === 'wrapped' && !this.singleKey) {
+      throw new HuduConfigError(
+        `Resource "${cfg.resourcePath}" uses createType 'wrapped' but has no singleKey to unwrap the response`,
+      );
+    }
   }
 
   /** Build the per-page fetcher from user params. */
   protected pageFetcher(params: ListParams, extraQuery?: Record<string, unknown>): (page: number, pageSize: number) => Promise<Page<T>> {
-    const query = { ...params, ...(extraQuery ?? {}) };
+    const query: Record<string, unknown> = { ...params, ...(extraQuery ?? {}) };
     if (!this.paginated) {
       // Non-paginated endpoint: fetch once, return everything as a single page.
+      // page/page_size belong only to paginated lists; strip them so they are
+      // never forwarded to endpoints whose spec accepts neither (A11).
+      delete query.page;
+      delete query.page_size;
       return async () => {
         const body = await this.http.request<unknown>({
           method: 'GET',
@@ -51,7 +62,8 @@ export abstract class BaseResource<T = unknown> {
           query,
         });
         const items = this.unwrapList<T>(body);
-        return { items, page: 1, page_size: Math.max(items.length, 1), hasMore: false };
+        // C12: non-paginated pages report the real item count (0 for empty), never a fabricated value.
+        return { items, page: 1, page_size: items.length, hasMore: false };
       };
     }
     return async (page, pageSize) => {
@@ -66,10 +78,24 @@ export abstract class BaseResource<T = unknown> {
   }
 
   /** Extract pagination opts from user params (page, page_size). */
-  private paginationOpts(params: ListParams): { page?: number; page_size?: number } {
+  private paginationOpts(params: ListParams): { page?: number; page_size?: number; guardNoProgress: boolean } {
     const page = typeof params.page === 'number' ? params.page : undefined;
-    const page_size = typeof params.page_size === 'number' ? params.page_size : undefined;
-    return { page, page_size: page_size ?? 25 };
+    const rawPageSize = typeof params.page_size === 'number' ? params.page_size : undefined;
+    const page_size = rawPageSize ?? 25;
+    // page_size:0 would make hasMore (length === page_size) always true and the
+    // short-page break (length < page_size) always false -> an infinite loop (A12).
+    if (!Number.isInteger(page_size) || page_size < 1) {
+      throw new HuduConfigError(`page_size must be a positive integer, got "${String(params.page_size)}"`);
+    }
+    // Non-integer (1.5) and non-positive (0/-N) `page` are invalid — symmetric
+    // with page_size (F8).
+    if (page !== undefined && (!Number.isInteger(page) || page < 1)) {
+      throw new HuduConfigError(`page must be a positive integer, got "${String(params.page)}"`);
+    }
+    // F4: the SDK's own bundled pagination opts into the no-progress guard
+    // (runaway-loop protection); external callers of the public `paginate`
+    // fetcher leave it off by default.
+    return { page, page_size, guardNoProgress: true };
   }
 
   /** Async iterator of items (used by subclass 'list'). */
@@ -109,6 +135,11 @@ export abstract class BaseResource<T = unknown> {
     return unwrapList<U>(data, this.listKey);
   }
 
+  /**
+   * Forwarding helper so downstream custom resources can issue requests
+   * through the shared HttpClient (rate limiter, auth, error wrapping).
+   * Documented public API of BaseResource (ARCHITECTURE.md §BaseResource).
+   */
   protected async request<U>(opts: RequestOptions): Promise<U> {
     return this.http.request<U>(opts);
   }

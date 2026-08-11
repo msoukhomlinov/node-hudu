@@ -31,10 +31,10 @@ export class FoldersResource extends BaseResource<Folder> {
     return this.all(params ?? {});
   }
   async create(data: FolderCreate): Promise<Folder> {
-    return this.createOne<Folder>(data);
+    return this.createOne<Folder>({ folder: data });
   }
   async update(id: number, data: FolderUpdate): Promise<Folder> {
-    return this.updateOne<Folder>(id, data);
+    return this.updateOne<Folder>(id, { folder: data });
   }
   async delete(id: number): Promise<void> {
     return this.deleteOne(id);

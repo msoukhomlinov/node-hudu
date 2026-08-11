@@ -19,7 +19,7 @@ export interface HuduConfig {
   apiKey: string;
   /** Defaults to '/api/v1' — the swagger basePath. */
   basePath?: string;
-  /** HTTP timeout in ms. Default 30_000. */
+  /** Whole-call deadline in ms (requests + retries + backoff + rate-limit wait). Default 30_000. */
   timeoutMs?: number;
   /** Retry budget for idempotent requests (GET/PUT/DELETE) on 429/5xx. Default 3 (0 disables). */
   maxRetries?: number;
@@ -73,8 +73,10 @@ export function resolveConfig(config: HuduConfig): ResolvedConfig {
   if (config.basePath !== undefined && !config.basePath.startsWith('/')) {
     throw new HuduConfigError('basePath must start with "/"');
   }
-  if (config.timeoutMs !== undefined && (!Number.isInteger(config.timeoutMs) || config.timeoutMs < 0)) {
-    throw new HuduConfigError('timeoutMs must be a non-negative integer');
+  // B12: timeoutMs must be strictly positive — 0 makes AbortSignal.timeout(0)
+  // abort every request immediately.
+  if (config.timeoutMs !== undefined && (!Number.isInteger(config.timeoutMs) || config.timeoutMs <= 0)) {
+    throw new HuduConfigError('timeoutMs must be a positive integer');
   }
   if (config.maxRetries !== undefined && (!Number.isInteger(config.maxRetries) || config.maxRetries < 0)) {
     throw new HuduConfigError('maxRetries must be a non-negative integer');
@@ -86,10 +88,12 @@ export function resolveConfig(config: HuduConfig): ResolvedConfig {
     if (!Number.isInteger(perMinute) || perMinute <= 0) {
       throw new HuduConfigError('rateLimit.perMinute must be a positive integer');
     }
-    rateLimit = {
-      perMinute,
-      burst: config.rateLimit.burst ?? perMinute,
-    };
+    // B12: a burst of 0/negative/non-integer would leave a permanently-empty token bucket.
+    const burst = config.rateLimit.burst ?? perMinute;
+    if (!Number.isInteger(burst) || burst <= 0) {
+      throw new HuduConfigError('rateLimit.burst must be a positive integer');
+    }
+    rateLimit = { perMinute, burst };
   }
 
   return {

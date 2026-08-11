@@ -6,11 +6,11 @@ export interface Matcher {
   integrator_id: number;
   integrator_name: string;
   sync_id: number;
-  identifier: string; // Can be null.
+  identifier: string | null; // Can be null.
   name: string;
-  potential_company_id: number; // Can be null.
-  company_id: number; // Can be null.
-  company_name: string; // Can be null.
+  potential_company_id: number | null; // Can be null.
+  company_id: number | null; // Can be null.
+  company_name: string | null; // Can be null.
 }
 
 /**

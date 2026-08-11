@@ -31,7 +31,7 @@ export class RelationsResource extends BaseResource<Relation> {
     return this.all(params ?? {});
   }
   async create(data: RelationCreate): Promise<Relation> {
-    return this.createOne<Relation>(data);
+    return this.createOne<Relation>({ relation: data });
   }
   async delete(id: number): Promise<void> {
     return this.deleteOne(id);

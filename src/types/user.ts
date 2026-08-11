@@ -19,7 +19,7 @@ export interface User {
   created_at: string; // The timestamp when the user was created.
   updated_at: string; // The timestamp of the last user update.
   archived: boolean; // Indicates if the user is archived (discarded).
-  portal_member_company_id: number; // The ID of the associated company, if the user is a portal member. Can Be null.
+  portal_member_company_id: number | null; // The ID of the associated company, if the user is a portal member. Can Be null.
   score_30_days: number; // The user's score over the past 30 days.
   score_all_time: number; // The user's all-time score.
   score_90_days: number; // The user's score over the past 90 days.

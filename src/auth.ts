@@ -3,7 +3,6 @@
  * The Hudu API authenticates via the `x-api-key` header.
  */
 export const API_KEY_HEADER = 'x-api-key';
-export const BEARER_PREFIX = 'Bearer ';
 
 export function buildAuthHeaders(apiKey: string): Record<string, string> {
   return { [API_KEY_HEADER]: apiKey };

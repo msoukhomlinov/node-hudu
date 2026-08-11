@@ -12,12 +12,23 @@ export interface PublicPhoto {
 }
 
 /**
- * Input for creating a PublicPhoto.
- * All fields are optional unless the API requires them; see docs.
+ * Input for creating a PublicPhoto. All three fields are required (spec).
  */
-export type PublicPhotoCreate = Partial<Omit<PublicPhoto, 'id' | 'created_at' | 'updated_at' | 'url' | 'full_url'>>;
+export interface PublicPhotoCreate {
+  /** The image file to upload. */
+  photo: Blob | File;
+  /** The type of record the photo is associated with (e.g. Article). */
+  record_type: string;
+  /** The ID of the record the photo is associated with. */
+  record_id: number;
+}
 
 /**
- * Input for updating a PublicPhoto.
+ * Input for updating a PublicPhoto's association. Both fields are required (spec).
  */
-export type PublicPhotoUpdate = Partial<PublicPhoto>;
+export interface PublicPhotoUpdate {
+  /** The type of record the photo is associated with (e.g. Article). */
+  record_type: string;
+  /** The ID of the record the photo is associated with. */
+  record_id: number;
+}

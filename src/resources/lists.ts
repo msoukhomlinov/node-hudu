@@ -29,10 +29,10 @@ export class ListsResource extends BaseResource<List> {
     return this.all(params ?? {});
   }
   async create(data: ListCreate): Promise<List> {
-    return this.createOne<List>(data);
+    return this.createOne<List>({ list: data });
   }
   async update(id: number, data: ListUpdate): Promise<List> {
-    return this.updateOne<List>(id, data);
+    return this.updateOne<List>(id, { list: data });
   }
   async delete(id: number): Promise<void> {
     return this.deleteOne(id);

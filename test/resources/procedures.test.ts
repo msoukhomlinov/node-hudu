@@ -31,6 +31,16 @@ describe('ProceduresResource', () => {
     expect(spy.calls[0].url).toContain('name=setup');
   });
 
+  it('list streams items and listPages yields page objects (B22)', async () => {
+    stubFetch(() => json(proceduresList));
+    const items: unknown[] = [];
+    for await (const p of makeClient().procedures.list({ name: 'setup' })) items.push(p);
+    expect(items).toEqual(proceduresList.procedures);
+    const pages: unknown[] = [];
+    for await (const pg of makeClient().procedures.listPages({})) pages.push(pg);
+    expect((pages[0] as { items: unknown[] }).items).toEqual(proceduresList.procedures);
+  });
+
   it('create (raw) returns the raw procedure', async () => {
     const spy = stubFetch(() => json(procedure, 201));
     const res = await makeClient().procedures.create({ name: 'Setup' });
@@ -44,12 +54,15 @@ describe('ProceduresResource', () => {
     expect(res).toEqual(procedure);
   });
 
-  it('delete returns void', async () => {
-    stubFetch(() => empty(204));
-    await expect(makeClient().procedures.delete(5)).resolves.toBeUndefined();
+  it('delete returns void (an empty 200 body is not mis-typed as { message }) (R4)', async () => {
+    const spy = stubFetch(() => empty(200));
+    const res = await makeClient().procedures.delete(5);
+    expect(res).toBeUndefined();
+    expect(spy.calls[0].url).toBe('https://hudu.example.com/api/v1/procedures/5');
+    expect(spy.calls[0].init.method).toBe('DELETE');
   });
 
-  it('duplicate POSTs to /duplicate with query opts and unwraps the procedure', async () => {
+  it('duplicate requires company_id (B15) and POSTs the query opts', async () => {
     const spy = stubFetch(() => json({ procedure }, 201));
     const res = await makeClient().procedures.duplicate(5, { company_id: 2, name: 'Copy', description: 'd' });
     expect(res).toEqual(procedure);

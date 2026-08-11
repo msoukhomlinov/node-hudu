@@ -29,16 +29,20 @@ export class MagicDashResource extends BaseResource<MagicDash> {
   async create(data: MagicDashCreate): Promise<MagicDash> {
     return this.createOne<MagicDash>(data);
   }
-  /** DELETE /magic_dash (delete item without id). */
-  async delete(): Promise<void> {
-    await this.http.request<unknown>({ method: 'DELETE', path: '/magic_dash' });
+  /** DELETE /magic_dash (delete item without id) — title and company_name are required, application/x-www-form-urlencoded (spec consumes). */
+  async delete(data: { title: string; company_name: string }): Promise<void> {
+    await this.http.request<unknown>({ method: 'DELETE', path: '/magic_dash', formUrlEncoded: data });
   }
   /** DELETE /magic_dash/{id} */
   async deleteById(id: number): Promise<void> {
     await this.http.request<unknown>({ method: 'DELETE', path: `/magic_dash/${id}` });
   }
   /** PUT /magic_dash/update_positions */
-  async updatePositions(data: { items: Array<{ id: number; position: number }> }): Promise<{ success: boolean }> {
-    return this.http.request<{ success: boolean }>({ method: 'PUT', path: '/magic_dash/update_positions', body: data });
+  async updatePositions(data: { company_id: number; positions: Array<{ id: number; position: number }> }): Promise<{ success: boolean }> {
+    return this.http.request<{ success: boolean }>({
+      method: 'PUT',
+      path: '/magic_dash/update_positions',
+      body: { company_id: data.company_id, positions: data.positions },
+    });
   }
 }

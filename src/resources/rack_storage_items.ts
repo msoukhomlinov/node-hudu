@@ -19,7 +19,7 @@ export interface RackStorageItemsListParams extends ListParams {
 
 export class RackStorageItemsResource extends BaseResource<RackStorageItem> {
   constructor(http: HttpClient) {
-    super(http, { resourcePath: 'rack_storage_items', singleKey: undefined, listKey: undefined, createType: 'wrapped', paginated: false });
+    super(http, { resourcePath: 'rack_storage_items', singleKey: undefined, listKey: undefined, createType: 'raw', paginated: false });
   }
 
   /** Get a rack_storage_items by id. */
@@ -35,10 +35,10 @@ export class RackStorageItemsResource extends BaseResource<RackStorageItem> {
     return this.all(params ?? {});
   }
   async create(data: RackStorageItemCreate): Promise<RackStorageItem> {
-    return this.createOne<RackStorageItem>(data);
+    return this.createOne<RackStorageItem>({ rack_storage_item: data });
   }
   async update(id: number, data: RackStorageItemUpdate): Promise<RackStorageItem> {
-    return this.updateOne<RackStorageItem>(id, data);
+    return this.updateOne<RackStorageItem>(id, { rack_storage_item: data });
   }
   async delete(id: number): Promise<void> {
     return this.deleteOne(id);

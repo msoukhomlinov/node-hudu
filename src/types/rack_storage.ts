@@ -12,7 +12,7 @@ export interface RackStorage {
   width: number; // The width of the rack storage.
   created_at: string; // The date and time when the rack storage was created.
   updated_at: string; // The date and time when the rack storage was last updated.
-  discarded_at: string; // The date and time when the rack storage was discarded. Can Be null.
+  discarded_at: string | null; // The date and time when the rack storage was discarded. Can Be null.
   company_id: number; // The unique ID of the company.
 }
 

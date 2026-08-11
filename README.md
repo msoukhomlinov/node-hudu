@@ -206,7 +206,7 @@ const hudu = new HuduClient({
 | `baseUrl` | `string` | — (**required**) | Origin only (`https://…`); no path or trailing slash. |
 | `apiKey` | `string` | — (**required**) | Hudu API key; sent as the `x-api-key` header. |
 | `basePath` | `string` | `'/api/v1'` | The Swagger base path; override only for custom installs. |
-| `timeoutMs` | `number` | `30000` | Per-request HTTP timeout in ms. |
+| `timeoutMs` | `number` | `30000` | Max time for the ENTIRE request call (network request, retries, backoff, and rate-limit wait) in ms. |
 | `maxRetries` | `number` | `3` | Retry budget for idempotent requests on 429/5xx (`0` disables). |
 | `logger` | `Logger` | no-op | Optional request/log sink; API keys are always redacted. |
 | `rateLimit` | `RateLimitConfig` | off | Optional client-side token bucket (`perMinute` default 300, `burst` defaults to `perMinute`). |

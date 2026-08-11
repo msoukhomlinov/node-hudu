@@ -3,7 +3,7 @@
  */
 export interface Relation {
   id: number; // The unique identifier of the relation.
-  description: string; // The description of the relation (optional). Can Be null.
+  description: string | null; // The description of the relation (optional). Can Be null.
   is_inverse: boolean; // Indicates whether the relation is inverse or not.
   name: string; // The name of the relation.
   fromable_id: number; // The ID of the origin entity involved in the relation.

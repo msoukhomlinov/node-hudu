@@ -71,6 +71,10 @@ describe('resolveConfig', () => {
     expect(() => resolveConfig({ baseUrl: 'https://hudu.example.com', apiKey: 'k', timeoutMs: 12.5 })).toThrow(HuduConfigError);
   });
 
+  it('rejects timeoutMs 0 (would abort every request) (B12)', () => {
+    expect(() => resolveConfig({ baseUrl: 'https://hudu.example.com', apiKey: 'k', timeoutMs: 0 })).toThrow(HuduConfigError);
+  });
+
   it('rejects negative maxRetries', () => {
     expect(() => resolveConfig({ baseUrl: 'https://hudu.example.com', apiKey: 'k', maxRetries: -2 })).toThrow(HuduConfigError);
   });
@@ -101,6 +105,13 @@ describe('resolveConfig', () => {
   it('respects a custom burst', () => {
     const cfg = resolveConfig({ baseUrl: 'https://hudu.example.com', apiKey: 'k', rateLimit: { perMinute: 10, burst: 20 } });
     expect(cfg.rateLimit?.burst).toBe(20);
+  });
+
+  it('rejects an invalid rateLimit.burst (B12)', () => {
+    const base = { baseUrl: 'https://hudu.example.com', apiKey: 'k' };
+    expect(() => resolveConfig({ ...base, rateLimit: { perMinute: 10, burst: 0 } })).toThrow(HuduConfigError);
+    expect(() => resolveConfig({ ...base, rateLimit: { perMinute: 10, burst: -1 } })).toThrow(HuduConfigError);
+    expect(() => resolveConfig({ ...base, rateLimit: { perMinute: 10, burst: 2.5 } })).toThrow(HuduConfigError);
   });
 
   it('throws a HuduConfigError for a missing config', () => {

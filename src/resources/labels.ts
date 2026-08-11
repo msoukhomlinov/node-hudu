@@ -33,10 +33,10 @@ export class LabelsResource extends BaseResource<Label> {
     return this.all(params ?? {});
   }
   async create(data: LabelCreate): Promise<Label> {
-    return this.createOne<Label>(data);
+    return this.createOne<Label>({ label: data });
   }
   async update(id: number, data: LabelUpdate): Promise<Label> {
-    return this.updateOne<Label>(id, data);
+    return this.updateOne<Label>(id, { label: data });
   }
   async delete(id: number): Promise<void> {
     return this.deleteOne(id);

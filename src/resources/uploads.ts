@@ -21,18 +21,19 @@ export class UploadsResource extends BaseResource<Upload> {
   listPages(params?: UploadsListParams): AsyncIterable<Page<Upload>> {
     return this.pageIter(params ?? {});
   }
-  /** Multipart upload. */
+  /** Multipart upload. A Node Buffer is converted to a Blob so binary bytes are not mangled to a UTF-8 string by undici FormData (close-check F1). */
   async upload(file: File | Blob | Buffer, data: { uploadable_id: number; uploadable_type: string }): Promise<Upload> {
     const fd = new FormData();
-    fd.append('file', file as Blob);
-    fd.append('uploadable_id', String(data.uploadable_id));
-    fd.append('uploadable_type', data.uploadable_type);
+    const blob = Buffer.isBuffer(file) ? new Blob([file]) : (file as Blob);
+    fd.append('file', blob);
+    fd.append('upload[uploadable_id]', String(data.uploadable_id));
+    fd.append('upload[uploadable_type]', data.uploadable_type);
     const body = await this.http.request<unknown>({ method: 'POST', path: '/uploads', formData: fd });
     return body as Upload;
   }
   async get(id: number, opts?: { download?: boolean }): Promise<Upload | Blob> {
     if (opts?.download) {
-      return this.http.request<Blob>({ method: 'GET', path: `/uploads/${id}`, query: { download: true } });
+      return this.http.download({ method: 'GET', path: `/uploads/${id}`, query: { download: true } });
     }
     return this.getOne<Upload>(id);
   }

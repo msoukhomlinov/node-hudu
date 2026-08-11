@@ -33,10 +33,10 @@ export class AssetPasswordsResource extends BaseResource<AssetPassword> {
     return this.all(params ?? {});
   }
   async create(data: AssetPasswordCreate): Promise<AssetPassword> {
-    return this.createOne<AssetPassword>(data);
+    return this.createOne<AssetPassword>({ asset_password: data });
   }
   async update(id: number, data: AssetPasswordUpdate): Promise<AssetPassword> {
-    return this.updateOne<AssetPassword>(id, data);
+    return this.updateOne<AssetPassword>(id, { asset_password: data });
   }
   async delete(id: number): Promise<void> {
     return this.deleteOne(id);

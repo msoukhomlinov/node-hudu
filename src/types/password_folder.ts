@@ -3,7 +3,7 @@
  */
 export interface PasswordFolder {
   id: number; // The unique identifier of the password folder
-  company_id: number; // The ID of the associated company, if any. Can Be null.
+  company_id: number | null; // The ID of the associated company, if any. Can Be null.
   description: string; // A brief description of the password folder
   name: string; // The name of the password folder
   slug: string; // A slug representing the password folder.

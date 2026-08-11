@@ -32,10 +32,10 @@ export class LabelTypesResource extends BaseResource<LabelType> {
     return this.all(params ?? {});
   }
   async create(data: LabelTypeCreate): Promise<LabelType> {
-    return this.createOne<LabelType>(data);
+    return this.createOne<LabelType>({ label_type: data });
   }
   async update(id: number, data: LabelTypeUpdate): Promise<LabelType> {
-    return this.updateOne<LabelType>(id, data);
+    return this.updateOne<LabelType>(id, { label_type: data });
   }
   async delete(id: number): Promise<void> {
     return this.deleteOne(id);

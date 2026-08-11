@@ -1,6 +1,7 @@
 /**
  * Error hierarchy for the Hudu SDK.
  */
+import { isRecord } from './utils.js';
 export class HuduError extends Error {
   readonly status?: number;
   readonly code: string;
@@ -82,7 +83,7 @@ export class ServerError extends HuduError {
  * Map an HTTP status code to the corresponding HuduError subclass.
  */
 export function errorFromStatus(status: number, body: unknown, url?: string): HuduError {
-  const message = typeof body === 'string' ? body : statusText(status);
+  const message = errorMessage(body, status);
   switch (status) {
     case 400: return new BadRequestError(message, url, body);
     case 401: return new UnauthorizedError(message, url, body);
@@ -96,6 +97,18 @@ export function errorFromStatus(status: number, body: unknown, url?: string): Hu
       if (status >= 500) return new ServerError(message, status, url, body);
       return new HuduError(message, { status, code: `HTTP_${status}`, url, body });
   }
+}
+
+/** Best-effort message for an error: a string body verbatim, else body.message ??
+ * body.error when the body is a record, else a status-derived fallback (B13).
+ * The JSON detail otherwise only reached err.body — this surfaces it in err.message. */
+function errorMessage(body: unknown, status: number): string {
+  if (typeof body === 'string' && body.trim().length > 0) return body;
+  if (isRecord(body)) {
+    const detail = body.message ?? body.error;
+    if (typeof detail === 'string' && detail.trim().length > 0) return detail;
+  }
+  return statusText(status);
 }
 
 function statusText(status: number): string {

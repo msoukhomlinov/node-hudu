@@ -231,9 +231,12 @@ The default barrel at `"."` is sufficient for most consumers. To enable deep imp
 "exports": {
   ".": { "import": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
          "require": { "types": "./dist/index.d.cts", "default": "./dist/index.cjs" } },
-  "./resources": { "types": "./dist/resources/index.d.ts", "default": "./dist/resources/index.js" },
-  "./types":     { "types": "./dist/types/index.d.ts",     "default": "./dist/types/index.js" },
-  "./errors":    { "types": "./dist/errors.d.ts",          "default": "./dist/errors.js" },
+  "./resources": { "import": { "types": "./dist/resources/index.d.ts", "default": "./dist/resources/index.js" },
+                   "require": { "types": "./dist/resources/index.d.cts", "default": "./dist/resources/index.cjs" } },
+  "./types":     { "import": { "types": "./dist/types/index.d.ts",     "default": "./dist/types/index.js" },
+                   "require": { "types": "./dist/types/index.d.cts",     "default": "./dist/types/index.cjs" } },
+  "./errors":    { "import": { "types": "./dist/errors.d.ts",          "default": "./dist/errors.js" },
+                   "require": { "types": "./dist/errors.d.cts",          "default": "./dist/errors.cjs" } },
   "./package.json": "./package.json"
 }
 ```
@@ -382,7 +385,10 @@ export interface RequestOptions {
 1. **URL**: `${baseUrl}${basePath}${path}` with `query` appended via `URLSearchParams`.
    `null`/`undefined`/empty-string query values are omitted (clean request sanitisation).
 2. **Auth**: `auth.ts` injects `{ 'x-api-key': apiKey }` (merged with `headers`).
-3. **Timeout**: `AbortSignal.timeout(timeoutMs)`.
+3. **Timeout**: a whole-call deadline of `timeoutMs` bounds the ENTIRE request (connection,
+   all retry attempts, backoff, and the rate-limit token wait). It is not a per-attempt
+   timeout — callers configure the total budget for the call, so a slow-but-OK server or a
+   long rate-limit hold can consume the budget before later retries.
 4. **Content-type**: `application/json` when `body` is set; `multipart/form-data`
    boundary via `FormData` when `formData` is set.
 5. **Response handling**:
@@ -611,7 +617,7 @@ a.listAllAcrossCompanies(params?: AccountAssetsListParams): Promise<Asset[]>
 r.list(params?): AsyncIterable<Export>
 r.listAll(params?): Promise<Export[]>
 r.create(data: ExportCreate): Promise<void>     // POST /exports returns 200 (null body)
-r.get(id: number, opts?: { download?: boolean }): Promise<ExportDetail | Blob>
+r.get(id: number, opts?: { download?: boolean }): Promise<Export | Blob>
 ```
 `get({download:true})` requests the binary; when not downloading returns metadata.
 
@@ -645,15 +651,16 @@ r.get(id: number, opts?: { download?: boolean }): Promise<ExportDetail | Blob>
 r.list(params?: MagicDashListParams): AsyncIterable<MagicDash>   // query: title?, company_id?
 r.listAll(params?): Promise<MagicDash[]>
 r.create(data: MagicDashCreate): Promise<MagicDash>              // createType 'raw'; POST may create or update
-r.delete(): Promise<void>                        // DELETE /magic_dash (delete item without id)
+r.delete(data: { title: string; company_name: string }): Promise<void>   // DELETE /magic_dash — title + company_name required, urlencoded
 r.deleteById(id: number): Promise<void>          // DELETE /magic_dash/{id}
-r.updatePositions(data: { items: Array<{ id: number; position: number }> }): Promise<{ success: boolean }>
+r.updatePositions(data: { company_id: number; positions: Array<{ id: number; position: number }> }): Promise<{ success: boolean }>
 ```
 
 ### 12.17 `MatchersResource` — path `matchers` (**`integration_id` is a query param, not a path segment**)
 ```ts
-r.list(params?: MatchersListParams): AsyncIterable<Matcher>   // integration_id?, matched?, sync_id?, identifier?, company_id?
-r.listAll(params?): Promise<Matcher[]>
+r.list(params: MatchersListParams): AsyncIterable<Matcher>   // integration_id (required), matched?, sync_id?, identifier?, company_id?
+r.listPages(params: MatchersListParams): AsyncIterable<Page<Matcher>>
+r.listAll(params: MatchersListParams): Promise<Matcher[]>
 r.update(id: number, data: MatcherUpdate): Promise<Matcher>
 r.delete(id: number): Promise<void>
 ```
@@ -666,7 +673,7 @@ r.delete(id: number): Promise<void>
 `get`, `list`, `listAll`, `create` (**'wrapped'**), `update`, `delete`.
 
 ### 12.20 `PhotosResource` — path `photos`
-`get`, `list`, `listAll`, `create` (**'wrapped'**, multipart: `file` + `caption`? + `company_id`? + `photoable_type`? + `photoable_id`? + `folder_id`? + `pinned`?), `update`, `delete`. `get(id, { download?: boolean })`.
+`get`, `list`, `listAll`, `create` (**'wrapped'**, multipart: `file` + `caption` (required) + `company_id`? + `photoable_type`? + `photoable_id`? + `folder_id`? + `pinned`?), `update`, `delete`. `get(id, { download?: boolean })`.
 
 ### 12.21 `ProcedureTasksResource` — path `procedure_tasks` (not paginated)
 `get`, `list` (query: `procedure_id?`, `name?`, `company_id?`), `listAll`, `create` (**'wrapped'**), `update`, `delete`.
@@ -679,14 +686,14 @@ r.listAll(params?): Promise<Procedure[]>
 r.create(data: ProcedureCreate): Promise<Procedure>   // createType 'raw'
 r.update(id, data: ProcedureUpdate): Promise<Procedure>
 r.delete(id): Promise<void>
-r.duplicate(id: number, opts?: { company_id?: number; name?: string; description?: string }): Promise<Procedure>  // POST /procedures/{id}/duplicate
+r.duplicate(id: number, opts: { company_id: number; name?: string; description?: string }): Promise<Procedure>  // POST /procedures/{id}/duplicate
 r.createFromTemplate(id: number, opts?: { company_id?: number; name?: string; description?: string }): Promise<Procedure> // POST /procedures/{id}/create_from_template
 r.kickoff(id: number, opts?: { asset_id?: number; name?: string }): Promise<{ message: string }> // POST /procedures/{id}/kickoff
 ```
 `ProceduresListParams` incl. `type?`, `process_scope?`, `parent_process_id?`, `name?`, `company_id?`, `slug?`, `archived?`, `global_template?`, `company_template?`, `parent_procedure_id?`.
 
 ### 12.23 `PublicPhotosResource` — path `public_photos`
-`get`, `list`, `listAll`, `create` (**'raw'**; multipart `file` + `record_type`? + `record_id`?), `update` (`record_type?`/`record_id?`). No DELETE in spec.
+`get`, `list`, `listAll`, `create` (**'raw'**; multipart field `photo` + required `record_type`/`record_id`), `update` (multipart, required `record_type`/`record_id`). No DELETE in spec. GET/PUT are `{public_photo}`-wrapped; `update` unwraps the envelope.
 
 ### 12.24 `RackStorageItemsResource` — path `rack_storage_items` (not paginated)
 `get`, `list`, `listAll`, `create`, `update`, `delete`.
@@ -729,7 +736,7 @@ r.delete(id: number): Promise<void>    // 204
 ```ts
 r.list(params?: ActivityLogsListParams): AsyncIterable<ActivityLog>  // user_id?, user_email?, resource_id?, resource_type?, action_message?, start_date?
 r.listAll(params?): Promise<ActivityLog[]>
-r.deleteAll(): Promise<void>   // DELETE /activity_logs — deletes ALL logs (caller beware)
+r.deleteAll(params: { datetime: string; delete_unassigned_logs?: boolean }): Promise<void>  // DELETE /activity_logs — deletes ALL logs from a datetime (caller beware)
 ```
 
 ### 12.35 `CardsResource` — integrator cards
@@ -864,7 +871,7 @@ export const NoopLogger: Logger = {};
 - **Per-resource (`resources/*.test.ts`)**: use `test/__fixtures__/` JSON captured from
   `api-docs.json` (wrapped list, wrapped single, raw create, wrapped create, empty success)
   to assert each method returns the **normalised** plain type.
-- **Coverage gate** (vitest config): lines/statements/functions ≥ 90%, branches ≥ 80%.
+- **Coverage gate** (vitest config): lines ≥ 97%, functions ≥ 94%, branches ≥ 83%, statements ≥ 97% (policy target 98% — gated a few points below measured: lines/stmts 98.36%, funcs 96.97%, branches 85.83%).
 
 ---
 

@@ -8,7 +8,7 @@ export interface AssetLayout {
   icon: string;
   color: string;
   icon_color: string;
-  sidebar_folder_id: number; // Can be null.
+  sidebar_folder_id: number | null; // Can be null.
   active: boolean;
   include_passwords: boolean;
   include_photos: boolean;

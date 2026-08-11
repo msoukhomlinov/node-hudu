@@ -57,6 +57,19 @@ describe('errorFromStatus', () => {
     const e = errorFromStatus(400, 'You sent a bad request');
     expect(e.message).toBe('You sent a bad request');
   });
+  it('pulls message/error out of a JSON body into err.message (B13)', () => {
+    const e = errorFromStatus(400, { error: 'malformed request' });
+    expect(e.message).toBe('malformed request');
+    expect(e.body).toEqual({ error: 'malformed request' });
+  });
+  it('prefers body.message over body.error (B13)', () => {
+    const e = errorFromStatus(422, { message: 'explained', error: 'raw' });
+    expect(e.message).toBe('explained');
+  });
+  it('falls back to the status text when a record body has no message/error (B13)', () => {
+    const e = errorFromStatus(404, { other: 'x' });
+    expect(e).toBeInstanceOf(NotFoundError);
+  });
 });
 
 describe('HuduError subclasses', () => {

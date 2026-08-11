@@ -108,6 +108,16 @@ describe('CompaniesResource', () => {
     expect(spy.calls[0].init.method).toBe('DELETE');
   });
 
+  it('jump follows the redirect and returns the Location (B21)', async () => {
+    const spy = stubFetch(() =>
+      new Response(null, { status: 302, headers: { location: 'https://hudu.example.com/companies/acme' } }),
+    );
+    const url = await makeClient().companies.jump({ integration_slug: 'hudu' });
+    expect(url).toBe('https://hudu.example.com/companies/acme');
+    expect(spy.calls[0].url).toContain('/companies/jump');
+    expect(spy.calls[0].url).toContain('integration_slug=hudu');
+  });
+
   it('archive and unarchive hit the right URLs', async () => {
     const spy = stubFetch(() => empty(204));
     const r = makeClient().companies;

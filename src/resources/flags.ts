@@ -33,10 +33,10 @@ export class FlagsResource extends BaseResource<Flag> {
     return this.all(params ?? {});
   }
   async create(data: FlagCreate): Promise<Flag> {
-    return this.createOne<Flag>(data);
+    return this.createOne<Flag>({ flag: data });
   }
   async update(id: number, data: FlagUpdate): Promise<Flag> {
-    return this.updateOne<Flag>(id, data);
+    return this.updateOne<Flag>(id, { flag: data });
   }
   async delete(id: number): Promise<void> {
     return this.deleteOne(id);

@@ -3,7 +3,7 @@
  */
 export interface AssetPassword {
   id: number; // Unique identifier of the asset password
-  passwordable_id: number; // ID of the related object (e.g., 'Website') for the password. Can be null.
+  passwordable_id: number | null; // ID of the related object (e.g., 'Website') for the password. Can be null.
   passwordable_type: string; // Type of the related object for the password (e.g., 'Asset', 'Website')
   company_id: number; // Identifier of the company to which the password belongs
   name: string; // Name of the password
@@ -12,13 +12,13 @@ export interface AssetPassword {
   description: string; // Description or notes related to the password
   password: string; // The actual password string
   otp_secret: string; // Secret key for one-time passwords (OTP), if used
-  password_type: string; // Type or category of the password. Can be null.
+  password_type: string | null; // Type or category of the password. Can be null.
   url: string; // URL related to the password, if applicable
   created_at: string; // Timestamp when the password was created
   updated_at: string; // Timestamp when the password was last updated
-  password_folder_id: number; // ID of the folder in which the password is stored, if any. Can be null.
-  password_folder_name: string; // Name of the folder in which the password is stored, if any. Can be null.
-  login_url: string; // URL for the login page associated with the password. Can be null.
+  password_folder_id: number | null; // ID of the folder in which the password is stored, if any. Can be null.
+  password_folder_name: string | null; // Name of the folder in which the password is stored, if any. Can be null.
+  login_url: string | null; // URL for the login page associated with the password. Can be null.
 }
 
 /**

@@ -6,9 +6,9 @@ export interface CompanyIntegration {
   integrator_id: number; // The unique identifier of the integrator.
   integrator_name: string; // The name of the integrator.
   sync_id: number; // The unique identifier for the synchronization.
-  identifier: string; // The identifier of the integration. Can be null.
+  identifier: string | null; // The identifier of the integration. Can be null.
   name: string; // The name of the integration.
-  potential_company_id: number; // The unique identifier of the potential company associated with the integration. Can be null.
+  potential_company_id: number | null; // The unique identifier of the potential company associated with the integration. Can be null.
   company_id: number; // The unique identifier of the company associated with the integration.
   company_name: string; // The name of the company associated with the integration.
 }

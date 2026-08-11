@@ -2,8 +2,9 @@
  * mcp-server.ts — a Model Context Protocol (MCP) server backed by node-hudu.
  *
  * Demonstrates the MCP tool-manifest standard (api-node-squad
- * references/mcp-tool-manifest.md): one `list_<resource>` read per resource via
- * listAll (the single read entry point), uniform verb_scope naming, optional
+ * references/mcp-tool-manifest.md): one `list_<resource>` read per represented
+ * resource via listAll (the single read entry point) - a small representative
+ * subset (3 of the SDK's resources) plus one targeted get, uniform verb_scope naming, optional
  * `search` listed before exact-match `name`, consistent page_size guidance, and
  * handlers that surface HuduError.code for LLM self-correction.
  *
@@ -30,7 +31,10 @@ const server = new McpServer({ name: 'hudu-mcp', version: '0.1.0' });
  * Surface a HuduError.code (plus status/retryAfter) as a structured content block so
  * the model can self-correct — never let the error vanish into an uncaughtException.
  */
-function huduContent(data: unknown, err?: unknown): { content: { type: 'text'; text: string }[] } {
+function huduContent(data: unknown, err?: unknown): {
+  content: { type: 'text'; text: string }[];
+  isError: boolean;
+} {
   if (err instanceof HuduError) {
     return {
       content: [{
@@ -43,13 +47,26 @@ function huduContent(data: unknown, err?: unknown): { content: { type: 'text'; t
           retryAfter: 'retryAfter' in err ? (err as { retryAfter?: number }).retryAfter : undefined,
         }),
       }],
+      isError: true,
     };
   }
-  return { content: [{ type: 'text', text: JSON.stringify(data) }] };
+  if (err !== undefined) {
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          error: true,
+          message: err instanceof Error ? err.message : String(err),
+        }),
+      }],
+      isError: true,
+    };
+  }
+  return { content: [{ type: 'text', text: JSON.stringify(data) }], isError: false };
 }
 
 // -- Read-only core tier ------------------------------------------------
-// One list_<resource> per resource (listAll is the single read entry point).
+// One list_<resource> per represented resource (a representative subset, not all 35).
 // `search` is OPTIONAL and listed first — so "list all" is always possible.
 
 server.registerTool(
@@ -58,7 +75,7 @@ server.registerTool(
     description: 'List/search companies. Returns Company[] with a numeric id to pass to later calls; search is a partial name match.',
     inputSchema: {
       search: z.string().optional().describe('Partial company name match (prefer over exact name)'),
-      page_size: z.number().int().optional().describe('Records per page; raise to 100 for many records'),
+      page_size: z.number().int().min(1).max(100).optional().describe('Records per page; 1-100 (raise to 100 for many records)'),
     },
   },
   async ({ search, page_size }) => {
@@ -77,7 +94,7 @@ server.registerTool(
     description: 'List/search articles. Returns Article[] with a numeric id; search matches name/content.',
     inputSchema: {
       search: z.string().optional().describe('Partial article name/content match (prefer over exact name)'),
-      page_size: z.number().int().optional().describe('Records per page; raise to 100 for many records'),
+      page_size: z.number().int().min(1).max(100).optional().describe('Records per page; 1-100 (raise to 100 for many records)'),
     },
   },
   async ({ search, page_size }) => {
@@ -97,12 +114,12 @@ server.registerTool(
     inputSchema: {
       name: z.string().optional().describe('Exact asset layout name match'),
       active: z.boolean().optional().describe('Filter to active layouts only'),
-      page_size: z.number().int().optional().describe('Records per page; raise to 100 for many records'),
+      slug: z.string().optional().describe('Exact asset layout slug match'),
     },
   },
-  async ({ name, active, page_size }) => {
+  async ({ name, active, slug }) => {
     try {
-      const layouts = await hudu.assetLayouts.listAll({ name, active, page_size: page_size ?? 25 });
+      const layouts = await hudu.assetLayouts.listAll({ name, active, slug });
       return huduContent(layouts);
     } catch (err) {
       return huduContent(null, err);
@@ -129,7 +146,10 @@ server.registerTool(
 );
 
 process.on('uncaughtException', (err) => {
-  console.error('uncaught', err instanceof Error ? err.message : err);
+  console.error('uncaught exception:', err instanceof Error ? err.stack ?? err.message : err);
+  // Avoid a hard process.exit(1), which can drop buffered stdout. Close the
+  // transport so pending I/O drains, then exit with a non-zero status.
+  void transport.close().finally(() => process.exit(1));
 });
 
 const transport = new StdioServerTransport();

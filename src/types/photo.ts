@@ -15,10 +15,24 @@ export interface Photo {
 }
 
 /**
- * Input for creating a Photo.
- * All fields are optional unless the API requires them; see docs.
+ * Input for creating a Photo (multipart). `file` and `caption` are required (spec).
  */
-export type PhotoCreate = Partial<Omit<Photo, 'id' | 'created_at' | 'updated_at' | 'url' | 'full_url'>>;
+export interface PhotoCreate {
+  /** The image file to upload. */
+  file: Blob | File;
+  /** Caption/title of the photo. Required (spec). */
+  caption: string;
+  /** ID of the company this photo belongs to. */
+  company_id?: number;
+  /** The type of record this photo is attached to (Company, Asset, Article, etc.). */
+  photoable_type?: string;
+  /** The ID of the record this photo is attached to. */
+  photoable_id?: number;
+  /** ID of the folder this photo is in. */
+  folder_id?: number;
+  /** Whether the photo is pinned. */
+  pinned?: boolean;
+}
 
 /**
  * Input for updating a Photo.

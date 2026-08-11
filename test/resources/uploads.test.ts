@@ -28,8 +28,23 @@ describe('UploadsResource', () => {
     expect(call.init.body).toBeInstanceOf(FormData);
     const fd = call.init.body as FormData;
     expect(fd.has('file')).toBe(true);
-    expect(fd.get('uploadable_id')).toBe('5');
-    expect(fd.get('uploadable_type')).toBe('Article');
+    expect(fd.get('upload[uploadable_id]')).toBe('5');
+    expect(fd.get('upload[uploadable_type]')).toBe('Article');
+    expect(fd.get('uploadable_id')).toBeNull();
+    expect(fd.get('uploadable_type')).toBeNull();
+  });
+
+
+  it('upload converts a Node Buffer to a Blob so binary bytes are not mangled (close-check F1)', async () => {
+    const spy = stubFetch(() => json(upload, 201));
+    const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x01, 0x02, 0xff]); // binary (PNG-like)
+    await makeClient().uploads.upload(bytes, { uploadable_id: 7, uploadable_type: 'Article' });
+    const fd = spy.calls[0].init.body as FormData;
+    expect(fd).toBeInstanceOf(FormData);
+    const sent = fd.get('file') as Blob;
+    expect(sent).toBeInstanceOf(Blob);
+    const roundtrip = new Uint8Array(await sent.arrayBuffer());
+    expect(Array.from(roundtrip)).toEqual(Array.from(bytes));
   });
 
   it('listAll collects pages', async () => {
@@ -56,7 +71,8 @@ describe('UploadsResource', () => {
   it('get with download:true requests the download query', async () => {
     const spy = stubFetch(() => text('file-bytes'));
     const res = await makeClient().uploads.get(3, { download: true });
-    expect(res).toBe('file-bytes');
+    expect(res).toBeInstanceOf(Blob);
+    expect(await (res as Blob).text()).toBe('file-bytes');
     expect(spy.calls[0].url).toBe('https://hudu.example.com/api/v1/uploads/3?download=true');
   });
 

@@ -44,8 +44,11 @@ export class ProceduresResource extends BaseResource<Procedure> {
   async update(id: number, data: ProcedureUpdate): Promise<Procedure> {
     return this.updateOne<Procedure>(id, data);
   }
+  /** DELETE /procedures/{id}. */
   async delete(id: number): Promise<void> {
-    return this.deleteOne(id);
+    // The spec's 200 response body is not guaranteed to be present; return void
+    // so an empty body (undefined) is never mis-typed as `{ message }` (R4).
+    await this.deleteOne(id);
   }
 
   listPages(params?: ProceduresListParams): AsyncIterable<Page<Procedure>> {
@@ -55,7 +58,7 @@ export class ProceduresResource extends BaseResource<Procedure> {
   /** POST /procedures/{id}/duplicate — create a copy of a process. */
   async duplicate(
     id: number,
-    opts?: { company_id?: number; name?: string; description?: string },
+    opts: { company_id: number; name?: string; description?: string },
   ): Promise<Procedure> {
     const body = await this.http.request<unknown>({
       method: 'POST',

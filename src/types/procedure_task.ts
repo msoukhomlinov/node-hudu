@@ -12,7 +12,7 @@ export interface ProcedureTask {
   completion_notes: string; // Notes about the completion of the task.
   due_date: string; // The due date for the task.
   formatted_due_date: string; // Formatted due date string.
-  user_id: number; // The ID of the user who completed the task, if any.
+  user_id?: number; // The ID of the user who completed the task, if any.
   user_name: string; // The name of the user who completed the task.
   assigned_users: number[]; // Array of user IDs assigned to this task.
   first_assigned_user_id: number; // The ID of the first assigned user.
@@ -20,7 +20,7 @@ export interface ProcedureTask {
   first_assigned_user_initials: string; // The initials of the first assigned user.
   procedure_id: number; // The ID of the procedure (process or run) this task belongs to.
   optional: boolean; // Whether the task is optional. Optional tasks don't need to be completed for the procedure to be considered complete.
-  parent_task_id: number; // The ID of the parent task if this is a subtask, null otherwise.
+  parent_task_id: number | null; // The ID of the parent task if this is a subtask, null otherwise.
   subtask_ids: number[]; // Array of IDs of subtasks belonging to this task.
   subtask_count: number; // The number of subtasks this task has.
   has_subtasks: boolean; // Whether this task has any subtasks.

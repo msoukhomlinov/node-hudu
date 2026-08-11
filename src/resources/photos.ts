@@ -4,7 +4,7 @@
 import type { HttpClient } from '../http.js';
 import { BaseResource } from './base.js';
 import type { ListParams, Page } from '../pagination.js';
-import type { Photo } from '../types/index.js';
+import type { Photo, PhotoCreate, PhotoUpdate } from '../types/index.js';
 
 export interface PhotosListParams extends ListParams {
   company_id?: number;
@@ -22,7 +22,7 @@ export class PhotosResource extends BaseResource<Photo> {
   }
   async get(id: number, opts?: { download?: boolean }): Promise<Photo | Blob> {
     if (opts?.download) {
-      return this.http.request<Blob>({ method: 'GET', path: `/photos/${id}`, query: { download: true } });
+      return this.http.download({ method: 'GET', path: `/photos/${id}`, query: { download: true } });
     }
     return this.getOne<Photo>(id);
   }
@@ -35,19 +35,21 @@ export class PhotosResource extends BaseResource<Photo> {
   listPages(params?: PhotosListParams): AsyncIterable<Page<Photo>> {
     return this.pageIter(params ?? {});
   }
-  /** Multipart create. */
-  async create(data: Record<string, unknown>): Promise<Photo> {
+  /** Multipart create. file and caption are required (spec). */
+  async create(data: PhotoCreate): Promise<Photo> {
     const fd = new FormData();
-    if (data.file) fd.append('file', data.file as Blob);
-    for (const k of ['caption','company_id','photoable_type','photoable_id','folder_id','pinned']) {
+    fd.append('file', data.file);
+    fd.append('caption', data.caption);
+    for (const k of ['company_id', 'photoable_type', 'photoable_id', 'folder_id', 'pinned'] as const) {
       const v = data[k];
       if (v !== undefined) fd.append(k, String(v));
     }
     const body = await this.http.request<unknown>({ method: 'POST', path: '/photos', formData: fd });
     return this.unwrapSingle<Photo>(body);
   }
-  async update(id: number, data: Record<string, unknown>): Promise<Photo> {
-    return this.updateOne<Photo>(id, data);
+  /** PUT /photos/{id} wraps the body in a `photo` key (spec, B7). */
+  async update(id: number, data: PhotoUpdate): Promise<Photo> {
+    return this.updateOne<Photo>(id, { photo: data });
   }
   async delete(id: number): Promise<void> {
     return this.deleteOne(id);

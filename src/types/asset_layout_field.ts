@@ -6,10 +6,10 @@ export interface AssetLayoutField {
   label: string;
   show_in_list: boolean;
   field_type: string;
-  required: boolean; // Can be null.
+  required: boolean | null; // Can be null.
   hint: string;
-  min: number; // Can be null.
-  max: number; // Can be null.
+  min: number | null; // Can be null.
+  max: number | null; // Can be null.
   linkable_id: number;
   expiration: boolean;
   options: string;

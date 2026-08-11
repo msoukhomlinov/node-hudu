@@ -31,10 +31,10 @@ export class WebsitesResource extends BaseResource<Website> {
     return this.all(params ?? {});
   }
   async create(data: WebsiteCreate): Promise<Website> {
-    return this.createOne<Website>(data);
+    return this.createOne<Website>({ website: data });
   }
   async update(id: number, data: WebsiteUpdate): Promise<Website> {
-    return this.updateOne<Website>(id, data);
+    return this.updateOne<Website>(id, { website: data });
   }
   async delete(id: number): Promise<void> {
     return this.deleteOne(id);
