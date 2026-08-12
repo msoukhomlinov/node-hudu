@@ -126,9 +126,12 @@ const matches = await hudu.articles.listAll({ search: 'firewall', page_size: 100
 See [`examples/mcp-server.ts`](examples/mcp-server.ts) for a complete, working MCP server
 that exposes `hudu_*` tools backed by this SDK.
 
-A minimal skeleton built on `@modelcontextprotocol/sdk`:
+A minimal skeleton built on MCP SDK v2 (`@modelcontextprotocol/server`, zod v4):
 
 ```ts
+import { McpServer } from '@modelcontextprotocol/server';
+import { serveStdio } from '@modelcontextprotocol/server/stdio';
+import * as z from 'zod/v4';
 import { HuduClient } from 'node-hudu';
 
 const hudu = new HuduClient({
@@ -136,10 +139,46 @@ const hudu = new HuduClient({
   apiKey: process.env.HUDU_API_KEY!,
 });
 
-// Inside your MCP tool's execute() handler:
-const companies = await hudu.companies.listAll({ search });
-return { content: [{ type: 'text', text: JSON.stringify(companies) }] };
+serveStdio(() => {
+  const server = new McpServer({
+    name: 'my-hudu-mcp',
+    version: '1.0.0',
+    title: 'My Hudu MCP',
+    websiteUrl: 'https://example.com',
+  });
+
+  server.registerTool(
+    'hudu_search_companies',
+    {
+      description: 'Search companies by name. Returns Company[] with id for hudu_get_company calls.',
+      inputSchema: z.object({
+        search: z.string().optional().describe('Partial company name match'),
+        limit: z.number().int().min(1).max(100).default(25).describe('Max results'),
+      }),
+      outputSchema: z.object({
+        companies: z.array(z.object({ id: z.number(), name: z.string() })),
+        total: z.number(),
+      }),
+      annotations: { readOnlyHint: true },
+    },
+    async ({ search, limit }) => {
+      // Bounded fetch: single page only via listPages()
+      const pages = hudu.companies.listPages({ search, page_size: limit });
+      const firstPage = await pages[Symbol.asyncIterator]().next();
+      const items = firstPage.done ? [] : firstPage.value.items;
+      const compact = items.map((c) => ({ id: c.id, name: c.name }));
+      return {
+        content: [{ type: 'text', text: JSON.stringify({ companies: compact, total: compact.length }) }],
+        structuredContent: { companies: compact, total: compact.length },
+      };
+    },
+  );
+
+  return server;
+});
 ```
+
+> **Note:** MCP SDK v2 requires Node >= 20. The SDK itself supports Node >= 18.
 
 ---
 

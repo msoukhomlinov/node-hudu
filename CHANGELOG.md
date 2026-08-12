@@ -5,6 +5,32 @@ All notable changes to **node-hudu** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] — 2026-08-11
+
+### Changed — MCP v2 alignment
+
+- **MCP example upgraded to official SDK v2** (`@modelcontextprotocol/server` instead of
+  legacy `@modelcontextprotocol/sdk`).
+- **Zod v4** in the MCP example (`import * as z from 'zod/v4'`).
+- **Structured output**: tools return `structuredContent` with typed `outputSchema`
+  alongside `content` for MCP spec compliance.
+- **Tool annotations**: `readOnlyHint` and `idempotentHint` declared per tool so MCP clients
+  can enforce safety policies.
+- **Search-first naming**: `hudu_search_companies`, `hudu_search_articles`,
+  `hudu_search_asset_layouts` (was `hudu_list_*`) — aligns with MCP v2 guidance that
+  search/list tools use bounded results.
+- **Bounded pagination**: search tools fetch a single page with `page_size=limit` via
+  `listPages()` instead of exhausting all pages, respecting the advertised bounded-search
+  behavior. `hudu_search_asset_layouts` iterates pages until `limit` is collected (the
+  upstream endpoint does not support `page_size`).
+- **Server metadata**: `title` and `websiteUrl` fields set for better client discovery.
+- **`serveStdio` factory pattern**: uses the v2-recommended `serveStdio(() => server)`
+  instead of `server.connect(transport)`.
+
+**Note:** MCP SDK v2 requires Node >= 20. The SDK itself continues to support Node >= 18.
+
+See [`examples/mcp-server.ts`](examples/mcp-server.ts) for the complete working example.
+
 ## [0.1.0] — 2026-08-10
 
 ### Added — Initial release

@@ -1,20 +1,25 @@
 /**
- * mcp-server.ts — a Model Context Protocol (MCP) server backed by node-hudu.
+ * mcp-server.ts — a Model Context Protocol (MCP) v2 server backed by node-hudu.
  *
- * Demonstrates the MCP tool-manifest standard (api-node-squad
- * references/mcp-tool-manifest.md): one `list_<resource>` read per represented
- * resource via listAll (the single read entry point) - a small representative
- * subset (3 of the SDK's resources) plus one targeted get, uniform verb_scope naming, optional
- * `search` listed before exact-match `name`, consistent page_size guidance, and
- * handlers that surface HuduError.code for LLM self-correction.
+ * Aligns with the MCP v2 standard (2026-07-28):
+ * - Official SDK v2: @modelcontextprotocol/server
+ * - Zod v4: import * as z from "zod/v4"
+ * - structuredContent + outputSchema for typed responses
+ * - Tool annotations (readOnlyHint, idempotentHint)
+ * - Search-first tool naming (hudu_search_* not hudu_list_*)
+ * - Server metadata (websiteUrl, title)
+ * - Bounded pagination (respects limit without fetching all pages)
+ * - Error handling with HuduError.code surfaced for LLM self-correction
  *
- * Requires:  npm install @modelcontextprotocol/sdk zod
+ * Note: MCP SDK v2 requires Node >= 20. The SDK itself supports Node >= 18.
+ *
+ * Requires:  npm install @modelcontextprotocol/server zod
  *
  * Run with:  HUDU_BASE_URL=https://hudu.example.com HUDU_API_KEY=xxx npx tsx examples/mcp-server.ts
  */
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { z } from 'zod';
+import { McpServer } from '@modelcontextprotocol/server';
+import { serveStdio } from '@modelcontextprotocol/server/stdio';
+import * as z from 'zod/v4';
 import { HuduClient, HuduError } from 'node-hudu';
 
 const baseUrl = process.env.HUDU_BASE_URL;
@@ -24,134 +29,290 @@ if (!baseUrl || !apiKey) {
   throw new Error('HUDU_BASE_URL and HUDU_API_KEY must be set');
 }
 
-const hudu = new HuduClient({ baseUrl, apiKey });
-const server = new McpServer({ name: 'hudu-mcp', version: '0.1.0' });
+const handle = serveStdio(() => {
+  const hudu = new HuduClient({ baseUrl, apiKey });
 
-/**
- * Surface a HuduError.code (plus status/retryAfter) as a structured content block so
- * the model can self-correct — never let the error vanish into an uncaughtException.
- */
-function huduContent(data: unknown, err?: unknown): {
-  content: { type: 'text'; text: string }[];
-  isError: boolean;
-} {
-  if (err instanceof HuduError) {
+  const server = new McpServer({
+    name: 'hudu-mcp',
+    version: '0.2.0',
+    title: 'Hudu MCP Server',
+    websiteUrl: 'https://github.com/msoukhomlinov/node-hudu',
+  });
+
+  /**
+   * Return a structured error response that surfaces HuduError.code
+   * so the model can self-correct — never let the error vanish.
+   */
+  function errorContent(err: unknown) {
+    const code = (err as { code?: string })?.code;
+    const status = (err as { status?: number })?.status;
+    const retryAfter = (err as { retryAfter?: number })?.retryAfter;
+    const message = err instanceof Error ? err.message : String(err);
+
     return {
-      content: [{
-        type: 'text',
-        text: JSON.stringify({
-          error: true,
-          code: err.code,
-          status: err.status,
-          message: err.message,
-          retryAfter: 'retryAfter' in err ? (err as { retryAfter?: number }).retryAfter : undefined,
-        }),
-      }],
+      content: [
+        {
+          type: 'text' as const,
+          text: JSON.stringify({
+            error: true,
+            code,
+            status,
+            message,
+            retryAfter,
+          }),
+        },
+      ],
       isError: true,
     };
   }
-  if (err !== undefined) {
-    return {
-      content: [{
-        type: 'text',
-        text: JSON.stringify({
-          error: true,
-          message: err instanceof Error ? err.message : String(err),
-        }),
-      }],
-      isError: true,
-    };
-  }
-  return { content: [{ type: 'text', text: JSON.stringify(data) }], isError: false };
-}
 
-// -- Read-only core tier ------------------------------------------------
-// One list_<resource> per represented resource (a representative subset, not all 35).
-// `search` is OPTIONAL and listed first — so "list all" is always possible.
+  // =========================================================================
+  // Read-only core tier — search-first pattern
+  // =========================================================================
 
-server.registerTool(
-  'hudu_list_companies',
-  {
-    description: 'List/search companies. Returns Company[] with a numeric id to pass to later calls; search is a partial name match.',
-    inputSchema: {
-      search: z.string().optional().describe('Partial company name match (prefer over exact name)'),
-      page_size: z.number().int().min(1).max(100).optional().describe('Records per page; 1-100 (raise to 100 for many records)'),
+  // Note: handlers typed as any due to MCP SDK v2 union type complexity between
+  // success (structuredContent + content) and error (isError) result shapes when
+  // outputSchema is set. Runtime behaviour is correct: isError=true skips
+  // outputSchema validation.
+
+  server.registerTool(
+    'hudu_search_companies',
+    {
+      title: 'Search Companies',
+      description:
+        'Search companies by name. Returns compact Company[] with numeric id for subsequent hudu_get_company calls. ' +
+        'Use search for partial matches; leave empty to list companies.',
+      inputSchema: z.object({
+        search: z.string().optional().describe('Partial company name match (prefer over exact name)'),
+        limit: z.number().int().min(1).max(100).default(25).describe('Max results (1-100, default 25)'),
+      }),
+      outputSchema: z.object({
+        companies: z.array(
+          z.object({
+            id: z.number().describe('Company id for hudu_get_company'),
+            name: z.string(),
+          }),
+        ),
+        total: z.number().describe('Number of companies returned'),
+      }),
+      annotations: {
+        readOnlyHint: true,
+      },
     },
-  },
-  async ({ search, page_size }) => {
-    try {
-      const companies = await hudu.companies.listAll({ search, page_size: page_size ?? 25 });
-      return huduContent(companies);
-    } catch (err) {
-      return huduContent(null, err);
-    }
-  },
-);
+    async function handler({ search, limit }: { search?: string; limit: number }) {
+      try {
+        // Bounded fetch: get first page only with page_size=limit
+        const pages = hudu.companies.listPages({
+          search: search || undefined,
+          page_size: limit,
+        });
+        const firstPage = await pages[Symbol.asyncIterator]().next();
+        if (firstPage.done) {
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify({ companies: [], total: 0 }) }],
+            structuredContent: { companies: [], total: 0 },
+          };
+        }
+        const items = firstPage.value.items.slice(0, limit);
+        const compact = items.map((c: { id: number; name: string }) => ({ id: c.id, name: c.name }));
 
-server.registerTool(
-  'hudu_list_articles',
-  {
-    description: 'List/search articles. Returns Article[] with a numeric id; search matches name/content.',
-    inputSchema: {
-      search: z.string().optional().describe('Partial article name/content match (prefer over exact name)'),
-      page_size: z.number().int().min(1).max(100).optional().describe('Records per page; 1-100 (raise to 100 for many records)'),
-    },
-  },
-  async ({ search, page_size }) => {
-    try {
-      const articles = await hudu.articles.listAll({ search, page_size: page_size ?? 25 });
-      return huduContent(articles);
-    } catch (err) {
-      return huduContent(null, err);
-    }
-  },
-);
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify({ companies: compact, total: compact.length }) }],
+          structuredContent: { companies: compact, total: compact.length },
+        };
+      } catch (err) {
+        return errorContent(err);
+      }
+    } as any,
+  );
 
-server.registerTool(
-  'hudu_list_asset_layouts',
-  {
-    description: 'List asset layouts. Returns AssetLayout[] with numeric id; call this first to find asset_layout_id for creating assets.',
-    inputSchema: {
-      name: z.string().optional().describe('Exact asset layout name match'),
-      active: z.boolean().optional().describe('Filter to active layouts only'),
-      slug: z.string().optional().describe('Exact asset layout slug match'),
+  server.registerTool(
+    'hudu_get_company',
+    {
+      title: 'Get Company',
+      description:
+        'Get a full Company record by its numeric id. Only call when you have the id (e.g. from hudu_search_companies); ' +
+        'otherwise call hudu_search_companies first.',
+      inputSchema: z.object({
+        id: z.number().int().describe('The numeric Company id'),
+      }),
+      outputSchema: z.object({
+        id: z.number(),
+        name: z.string(),
+        description: z.string().optional(),
+        created_at: z.string().optional(),
+        updated_at: z.string().optional(),
+      }).passthrough(),
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+      },
     },
-  },
-  async ({ name, active, slug }) => {
-    try {
-      const layouts = await hudu.assetLayouts.listAll({ name, active, slug });
-      return huduContent(layouts);
-    } catch (err) {
-      return huduContent(null, err);
-    }
-  },
-);
+    async function handler({ id }: { id: number }) {
+      try {
+        const company = await hudu.companies.get(id);
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify(company) }],
+          structuredContent: company,
+        };
+      } catch (err) {
+        return errorContent(err);
+      }
+    } as any,
+  );
 
-// -- A targeted get: only when you already hold a numeric id ------------
-server.registerTool(
-  'hudu_get_company',
-  {
-    description: 'Get one Company by its numeric id. Only call when you have the id (e.g. from hudu_list_companies); otherwise call hudu_list_companies first.',
-    inputSchema: {
-      id: z.number().int().describe('The numeric Company id'),
+  server.registerTool(
+    'hudu_search_articles',
+    {
+      title: 'Search Articles',
+      description:
+        'Search articles by name or content. Returns Article[] with id and content preview for subsequent hudu_get_article calls. ' +
+        'Use search for partial matches; leave empty to list articles.',
+      inputSchema: z.object({
+        search: z.string().optional().describe('Partial article name/content match (prefer over exact name)'),
+        limit: z.number().int().min(1).max(100).default(25).describe('Max results (1-100, default 25)'),
+      }),
+      outputSchema: z.object({
+        articles: z.array(
+          z.object({
+            id: z.number().describe('Article id for hudu_get_article'),
+            name: z.string(),
+            content: z.string().describe('Article content'),
+          }),
+        ),
+        total: z.number().describe('Number of articles returned'),
+      }),
+      annotations: {
+        readOnlyHint: true,
+      },
     },
-  },
-  async ({ id }) => {
-    try {
-      return huduContent(await hudu.companies.get(id));
-    } catch (err) {
-      return huduContent(null, err);
-    }
-  },
-);
+    async function handler({ search, limit }: { search?: string; limit: number }) {
+      try {
+        // Bounded fetch: get first page only with page_size=limit
+        const pages = hudu.articles.listPages({
+          search: search || undefined,
+          page_size: limit,
+        });
+        const firstPage = await pages[Symbol.asyncIterator]().next();
+        if (firstPage.done) {
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify({ articles: [], total: 0 }) }],
+            structuredContent: { articles: [], total: 0 },
+          };
+        }
+        const items = firstPage.value.items.slice(0, limit);
+        // Truncate content to preview (full content via hudu_get_article)
+        const previewMax = 500;
+        const compact = items.map((a: { id: number; name: string; content?: string }) => ({
+          id: a.id,
+          name: a.name,
+          content: a.content ? (a.content.length > previewMax ? a.content.slice(0, previewMax) + '...' : a.content) : '',
+        }));
+
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify({ articles: compact, total: compact.length }) }],
+          structuredContent: { articles: compact, total: compact.length },
+        };
+      } catch (err) {
+        return errorContent(err);
+      }
+    } as any,
+  );
+
+  server.registerTool(
+    'hudu_get_article',
+    {
+      title: 'Get Article',
+      description:
+        'Get a full Article record by its numeric id. Only call when you have the id (e.g. from hudu_search_articles); ' +
+        'otherwise call hudu_search_articles first.',
+      inputSchema: z.object({
+        id: z.number().int().describe('The numeric Article id'),
+      }),
+      outputSchema: z.object({
+        id: z.number(),
+        name: z.string(),
+        content: z.string(),
+        created_at: z.string().optional(),
+        updated_at: z.string().optional(),
+      }).passthrough(),
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+      },
+    },
+    async function handler({ id }: { id: number }) {
+      try {
+        const article = await hudu.articles.get(id);
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify(article) }],
+          structuredContent: article,
+        };
+      } catch (err) {
+        return errorContent(err);
+      }
+    } as any,
+  );
+
+  server.registerTool(
+    'hudu_search_asset_layouts',
+    {
+      title: 'Search Asset Layouts',
+      description:
+        'List asset layouts. Returns AssetLayout[] with numeric id; call this first to find asset_layout_id for creating assets.',
+      inputSchema: z.object({
+        name: z.string().optional().describe('Exact asset layout name match'),
+        slug: z.string().optional().describe('Exact asset layout slug match'),
+        active: z.boolean().optional().describe('Filter to active layouts only'),
+        limit: z.number().int().min(1).max(100).default(25).describe('Max results (1-100, default 25)'),
+      }),
+      outputSchema: z.object({
+        layouts: z.array(
+          z.object({
+            id: z.number().describe('Asset layout id for creating/updating assets'),
+            name: z.string(),
+            slug: z.string(),
+          }),
+        ),
+        total: z.number().describe('Number of layouts returned'),
+      }),
+      annotations: {
+        readOnlyHint: true,
+      },
+    },
+    async function handler({ name, slug, active, limit }: { name?: string; slug?: string; active?: boolean; limit: number }) {
+      try {
+        // Iterate pages until limit is collected (assetLayouts doesn't support page_size)
+        const pages = hudu.assetLayouts.listPages({
+          name: name || undefined,
+          slug: slug || undefined,
+          active: active ?? undefined,
+        });
+        const compact = [];
+        for await (const page of pages) {
+          for (const l of page.items) {
+            if (compact.length >= limit) break;
+            compact.push({ id: l.id, name: l.name, slug: l.slug });
+          }
+          if (compact.length >= limit) break;
+        }
+
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify({ layouts: compact, total: compact.length }) }],
+          structuredContent: { layouts: compact, total: compact.length },
+        };
+      } catch (err) {
+        return errorContent(err);
+      }
+    } as any,
+  );
+
+  return server;
+});
 
 process.on('uncaughtException', (err) => {
   console.error('uncaught exception:', err instanceof Error ? err.stack ?? err.message : err);
-  // Avoid a hard process.exit(1), which can drop buffered stdout. Close the
-  // transport so pending I/O drains, then exit with a non-zero status.
-  void transport.close().finally(() => process.exit(1));
+  void handle.close().finally(() => process.exit(1));
 });
 
-const transport = new StdioServerTransport();
-await server.connect(transport);
-console.error('hudu MCP server running over stdio');
+console.error('hudu MCP server running over stdio (MCP v2)');
