@@ -377,6 +377,21 @@ function paramFields(text) {
 // signature does in some cases and fewer in others, so every declaration is considered and, per
 // position, the declaration whose parameter resolves to the MOST fields wins. The implementation
 // (last) declaration is the fallback. This is what stops a helper emitting a bare opaque `opts`.
+// A field whose validity depends on the operation must not be projected for an operation that
+// cannot honour it. `expectedUpdatedAt` guards `updateOne` only — base.ts
+// assertNoExpectedUpdatedAt throws CONFIG_ERROR on create/delete/archive/setArchived — so only an
+// update-shaped operation may advertise it.
+function isUpdateShaped(row) {
+  const opName = String(row.primitive ?? row.helper ?? '');
+  const method = opName.split('.').slice(1).join('.');
+  const isHelper = typeof row.helper === 'string' && row.helper.length > 0;
+  return isHelper ? /^(update|set|patch|move)[A-Za-z0-9_]*$/.test(method) : method === 'update';
+}
+function fieldAllowed(row, fieldName) {
+  if (fieldName === 'expectedUpdatedAt') return isUpdateShaped(row);
+  return true;
+}
+
 function paramInfo(method) {
   const decls = method.decls ?? [{ params: method.params }];
   const impl = decls[decls.length - 1];
@@ -399,8 +414,11 @@ function paramInfo(method) {
   }
   return out;
 }
-function inputSchema(method) {
-  const infos = paramInfo(method);
+function inputSchema(method, row) {
+  const infos = paramInfo(method).map((p) => ({
+    ...p,
+    fields: p.fields ? p.fields.filter((f) => fieldAllowed(row, f.name)) : p.fields,
+  }));
   const schema = {};
   // One parameter: flatten it, so `create(data)` and `companies.list(params)` expose the callable
   // fields at the top level (the shape the policy's own example uses for findByDomain(domain)).
@@ -465,7 +483,7 @@ function exampleFor(row, method, resource) {
   const opName = String(row.primitive ?? row.helper ?? '');
   // Only an update row that actually checks staleness may show expectedUpdatedAt: every other
   // mutation (and every update without a stale guard) throws CONFIG_ERROR before reaching the wire.
-  const isUpdateRow = opName.endsWith('.update') && row.staleCheck === 'updated_at';
+  const isUpdateRow = isUpdateShaped(row) && row.staleCheck === 'updated_at';
   const isMutation = row.effect === 'write' || row.effect === 'destructive';
   const args = paramInfo(method).map((p) => {
     if (!p.fields || !p.fields.length) {
@@ -478,7 +496,7 @@ function exampleFor(row, method, resource) {
     if (isOptionsBag) {
       return isUpdateRow ? "{ dryRun: true, expectedUpdatedAt: '2026-01-01T00:00:00Z' }" : '{ dryRun: true }';
     }
-    const fields = p.fields.filter((f) => isUpdateRow || f.name !== 'expectedUpdatedAt');
+    const fields = p.fields.filter((f) => fieldAllowed(row, f.name));
     const shown = fields.slice(0, 4).map((f) => `${f.name}: ${sampleValue(f)}`);
     const rest = fields.length > 4 ? ', /* ... */' : '';
     return `{ ${shown.join(', ')}${rest} }`;
@@ -584,7 +602,10 @@ function documentedMaxPageSize(endpoint) {
   const op = item[String(method).toLowerCase()];
   if (!op || !Array.isArray(op.parameters)) return null;
   const p = op.parameters.find((x) => x && x.name === 'page_size');
-  const m = p && typeof p.description === 'string' ? /max(?:imum)?\s*(\d+)/i.exec(p.description) : null;
+  // The vendor phrases this several ways: "max 1000", "max: 1000", "max of 1000", "maximum 1000".
+  const m = p && typeof p.description === 'string'
+    ? /\bmax(?:imum)?\b\s*(?:of\s*)?(?::)?\s*(\d+)/i.exec(p.description)
+    : null;
   return m ? Number(m[1]) : null;
 }
 
@@ -819,6 +840,15 @@ writeJson(path.join(OUT_DIR, 'capabilities.schema.json'), schemaDoc);
 console.log(`capabilities:build — plan ${path.relative(ROOT, PLAN_PATH)} planHash=${planHash}`);
 console.log(`capabilities:build — spec ${plan.spec ? plan.spec.source + ' v' + plan.spec.version : 'unknown'}; rows=${operations.length}; records emitted=${records.length}`);
 console.log(`capabilities:build — wrote ${WRITE_SRC ? 'src/capabilities.ts, ' : ''}${path.relative(ROOT, path.join(OUT_DIR, 'capabilities.json'))}, ${path.relative(ROOT, path.join(OUT_DIR, 'capabilities.schema.json'))}`);
+// Evidence line for the operation-conditional field rule (F1): a record may advertise
+// expectedUpdatedAt only when the operation is update-shaped.
+const advertisesExpected = (rec) => JSON.stringify(rec.inputSchema ?? {}).includes('expectedUpdatedAt');
+const withExpected = records.filter(advertisesExpected);
+const badExpected = withExpected.filter((r) => {
+  const method = r.name.split('.').slice(1).join('.');
+  return r.kind === 'helper' ? !/^(update|set|patch|move)[A-Za-z0-9_]*$/.test(method) : method !== 'update';
+});
+console.log(`capabilities:build — records advertising expectedUpdatedAt: ${withExpected.length} (non-update offenders: ${badExpected.length}${badExpected.length ? ' — ' + badExpected.map((r) => r.name).join(', ') : ''})`);
 const opaqueInputs = records
   .map((r) => ({ name: r.name, nodes: opaqueSchemaNodes(r.inputSchema) }))
   .filter((x) => x.nodes.length);

@@ -47,6 +47,9 @@ const argValue = (flag, fallback) => { const i = argv.indexOf(flag); return i ==
 const REGISTRY = path.resolve(ROOT, argValue('--registry', 'capabilities.json'));
 const OUT = path.resolve(ROOT, argValue('--out', 'MCP_TOOL_MANIFEST.md'));
 const OVERRIDES_PATH = path.resolve(ROOT, 'MCP_TOOL_OVERRIDES.json');
+// --check-example: verification mode. Recomputed projection, no manifest write, exit non-zero when
+// an advertised tool would fail at runtime (an example or a schema field the SDK rejects).
+const CHECK_EXAMPLE = argv.includes('--check-example');
 const TOOL_PREFIX = 'hudu_';
 
 // Mechanical exclusion sets (documented, not curated):
@@ -132,6 +135,8 @@ for (const rec of records) {
     outputSchema: rec.outputSchema ?? {},
     annotations,
     effect: rec.effect,
+    // The advertised call: the registry's first example, verbatim (never re-derived here).
+    example: Array.isArray(rec.examples) && rec.examples.length ? rec.examples[0] : null,
     registryKind: rec.kind ?? null,
     flags: rec.flags ?? [],
     permissions: rec.permissions,
@@ -311,6 +316,7 @@ for (const t of tools) {
   lines.push('');
   lines.push(`- backingOperation: \`${t.backingOperation}\``);
   lines.push(`- description: ${t.description}`);
+  lines.push(`- example: ${t.example === null ? '<none recorded>' : '\`' + String(t.example).replace(/\|/g, '\\|') + '\`'}`);
   lines.push(`- effect: \`${t.effect}\`; flags: ${t.flags.length ? t.flags.map((f) => `\`${f}\``).join(', ') : '(none)'}; permissions: \`${t.permissions}\`; dryRun: ${t.dryRun}`);
   lines.push(`- annotations: ${Object.entries(t.annotations).filter(([, v]) => v !== null).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(', ')}`);
   // Schemas are written single-line: this manifest is machine-generated and consumed by the
@@ -327,6 +333,36 @@ lines.push(tools.map((t) => '  ' + JSON.stringify(t)).join(',\n'));
 lines.push(']');
 lines.push('```');
 lines.push('');
+// Operation-conditional fields and examples must be calls that work: base.ts
+// assertNoExpectedUpdatedAt rejects expectedUpdatedAt outside an update operation, so a tool that
+// advertises or demonstrates it for anything else would fail at runtime.
+const updateShaped = (opName, kind) => {
+  const method = opName.split('.').slice(1).join('.');
+  return kind === 'helper' ? /^(update|set|patch|move)[A-Za-z0-9_]*$/.test(method) : method === 'update';
+};
+const exampleViolations = [];
+for (const t of tools) {
+  const isUpdate = updateShaped(t.backingOperation, t.registryKind);
+  if (isUpdate) continue;
+  if (t.example && String(t.example).includes('expectedUpdatedAt')) {
+    exampleViolations.push(`${t.name} (${t.backingOperation}): the example passes expectedUpdatedAt, which the SDK rejects outside an update`);
+  }
+  if (process.env.MCP_DEBUG_EXAMPLE === '1' && JSON.stringify(t.inputSchema).includes('expectedUpdatedAt')) {
+    const jj = JSON.stringify(t.inputSchema);
+    const at = jj.indexOf('expectedUpdatedAt');
+    console.log('DEBUG', t.name, '...' + jj.slice(Math.max(0, at - 220), at + 80));
+  }
+  if (JSON.stringify(t.inputSchema).includes('expectedUpdatedAt')) {
+    exampleViolations.push(`${t.name} (${t.backingOperation}): the inputSchema advertises expectedUpdatedAt, which the SDK rejects outside an update`);
+  }
+}
+if (CHECK_EXAMPLE) {
+  console.log(`mcp:project --check-example — tools checked=${tools.length}; example/field violations=${exampleViolations.length}`);
+  for (const v of exampleViolations) console.error(`  ✗ ${v}`);
+  if (exampleViolations.length) process.exit(1);
+  console.log('mcp:project --check-example — PASS: every projected example is a call the SDK accepts and no schema advertises an operation-invalid field');
+  process.exit(0);
+}
 writeFileSync(OUT, lines.join('\n'));
 
 console.log(`mcp:project — registry ${path.relative(ROOT, REGISTRY)} planHash=${registry.planHash}; records=${records.length}`);
@@ -341,9 +377,14 @@ const mislabelled = tools.filter((t) => t.registryKind === 'helper' && t.annotat
 console.log(`mcp:project — classification by registry kind: helper-tier tools=${helperTierTools.length}, primitive-read=${primitiveBackedReadTools.length}, primitive-write=${tools.filter((t) => t.effect !== 'read' && t.annotations.tier !== 'helper').length}; re-pointed-by-curation=${rePointedByCuration.length}; mislabelled=${mislabelled.length}${mislabelled.length ? ' (' + mislabelled.map((t) => t.backingOperation).join(', ') + ')' : ''}`);
 console.log(`mcp:project — curation exclusions: ${curationExcluded.length} tool(s) dropped through MCP_TOOL_OVERRIDES.json (listed under "Excluded by curation" in the manifest); no two curated read tools share a backingOperation=${(() => { const seen = new Map(); for (const t of tools) if (t.effect === 'read') { if (seen.has(t.backingOperation)) return false; seen.set(t.backingOperation, t.name); } return true; })()}`);
 console.log(`mcp:project — read tools missing helper-tier backing (resource has no helper record): ${readToolsMissingHelperBacking.length}`);
+if (exampleViolations.length) {
+  console.error(`mcp:project — EXAMPLE/FIELD VIOLATIONS (${exampleViolations.length}):`);
+  for (const v of exampleViolations) console.error(`  ✗ ${v}`);
+}
 console.log(`mcp:project — WARNING: ${primitiveBackedReadTools.length} read tool(s) are still backed by a plain primitive (${primitiveReadWithHelperAlternative.length} have a helper-tier alternative in the registry); listAll/listPages are never projected`);
 console.log(`mcp:project — helper-tier backing stated for every tool; curation worklist in the manifest`);
 if (missingPurpose.length) console.log(`mcp:project — tools with no projected description (missing purpose): ${missingPurpose.join(', ')}`);
+if (exampleViolations.length) process.exit(1);
 if (unresolvedOverrides.length) {
   console.error(`mcp:project — UNRESOLVED OVERRIDES (${unresolvedOverrides.length}):`);
   for (const u of unresolvedOverrides) console.error(`  ✗ ${JSON.stringify(u.ov)}: ${u.why}`);

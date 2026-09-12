@@ -43,9 +43,13 @@
 //   compact-shape-unknown     a non-null `compact` names a shape that is not declared in src/types/**
 //   resolution-caps           a client-scan resolution without both caps, or a server-filter without them
 //   redaction-value           `redaction` is not exactly "none" or "credentials"
-//   errors-vocabulary         an `errors` entry is not SCREAMING_SNAKE, or a required code is missing
-//                            (CONFIG_ERROR on every row; STALE_OBJECT when staleCheck is updated_at)
-//   related-dangling          a `related` entry names an operation with no registry record
+//   errors-vocabulary         an `errors` entry is not SCREAMING_SNAKE, or a required code is
+//                            missing (CONFIG_ERROR on every row; STALE_OBJECT when staleCheck is
+//                            updated_at) — checked on the plan rows AND on the registry records
+//   inputSchema-conditional-field  a record advertises a field the operation cannot honour
+//                            (expectedUpdatedAt outside an update-shaped operation)
+//   related-dangling          a `related` entry names an operation with no registry record —
+//                            checked on the plan rows AND on the registry records
 //   pagination                a record's pagination is absent, or claims nonPaginated AND mode "page"
 //   inputSchema-name          an inputSchema field object omits the `name` key CapabilityField declares
 //   test-title               a row at "tested": no test with that exact title in the named file
@@ -443,6 +447,34 @@ if (registry) {
     if (typeof rec.permissions !== 'string' || rec.permissions.length === 0) fail('record-permissions', `CAPABILITY_REGISTRY['${name}'].permissions`, 'permissions is missing or empty — the literal "unknown" is acceptable, an absent field is not');
     if (rec.purpose === null) warn('record-purpose', `CAPABILITY_REGISTRY['${name}'].purpose`, 'purpose is null (Architect judgement column unfilled)');
     const planRow = operations.find((r) => r.primitive === name || r.helper === name);
+    // errors vocabulary is gated on the EMITTED record too: the registry is what consumers read.
+    const recErrors = Array.isArray(rec.errors) ? rec.errors : [];
+    recErrors.forEach((code, i) => {
+      if (typeof code !== 'string' || !/^[A-Z][A-Z0-9_]*$/.test(code)) {
+        fail('errors-vocabulary', `CAPABILITY_REGISTRY['${name}'].errors[${i}]`, `${name}: "${code}" is not SCREAMING_SNAKE`);
+      }
+    });
+    if (!recErrors.includes('CONFIG_ERROR')) {
+      fail('errors-vocabulary', `CAPABILITY_REGISTRY['${name}'].errors`, `${name}: the emitted record omits CONFIG_ERROR, which the SDK raises for every operation shape`);
+    }
+    if (planRow && planRow.staleCheck === 'updated_at' && !recErrors.includes('STALE_OBJECT')) {
+      fail('errors-vocabulary', `CAPABILITY_REGISTRY['${name}'].errors`, `${name}: staleCheck is updated_at, so the emitted record must list STALE_OBJECT`);
+    }
+    // related edges are gated on the EMITTED record too.
+    const recRelated = Array.isArray(rec.related) ? rec.related : [];
+    recRelated.forEach((target, i) => {
+      if (!registryNameSet.has(target)) {
+        fail('related-dangling', `CAPABILITY_REGISTRY['${name}'].related[${i}]`, `${name}: the emitted record points at "${target}", which has no registry record`);
+      }
+    });
+    // an operation-conditional field must not be advertised by an operation that rejects it.
+    if (JSON.stringify(rec.inputSchema ?? {}).includes('expectedUpdatedAt')) {
+      const method = name.split('.').slice(1).join('.');
+      const updateShaped = rec.kind === 'helper' ? /^(update|set|patch|move)[A-Za-z0-9_]*$/.test(method) : method === 'update';
+      if (!updateShaped) {
+        fail('inputSchema-conditional-field', `CAPABILITY_REGISTRY['${name}'].inputSchema`, `${name}: advertises expectedUpdatedAt, which base.ts assertNoExpectedUpdatedAt rejects outside an update operation`);
+      }
+    }
     // examples must show calls that work: only an update row may pass expectedUpdatedAt, because
     // BaseResource.assertNoExpectedUpdatedAt throws CONFIG_ERROR before the dry-run branch.
     if (Array.isArray(rec.examples)) {
@@ -468,6 +500,16 @@ if (registry) {
       }
       if (pag.nonPaginated === false && !(Number(pag.maxPageSize) > 0)) {
         fail('pagination', `CAPABILITY_REGISTRY['${name}'].pagination.maxPageSize`, `${name}: a paginated operation needs a positive maxPageSize bound`);
+      }
+      // A bound must say WHERE it came from: a vendor-declared maximum and a self-imposed client
+      // cap must never be confusable.
+      if (pag.mode === 'page') {
+        if (pag.maxPageSizeSource !== 'api-docs' && pag.maxPageSizeSource !== 'default') {
+          fail('pagination', `CAPABILITY_REGISTRY['${name}'].pagination.maxPageSizeSource`, `${name}: maxPageSize needs a source label ("api-docs" | "default"), got ${JSON.stringify(pag.maxPageSizeSource)}`);
+        }
+        if (pag.maxPageSizeSource === 'api-docs' && !(Number(pag.maxPageSize) > 0)) {
+          fail('pagination', `CAPABILITY_REGISTRY['${name}'].pagination.maxPageSize`, `${name}: the source claims api-docs but the bound is ${JSON.stringify(pag.maxPageSize)}`);
+        }
       }
     }
     // every inputSchema field object carries the `name` key CapabilityField declares
