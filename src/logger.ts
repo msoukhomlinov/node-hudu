@@ -38,14 +38,24 @@ export const REDACTED_KEYS = [
   'private_key',
 ] as const;
 
-const REDACTED_KEY_SET: ReadonlySet<string> = new Set<string>(REDACTED_KEYS);
-const REDACTED_SUFFIXES = ['_token', '_secret', '_password'] as const;
+/**
+ * Credential keys are compared with separators REMOVED, so every spelling of the same field matches:
+ * `api_key`, `apiKey`, `API_KEY`, `api-key` and `apikey` all normalise to `apikey`. Live sandbox testing
+ * found that the camelCase `apiKey` - the name the SDK's own config uses, and the one most JSON bodies use -
+ * was NOT masked, so a credential could reach an audit event or a log line unmasked.
+ */
+function normalizeCredentialKey(key: string): string {
+  return key.toLowerCase().replace(/[_-]/g, '');
+}
+
+const REDACTED_KEY_SET: ReadonlySet<string> = new Set<string>(REDACTED_KEYS.map(normalizeCredentialKey));
+const REDACTED_SUFFIXES = ['token', 'secret', 'password'] as const;
 
 /** True when a key's name is credential-shaped and must never reach a log or audit payload. */
 export function isCredentialKey(key: string): boolean {
-  const lower = key.toLowerCase();
-  if (REDACTED_KEY_SET.has(lower)) return true;
-  return REDACTED_SUFFIXES.some((suffix) => lower.endsWith(suffix));
+  const normalized = normalizeCredentialKey(key);
+  if (REDACTED_KEY_SET.has(normalized)) return true;
+  return REDACTED_SUFFIXES.some((suffix) => normalized.endsWith(suffix));
 }
 
 /**

@@ -548,6 +548,21 @@ describe('redact() — the one SDK redactor', () => {
     expect(isCredentialKey('TOKEN')).toBe(true);
   });
 
+  it('masks every spelling of a credential key, not just the snake_case one', () => {
+    // Live sandbox testing found `apiKey` - the camelCase name the SDK's own config uses, and the one most
+    // JSON bodies carry - was NOT masked, because the key set only held `api_key`. A credential could
+    // therefore reach an audit event or a log line in clear text.
+    const input = {
+      apiKey: 'K', apikey: 'K', api_key: 'K', API_KEY: 'K', 'api-key': 'K', 'Api-Key': 'K',
+      clientSecret: 'cs', privateKey: 'pk', otpSecret: 'os', accessToken: 'at',
+    };
+    const out = redact(input) as Record<string, unknown>;
+    for (const key of Object.keys(input)) expect(out[key]).toBe(REDACTED);
+    for (const key of Object.keys(input)) expect(isCredentialKey(key)).toBe(true);
+    // A field whose name merely CONTAINS a credential word but is not one stays readable.
+    expect(isCredentialKey('keywords')).toBe(false);
+  });
+
   it('recurses through nested records and arrays, and passes non-plain values through', () => {
     const out = redact({
       company: { id: 1, password: 'p', nested: [{ api_key: 'a', keep: true }] },

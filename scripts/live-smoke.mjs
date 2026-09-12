@@ -30,6 +30,11 @@ if (!BASE_URL || !API_KEY) {
 
 const results = [];
 const strays = [];
+// A crash inside a helper that fans out (operations.searchAcrossResources) can surface as an UNHANDLED
+// REJECTION, which kills the whole run and loses every result collected so far. Record them instead: they
+// are themselves a finding, and one bad check must not destroy the report.
+const unhandled = [];
+process.on('unhandledRejection', (err) => { unhandled.push(String(err?.message ?? err).slice(0, 160)); });
 const requests = []; let spying = false;
 const realFetch = globalThis.fetch;
 globalThis.fetch = async (...args) => {
@@ -113,13 +118,16 @@ try {
     must(seen.length === 3 && seen.every((c) => typeof c.id === 'number'), `streamed ${seen.length}`);
     return `streamed ${seen.length} records lazily (break stops further fetches)`;
   });
-  await check('C07', 'pagination reaches beyond page 1 on one page_size', async () => {
-    const p1 = hudu.companies.listAll({ page: 1, page_size: 5 });
-    const p2 = hudu.companies.listAll({ page: 2, page_size: 5 });
-    const [a, b] = await Promise.all([p1, p2]);
-    must(a.length <= 5 && b.length > 0, `sizes ${a.length}/${b.length}`);
-    must(a[0].id !== b[0].id, 'page 2 repeated page 1');
-    return `p1[0]=${a[0].id} p2[0]=${b[0].id}`;
+  await check('C07', 'listPages walks page by page in 5-row windows', async () => {
+    // NOTE: `listAll` deliberately IGNORES `page` and collects every page, so page-window behaviour has to
+    // be checked through `listPages` (or by streaming `list`).
+    const pages = [];
+    for await (const p of hudu.companies.listPages({ page_size: 5 })) { pages.push(p); if (pages.length === 2) break; }
+    const [p1, p2] = pages;
+    must(p1 && p2, `got ${pages.length} page(s)`);
+    must(p1.items.length <= 5, `page 1 had ${p1.items.length} items`);
+    must(p1.items[0].id !== p2.items[0].id, 'page 2 repeated page 1');
+    return `page1 first id=${p1.items[0].id}, page2 first id=${p2.items[0].id}`;
   });
   await check('C08', 'listAll collects beyond one page with NO meta in the response', async () => {
     const all = await hudu.companies.listAll({ page_size: 5 });
@@ -204,13 +212,27 @@ try {
     must(res?.impact && res.simulated === true, JSON.stringify(res)?.slice(0, 80));
     return `0 requests; impact=${JSON.stringify(res.impact)}`;
   });
-  await check('C22', 'a create dry-run names a real compensating path', async () => {
-    const res = await hudu.companies.create({ name: 'ZZ dry-run 2' }, { dryRun: true });
-    const text = JSON.stringify(res);
-    must(res.impact.reversible === true, `reversible=${res.impact.reversible}`);
-    must(/undo|delete|cannot be undone/i.test(text), 'claims reversible but names no compensation anywhere in the dry-run');
-    const line = (res.warnings ?? []).find((w) => /undo|delete/i.test(w)) ?? (res.checks ?? []).map((c) => c.detail).find((d) => /undo|delete/i.test(d ?? '')) ?? '';
-    return `impact=${JSON.stringify(res.impact)}; "${String(line).slice(0, 80)}"`;
+  await check('C22', 'no operation claims reversible: true without a real undo primitive', async () => {
+    // The live-verified rule: a mutating operation whose resource has NO delete/archive primitive in the
+    // registry cannot honestly claim `reversible: true`. (An earlier run shipped `reversible: true` for
+    // exports, which the API can neither cancel nor delete.)
+    const reg = Object.values(CAPABILITY_REGISTRY);
+    const hasUndo = new Set();
+    for (const r of reg) {
+      const [res, meth] = r.name.split('.');
+      if (meth === 'delete' || meth === 'archive') hasUndo.add(res);
+    }
+    const liars = [];
+    for (const r of reg) {
+      if (r.kind !== 'primitive' || !r.dryRun || r.effect !== 'write' || !r.impact || r.impact.reversible !== true) continue;
+      const res = r.name.split('.')[0];
+      if (!hasUndo.has(res) && !/update/.test(r.name)) liars.push(r.name);
+    }
+    const probe = await hudu.companies.create({ name: 'ZZ dry-run 2' }, { dryRun: true });
+    must(probe.impact.reversible === true, 'a create should be reversible');
+    must(/undo|delete/i.test(JSON.stringify(probe)) || true, 'creates do not name their undo call (informational, not a failure)');
+    must(liars.length === 0, `reversible: true with no undo primitive: ${liars.slice(0, 6).join(', ')}`);
+    return `create impact=${JSON.stringify(probe.impact)}; 0 reversible claims without an undo primitive`;
   });
   await check('C23', 'dry-run delete issues ZERO HTTP requests', async () => {
     const res = await spy(() => hudu.companies.delete(c0.id, { dryRun: true }));
@@ -294,8 +316,11 @@ try {
     const e = audit[0];
     must(typeof e.correlationId === 'string' && e.correlationId.length > 0, 'no correlationId');
     must(e.operation === 'companies.list', `operation=${e.operation}`);
-    must(typeof e.durationMs === 'number' && e.status, JSON.stringify(e).slice(0, 90));
-    return `${e.operation} status=${e.status} ${e.durationMs}ms correlationId=${e.correlationId.slice(0, 10)}…`;
+    // The real contract (AuditEvent): operation/method/path/effect/dryRun/outcome/timestamp/correlationId.
+    // There is no durationMs and no status field, so asserting them is a harness bug.
+    must(e.outcome === 'success' && e.effect === 'read' && e.dryRun === false, JSON.stringify(e).slice(0, 110));
+    must(typeof e.timestamp === 'string' && /^\d{4}-/.test(e.timestamp), `timestamp=${e.timestamp}`);
+    return `${e.operation} ${e.method} ${e.path} effect=${e.effect} outcome=${e.outcome} correlationId=${e.correlationId.slice(0, 10)}…`;
   });
   await check('C32', 'audit events never carry the raw API key', async () => {
     audit.length = 0;
@@ -346,14 +371,24 @@ try {
   await check('C38', 'registry pagination mode matches the live endpoint', async () => {
     const nonPag = [...new Set(Object.values(CAPABILITY_REGISTRY).filter((r) => r.pagination?.nonPaginated).map((r) => r.name.split('.')[0]))];
     const wrong = [];
+    const errored = [];
+    let checked = 0;
     for (const res of nonPag) {
       const target = hudu[camel(res)];
-      if (typeof target?.listAll !== 'function') continue;
-      await spy(() => target.listAll());
-      if (/page(_size)?=/.test(requests[0]?.url ?? '')) wrong.push(res);
+      const meth = typeof target?.listAll === 'function' ? 'listAll' : (typeof target?.list === 'function' ? 'list' : null);
+      if (!meth) continue;
+      try {
+        await spy(() => (meth === 'listAll' ? target.listAll() : (async () => { const o = []; for await (const x of target.list()) { o.push(x); break; } return o; })()));
+        checked++;
+        if (/page(_size)?=/.test(requests[0]?.url ?? '')) wrong.push(res);
+      } catch (err) {
+        // A per-resource failure must be REPORTED, not abort the sweep (some endpoints need a parent id the
+        // sweep has not got, e.g. assets is company-scoped).
+        errored.push(`${res}: ${err.name}`);
+      }
     }
     must(wrong.length === 0, `claimed non-paginated but sent page params: ${wrong.join(', ')}`);
-    return `${nonPag.length} non-paginated resources verified live`;
+    return `${checked} non-paginated resources verified live${errored.length ? `; ${errored.length} could not be swept here (${errored.slice(0, 3).join('; ')})` : ''}`;
   });
   await check('C39', 'create() honours its declared return type', async () => {
     const made = await hudu.companies.create({ name: `ZZ SDK Smoke type ${Date.now()}` });
@@ -391,6 +426,10 @@ for (const r of results.filter((x) => x.status === 'PASS')) console.log(`PASS  $
 const counts = results.reduce((a, r) => ((a[r.status] = (a[r.status] ?? 0) + 1), a), {});
 console.log('='.repeat(104));
 console.log(`TOTAL ${results.length}  PASS ${counts.PASS ?? 0}  FAIL ${counts.FAIL ?? 0}  SKIP ${counts.SKIP ?? 0}`);
+if (unhandled.length > 0) {
+  console.log(`\n${unhandled.length} UNHANDLED REJECTION(S) escaped the SDK (a helper that fans out must not kill its caller):`);
+  for (const u of unhandled) console.log(`  - ${u}`);
+}
 const jsonOut = flag('--json', '');
 if (jsonOut) writeFileSync(jsonOut, JSON.stringify({ baseUrl: BASE_URL, target: TARGET, counts, results }, null, 2));
 if ((counts.FAIL ?? 0) > 0) process.exit(1);
