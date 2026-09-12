@@ -8,9 +8,19 @@ import type { AssetLayout, AssetLayoutCreate, AssetLayoutUpdate } from '../types
 import type { AssetLayoutIdentifier, AssetLayoutSummary } from '../types/asset_layout.js';
 import type { DryRunResult, HelperOptions, MutationOptions, Resolution, ResolutionCandidate } from '../types/common.js';
 import { HuduConfigError, ResolutionError } from '../errors.js';
+import { DEFAULT_PAGE_SIZE } from '../config.js';
 
 /** Upper bound on server-side pages walked before refusing (runaway guard). */
 const MAX_PAGES = 100_000;
+
+/**
+ * Options of `asset_layouts.create`. A create has no prior revision, so there is no
+ * `expectedUpdatedAt` guard: the option is deliberately absent from this signature
+ * rather than declared and ignored.
+ */
+export interface LayoutWriteOptions {
+  dryRun?: boolean;
+}
 
 /** Helper `limit` bounds (policy §9): default 25, hard maximum 100. */
 const MAX_HELPER_LIMIT = 100;
@@ -98,14 +108,14 @@ export class AssetLayoutsResource extends BaseResource<AssetLayout> {
 
   async create(data: AssetLayoutCreate): Promise<AssetLayout>;
   /** Dry-run: describe the create without issuing it. */
-  async create(data: AssetLayoutCreate, opts: MutationOptions & { dryRun: true }): Promise<DryRunResult<AssetLayout>>;
-  async create(data: AssetLayoutCreate, opts?: MutationOptions): Promise<AssetLayout | DryRunResult<AssetLayout>>;
+  async create(data: AssetLayoutCreate, opts: { dryRun: true }): Promise<DryRunResult<AssetLayout>>;
+  async create(data: AssetLayoutCreate, opts?: LayoutWriteOptions): Promise<AssetLayout | DryRunResult<AssetLayout>>;
   /**
    * POST /asset_layouts. `{ dryRun: true }` describes the create without issuing
-   * it. The `expectedUpdatedAt` guard is an UPDATE guard: a create has no prior
-   * revision to compare against, so the option is accepted and ignored here.
+   * it. A create has no prior revision, so there is no `expectedUpdatedAt` guard and
+   * the option is not part of this signature.
    */
-  async create(data: AssetLayoutCreate, opts?: MutationOptions): Promise<AssetLayout | DryRunResult<AssetLayout>> {
+  async create(data: AssetLayoutCreate, opts?: LayoutWriteOptions): Promise<AssetLayout | DryRunResult<AssetLayout>> {
     return this.createOne<AssetLayout>(data, undefined, opts);
   }
 
@@ -134,6 +144,10 @@ export class AssetLayoutsResource extends BaseResource<AssetLayout> {
    * small configuration table, so the resolution caps are never expected to be
    * reached; a capped scan would throw `RESOLUTION_TRUNCATED` rather than return
    * `null`.
+   *
+   * `limit` is validated against the helper bounds (default 25, hard maximum 100)
+   * but cannot be applied to the request: GET /asset_layouts accepts `page` and not
+   * `page_size`, so a layout read is one server-sized page.
    */
   async resolve(identifier: number | string | AssetLayoutIdentifier): Promise<AssetLayoutSummary | null>;
   /** `expand: true` returns the full record. */
@@ -196,12 +210,15 @@ export class AssetLayoutsResource extends BaseResource<AssetLayout> {
   /**
    * One bounded, server-filtered scan (policy §6): the vendor filter narrows the
    * result set, the exact compare decides. Several matches throw
-   * `RESOLUTION_AMBIGUOUS`; a complete scan with no match is `null`.
+   * `RESOLUTION_AMBIGUOUS`; a complete scan with no match is `null`; a scan the client
+   * cap stopped throws `RESOLUTION_TRUNCATED` — never `null`.
    *
-   * GET /asset_layouts does NOT accept `page_size` (the server paginates at its own
-   * size), so this scan reads one page and never sends `page_size`. It never reports
-   * truncation for the same reason: a layout table is a small configuration set and
-   * the vendor filter — not a walk — is what narrows it.
+   * GET /asset_layouts accepts `page` but NOT `page_size` (api-docs 2.45.1), so the
+   * server's page size cannot be requested: the walk assumes the SDK's documented
+   * default page size and grows it when the server returns a longer page; a page
+   * shorter than the known full page (or empty) is the last page. Walking pages is
+   * what makes a layout that sits on page 2+ resolvable instead of reported as
+   * "not found".
    */
   private async filterScan(
     filter: Record<string, unknown>,
@@ -211,7 +228,8 @@ export class AssetLayoutsResource extends BaseResource<AssetLayout> {
     helperLimit(opts?.limit);
     const operation = 'asset_layouts.resolve';
     const fetched: AssetLayout[] = [];
-    await this.boundedScan<AssetLayout>(
+    let fullPage = DEFAULT_PAGE_SIZE;
+    const scan = await this.boundedScan<AssetLayout>(
       async (page) => {
         const body = await this.request<unknown>({
           method: 'GET',
@@ -220,7 +238,10 @@ export class AssetLayoutsResource extends BaseResource<AssetLayout> {
           operation,
         });
         const items = this.unwrapList<AssetLayout>(body);
-        return { items, page, page_size: items.length, hasMore: false };
+        // `page_size` is not in the spec, so the full-page size is learned from the
+        // responses themselves and never sent (mirrors assetLayoutPages).
+        if (items.length > fullPage) fullPage = items.length;
+        return { items, page, page_size: fullPage, hasMore: items.length > 0 && items.length === fullPage };
       },
       {
         match: (layout) => {
@@ -247,6 +268,15 @@ export class AssetLayoutsResource extends BaseResource<AssetLayout> {
         scanTruncated: false,
         candidates: [{ id: only.id, label: layoutLabel(only) } satisfies ResolutionCandidate],
       };
+    }
+    if (scan.scanTruncated) {
+      // The cap stopped the walk before the data ran out, so "not found" cannot be
+      // decided: returning null here would be a lie.
+      throw ResolutionError.truncated(
+        `${operation}: the bounded client scan was truncated after ${String(fetched.length)} record(s), ` +
+          'so no exact match could be decided.',
+        { operation },
+      );
     }
     if (fetched.length > 1) {
       throw ResolutionError.ambiguous(

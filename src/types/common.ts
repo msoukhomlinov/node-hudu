@@ -57,7 +57,7 @@ export interface DryRunResult<T = unknown> {
   request: { method: string; path: string };
   diff?: FieldDiff[];
   checks: DryRunCheck[];
-  impact: { affected: number; scope: 'single' | 'bulk'; reversible: boolean };
+  impact: OperationImpact;
   simulated: true;
   warnings: string[];
   /**
@@ -108,6 +108,25 @@ export interface AuditEvent {
   timestamp: string;
   /** Redacted query parameters, when the request had any. */
   query?: Record<string, unknown>;
+  /**
+   * Impact statement for an executed mutation (policy §7.3): the SDK must not change any
+   * primitive's return shape, so the audit event is the executed-result metadata channel.
+   * Absent on `effect: 'read'` events.
+   */
+  impact?: OperationImpact;
+}
+
+/**
+ * Impact statement shared by the dry-run result and the executed-result metadata
+ * (audit event). `exact: false` means `affected` is a LOWER BOUND — the server
+ * computes the real target set (e.g. a bulk delete by filter); `exact` absent or
+ * `true` means `affected` is the count the SDK knows it will touch.
+ */
+export interface OperationImpact {
+  affected: number;
+  scope: 'single' | 'bulk';
+  reversible: boolean;
+  exact?: boolean;
 }
 
 /** Any value a resource accepts as an identifier. */

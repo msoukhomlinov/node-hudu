@@ -41,10 +41,12 @@ export class S3ExportsResource extends BaseResource<unknown> {
         checks: [this.payloadCheck(payload)],
         affected: 1,
         scope: 'single',
-        reversible: true,
+        // No compensating undo exists: /s3_exports has POST only (no DELETE, no cancel).
+        reversible: false,
         warnings: [
           'POST /s3_exports returns an empty 200 body, so there is no server-computed result to promise: the export ' +
             'runs asynchronously and dry-run cannot describe its outcome',
+          'an export runs asynchronously and the API exposes no cancel or delete path for it, so this cannot be undone',
         ],
       });
     }

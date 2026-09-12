@@ -200,10 +200,14 @@ export class PublicPhotosResource extends BaseResource<PublicPhoto> {
         checks: [this.photoCheck(data), this.recordCheck(data)],
         affected: 1,
         scope: 'single',
-        reversible: true,
+        // No compensating undo exists: /public_photos has GET and POST, and /public_photos/{id} has GET and PUT
+        // only — the API exposes no DELETE, so a created public photo cannot be removed.
+        reversible: false,
         warnings: [
           'dry-run validates the multipart inputs without building or sending the body, so the server-computed ' +
             'public photo (id, url, file_size) cannot be promised',
+          'the API exposes no delete path for a public photo, so this create cannot be undone (it can only be ' +
+            're-associated with public_photos.update)',
         ],
       });
     }

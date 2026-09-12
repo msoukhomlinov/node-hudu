@@ -48,13 +48,19 @@ interface ExactScan<T> {
 
 /** The compact projection of a website record (`WebsiteSummary`, declared in types/website.ts). */
 function toWebsiteSummary(record: Website): WebsiteSummary {
+  // EVERY field `WebsiteSummary` declares is populated from the record: a widening of
+  // the interface must never leave the projection silently dropping a declared field.
   return {
     id: record.id,
     name: record.name,
+    slug: record.slug,
     company_id: record.company_id,
+    company_name: record.company_name,
+    status: record.status,
     monitoring_status: record.monitoring_status,
     paused: record.paused,
     archived: record.archived,
+    url: record.url,
   };
 }
 

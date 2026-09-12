@@ -38,7 +38,7 @@ export type {
   OperationEffect, OperationFlag, OperationMetadata,
   FieldDiff, DryRunCheck, DryRunResult,
   ResolutionCost, ResolutionCandidate, Resolution,
-  AuditEvent, Identifier, IdentifierObject,
+  AuditEvent, Identifier, IdentifierObject, OperationImpact,
   HelperOptions, ResolutionOptions, MutationOptions,
 } from './types/common.js';
 // The compact summary shapes live with the resource they belong to (SCOPING decision 6) and are

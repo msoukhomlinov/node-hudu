@@ -3,7 +3,7 @@
     "source": "api-docs.json",
     "version": "2.45.1"
   },
-  "generatedAt": "2026-09-12T14:14:36.267Z",
+  "generatedAt": "2026-09-12T14:54:35.600Z",
   "resources": {
     "companies": {
       "helperCap": 4,
@@ -245,6 +245,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -306,6 +307,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -347,8 +349,8 @@
         "usage": "Read path for companies returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; companies.resolve is for a name, slug or domain.",
         "related": [
-          "companies.resolve",
-          "companies.list"
+          "companies.list",
+          "companies.resolve"
         ]
       },
       "compact": null,
@@ -356,6 +358,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -409,6 +412,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_ACCEPTABLE",
         "NOT_FOUND",
@@ -454,6 +458,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -506,8 +511,10 @@
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -569,6 +576,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -621,6 +629,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -663,11 +672,11 @@
         "usage": "Accepts {id} (direct fetch; a miss throws NOT_FOUND), {name}, {slug} or {website}/{domain}. A bare value is read in the documented order: numeric id, slug, exact name, domain. Never returns null after a partial scan.",
         "preferredWhen": "Use when the caller has an identifier rather than a numeric id; companies.get is cheaper when the id is known.",
         "related": [
-          "companies.get",
           "companies.findByDomain",
           "companies.findBySlug",
-          "companies.search",
-          "companies.getContext"
+          "companies.get",
+          "companies.getContext",
+          "companies.search"
         ]
       },
       "compact": "CompanySummary",
@@ -747,8 +756,8 @@
         "usage": "Uses the vendor `website` filter and compares the returned value exactly, so a fuzzy vendor match cannot produce a false positive. Bounded by the resolution caps; throws RESOLUTION_TRUNCATED at the cap and RESOLUTION_AMBIGUOUS for several exact matches.",
         "preferredWhen": "Preferred over companies.list for any domain lookup.",
         "related": [
-          "companies.resolve",
-          "companies.findBySlug"
+          "companies.findBySlug",
+          "companies.resolve"
         ]
       },
       "compact": "CompanySummary",
@@ -817,8 +826,8 @@
         "usage": "Uses the vendor `slug` filter with an exact compare. Bounded by the resolution caps.",
         "preferredWhen": "Preferred over companies.list for a slug lookup.",
         "related": [
-          "companies.resolve",
-          "companies.findByDomain"
+          "companies.findByDomain",
+          "companies.resolve"
         ]
       },
       "compact": "CompanySummary",
@@ -932,9 +941,9 @@
         "usage": "Returns the company plus bounded lists of its assets, articles, websites and asset passwords (limit defaults to 25, max 100). Every sub-list is a bounded fetch - nothing here pages the account.",
         "preferredWhen": "Preferred over four separate list calls when an agent starts work on a company.",
         "related": [
-          "companies.get",
-          "assets.listAll",
           "articles.list",
+          "assets.list",
+          "companies.get",
           "websites.list"
         ]
       },
@@ -995,6 +1004,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -1053,6 +1063,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -1094,8 +1105,8 @@
         "usage": "Read path for articles returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; articles.resolve is for a name, slug or domain.",
         "related": [
-          "articles.resolve",
-          "articles.list"
+          "articles.list",
+          "articles.resolve"
         ]
       },
       "compact": null,
@@ -1103,6 +1114,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -1152,6 +1164,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -1203,8 +1216,10 @@
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -1266,6 +1281,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -1318,6 +1334,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -1360,10 +1377,10 @@
         "usage": "Bare values are read in the order: numeric id, slug, exact name (optionally narrowed by company_id). A miss on {id} throws NOT_FOUND; a complete scan with no match returns null.",
         "preferredWhen": "Use when the article identifier is a name or slug; articles.get is cheaper for a known id.",
         "related": [
-          "articles.get",
           "articles.findBySlug",
-          "articles.search",
-          "articles.getContext"
+          "articles.get",
+          "articles.getContext",
+          "articles.search"
         ]
       },
       "compact": "ArticleSummary",
@@ -1555,7 +1572,7 @@
       "dryRun": false,
       "metadata": {
         "purpose": "Fetch an article with its company and folder context.",
-        "usage": "Returns the article plus its company and folder (when set) in one call. Every part is a bounded fetch.",
+        "usage": "Returns the article plus its company and folder (when set) in one call. Each part is a single-record fetch, so there is no sub-list and no limit: use `{ expand: true }` for the full records.",
         "preferredWhen": "Preferred over three separate calls when an agent starts from an article.",
         "related": [
           "articles.get",
@@ -1615,6 +1632,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -1675,6 +1693,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -1722,6 +1741,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -1763,8 +1783,8 @@
         "usage": "Read path for assets returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; assets.resolve is for a name, slug or domain.",
         "related": [
-          "assets.resolve",
-          "assets.list"
+          "assets.list",
+          "assets.resolve"
         ]
       },
       "compact": null,
@@ -1772,6 +1792,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -1821,6 +1842,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR"
       ],
       "tests": [
@@ -1870,6 +1892,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -1928,6 +1951,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -1980,6 +2004,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -2032,6 +2057,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -2074,10 +2100,10 @@
         "usage": "Accepts {companyId, id} for a direct company-scoped fetch, or an account-wide identifier (primary_serial, name, slug) that uses the vendor filters on GET /assets. Bare values are read in the order: numeric id, primary_serial, name, slug.",
         "preferredWhen": "Use when the identifier is a serial or a name; assets.get is cheaper for a known id.",
         "related": [
-          "assets.get",
           "assets.findBySerial",
-          "assets.search",
-          "assets.getContext"
+          "assets.get",
+          "assets.getContext",
+          "assets.search"
         ]
       },
       "compact": "AssetSummary",
@@ -2157,8 +2183,8 @@
         "usage": "Uses the vendor `primary_serial` filter with an exact compare, bounded by the resolution caps. Most useful for the account-wide path; a company-scoped asset can be fetched directly with assets.get.",
         "preferredWhen": "Preferred over assets.listAllAcrossCompanies for any serial lookup.",
         "related": [
-          "assets.resolve",
-          "assets.get"
+          "assets.get",
+          "assets.resolve"
         ]
       },
       "compact": "AssetSummary",
@@ -2278,8 +2304,8 @@
         "usage": "Returns the asset, its layout, its expirations and its relations in one call, each as a bounded list (limit defaults to 25, max 100).",
         "preferredWhen": "Preferred over four separate calls when an agent starts from an asset.",
         "related": [
-          "assets.get",
           "asset_layouts.get",
+          "assets.get",
           "expirations.list",
           "relations.list"
         ]
@@ -2335,8 +2361,7 @@
         "usage": "Read path for asset_layouts returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer asset_layouts.search or asset_layouts.resolve for a single lookup.",
         "related": [
-          "asset_layouts.resolve",
-          "asset_layouts.search"
+          "asset_layouts.resolve"
         ]
       },
       "compact": null,
@@ -2344,6 +2369,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -2386,8 +2412,8 @@
         "usage": "Read path for asset_layouts returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; asset_layouts.resolve is for a name, slug or domain.",
         "related": [
-          "asset_layouts.resolve",
-          "asset_layouts.list"
+          "asset_layouts.list",
+          "asset_layouts.resolve"
         ]
       },
       "compact": null,
@@ -2395,6 +2421,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -2444,6 +2471,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -2496,8 +2524,10 @@
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -2545,7 +2575,7 @@
       "dryRun": false,
       "metadata": {
         "purpose": "Resolve an asset layout from an id, name or slug.",
-        "usage": "Bare values are read in the order: numeric id, slug, exact name. Layouts are a small configuration table, so the caps are never expected to be reached.",
+        "usage": "Bare values are read in the order: numeric id, slug, exact name. Layouts are a small configuration table, so the caps are never expected to be reached. NOTE: GET /asset_layouts accepts `page` but no `page_size`, so the scan pages at the vendor's own page size and reports RESOLUTION_TRUNCATED if the page cap is reached before a match.",
         "preferredWhen": "Use when the identifier is a layout name or slug; asset_layouts.get is cheaper for a known id.",
         "related": [
           "asset_layouts.get",
@@ -2631,6 +2661,7 @@
       "staleCheck": "unavailable",
       "redaction": "credentials",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -2690,6 +2721,7 @@
       "staleCheck": null,
       "redaction": "credentials",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED"
       ],
@@ -2737,8 +2769,8 @@
         "usage": "Read path for asset_passwords returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; asset_passwords.resolve is for a name, slug or domain.",
         "related": [
-          "asset_passwords.resolve",
-          "asset_passwords.list"
+          "asset_passwords.list",
+          "asset_passwords.resolve"
         ]
       },
       "compact": null,
@@ -2746,6 +2778,7 @@
       "staleCheck": null,
       "redaction": "credentials",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -2802,6 +2835,7 @@
       "staleCheck": "unavailable",
       "redaction": "credentials",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -2854,8 +2888,10 @@
       "staleCheck": "updated_at",
       "redaction": "credentials",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -2918,6 +2954,7 @@
       "staleCheck": "unavailable",
       "redaction": "credentials",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -2971,6 +3008,7 @@
       "staleCheck": "unavailable",
       "redaction": "credentials",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -3015,8 +3053,8 @@
         "usage": "Sensitive resource: the summary never contains the secret. Bare values are read in the order: numeric id, slug, exact name (optionally narrowed by company_id).",
         "preferredWhen": "Use when the identifier is a name or slug; asset_passwords.get returns the full record including the secret.",
         "related": [
-          "asset_passwords.get",
           "asset_passwords.findBySlug",
+          "asset_passwords.get",
           "asset_passwords.search"
         ]
       },
@@ -3209,7 +3247,7 @@
         "usage": "Mutating path for websites; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer websites.archive when the record may be needed again.",
         "related": [
-          "websites.archive"
+          "websites.delete"
         ]
       },
       "compact": null,
@@ -3217,6 +3255,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -3272,6 +3311,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -3313,8 +3353,8 @@
         "usage": "Read path for websites returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; websites.resolve is for a name, slug or domain.",
         "related": [
-          "websites.resolve",
-          "websites.list"
+          "websites.list",
+          "websites.resolve"
         ]
       },
       "compact": null,
@@ -3322,6 +3362,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -3371,6 +3412,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -3423,8 +3465,10 @@
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -3475,8 +3519,8 @@
         "usage": "Bare values are read in the order: numeric id, slug, exact name. Monitoring fields are reached through the full record, not the summary.",
         "preferredWhen": "Use when the identifier is a name or slug; websites.get is cheaper for a known id.",
         "related": [
-          "websites.get",
           "websites.findBySlug",
+          "websites.get",
           "websites.search"
         ]
       },
@@ -3655,7 +3699,7 @@
         "usage": "Mutating path for folders; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer folders.archive when the record may be needed again.",
         "related": [
-          "folders.archive"
+          "folders.delete"
         ]
       },
       "compact": null,
@@ -3663,6 +3707,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -3709,8 +3754,7 @@
         "usage": "Read path for folders returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer folders.search or folders.resolve for a single lookup.",
         "related": [
-          "folders.resolve",
-          "folders.search"
+          "folders.resolve"
         ]
       },
       "compact": null,
@@ -3718,6 +3762,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -3759,8 +3804,8 @@
         "usage": "Read path for folders returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; folders.resolve is for a name, slug or domain.",
         "related": [
-          "folders.resolve",
-          "folders.list"
+          "folders.list",
+          "folders.resolve"
         ]
       },
       "compact": null,
@@ -3768,6 +3813,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -3817,6 +3863,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -3869,8 +3916,10 @@
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -4001,7 +4050,7 @@
         "usage": "Mutating path for password_folders; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer password_folders.archive when the record may be needed again.",
         "related": [
-          "password_folders.archive"
+          "password_folders.delete"
         ]
       },
       "compact": null,
@@ -4009,6 +4058,7 @@
       "staleCheck": "unavailable",
       "redaction": "credentials",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -4065,6 +4115,7 @@
       "staleCheck": null,
       "redaction": "credentials",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -4113,8 +4164,8 @@
         "usage": "Read path for password_folders returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; password_folders.resolve is for a name, slug or domain.",
         "related": [
-          "password_folders.resolve",
-          "password_folders.list"
+          "password_folders.list",
+          "password_folders.resolve"
         ]
       },
       "compact": null,
@@ -4122,6 +4173,7 @@
       "staleCheck": null,
       "redaction": "credentials",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -4178,6 +4230,7 @@
       "staleCheck": "unavailable",
       "redaction": "credentials",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -4230,8 +4283,10 @@
       "staleCheck": "updated_at",
       "redaction": "credentials",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -4420,6 +4475,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -4461,8 +4517,8 @@
         "usage": "Read path for groups returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; groups.resolve is for a name, slug or domain.",
         "related": [
-          "groups.resolve",
-          "groups.list"
+          "groups.list",
+          "groups.resolve"
         ]
       },
       "compact": null,
@@ -4470,6 +4526,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -4635,7 +4692,7 @@
         "usage": "Mutating path for networks; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer networks.archive when the record may be needed again.",
         "related": [
-          "networks.archive"
+          "networks.delete"
         ]
       },
       "compact": null,
@@ -4643,6 +4700,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -4694,8 +4752,7 @@
         "usage": "Read path for networks returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer networks.search or networks.resolve for a single lookup.",
         "related": [
-          "networks.resolve",
-          "networks.search"
+          "networks.resolve"
         ]
       },
       "compact": null,
@@ -4703,6 +4760,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED"
       ],
@@ -4743,8 +4801,8 @@
         "usage": "Read path for networks returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; networks.resolve is for a name, slug or domain.",
         "related": [
-          "networks.resolve",
-          "networks.list"
+          "networks.list",
+          "networks.resolve"
         ]
       },
       "compact": null,
@@ -4752,6 +4810,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -4801,6 +4860,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -4852,8 +4912,10 @@
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -4904,8 +4966,8 @@
         "usage": "Bare values are read in the order: numeric id, slug, exact name, address (CIDR). GET /networks is not paginated, so a lookup returns the whole collection in one request and the record cap cannot truncate it. Accepted identifier kinds are listed here because any other kind throws a validation error rather than guessing.",
         "preferredWhen": "Use when the identifier is a name, slug or CIDR; networks.get is cheaper for a known id.",
         "related": [
-          "networks.get",
-          "networks.findByAddress"
+          "networks.findByAddress",
+          "networks.get"
         ]
       },
       "compact": "NetworkSummary",
@@ -4980,8 +5042,8 @@
         "usage": "Uses the vendor `address` filter with an exact compare. Bounded by the resolution caps; a non-paginated list is returned whole, so nothing is silently left unread.",
         "preferredWhen": "Preferred over networks.list for any CIDR lookup.",
         "related": [
-          "networks.resolve",
-          "ip_addresses.listAll"
+          "ip_addresses.list",
+          "networks.resolve"
         ]
       },
       "compact": "NetworkSummary",
@@ -5038,7 +5100,7 @@
         "usage": "Mutating path for vlans; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer vlans.archive when the record may be needed again.",
         "related": [
-          "vlans.archive"
+          "vlans.delete"
         ]
       },
       "compact": null,
@@ -5046,6 +5108,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -5095,8 +5158,7 @@
         "usage": "Read path for vlans returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer vlans.search or vlans.resolve for a single lookup.",
         "related": [
-          "vlans.resolve",
-          "vlans.search"
+          "vlans.resolve"
         ]
       },
       "compact": null,
@@ -5105,6 +5167,7 @@
       "redaction": "none",
       "errors": [
         "BAD_REQUEST",
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED"
       ],
@@ -5145,8 +5208,8 @@
         "usage": "Read path for vlans returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; vlans.resolve is for a name, slug or domain.",
         "related": [
-          "vlans.resolve",
-          "vlans.list"
+          "vlans.list",
+          "vlans.resolve"
         ]
       },
       "compact": null,
@@ -5154,6 +5217,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -5203,6 +5267,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -5254,8 +5319,10 @@
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -5306,8 +5373,8 @@
         "usage": "Bare values are read in the order: numeric id, vlan_id, exact name. GET /vlans is not paginated (a single complete fetch).",
         "preferredWhen": "Use when the identifier is a name or VLAN number; vlans.get is cheaper for a known id.",
         "related": [
-          "vlans.get",
-          "vlans.findByVlanId"
+          "vlans.findByVlanId",
+          "vlans.get"
         ]
       },
       "compact": "VlanSummary",
@@ -5434,7 +5501,7 @@
         "usage": "Mutating path for vlan_zones; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer vlan_zones.archive when the record may be needed again.",
         "related": [
-          "vlan_zones.archive"
+          "vlan_zones.delete"
         ]
       },
       "compact": null,
@@ -5442,6 +5509,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -5489,8 +5557,7 @@
         "usage": "Read path for vlan_zones returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer vlan_zones.search or vlan_zones.resolve for a single lookup.",
         "related": [
-          "vlan_zones.resolve",
-          "vlan_zones.search"
+          "vlan_zones.resolve"
         ]
       },
       "compact": null,
@@ -5499,6 +5566,7 @@
       "redaction": "none",
       "errors": [
         "BAD_REQUEST",
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED"
       ],
@@ -5539,8 +5607,8 @@
         "usage": "Read path for vlan_zones returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; vlan_zones.resolve is for a name, slug or domain.",
         "related": [
-          "vlan_zones.resolve",
-          "vlan_zones.list"
+          "vlan_zones.list",
+          "vlan_zones.resolve"
         ]
       },
       "compact": null,
@@ -5548,6 +5616,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -5597,6 +5666,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -5648,8 +5718,10 @@
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -5701,7 +5773,7 @@
         "preferredWhen": "Use when the identifier is a name or slug; vlan_zones.get is cheaper for a known id.",
         "related": [
           "vlan_zones.get",
-          "vlans.listAll"
+          "vlans.list"
         ]
       },
       "compact": "VlanZoneSummary",
@@ -5774,7 +5846,7 @@
         "usage": "Mutating path for ip_addresses; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer ip_addresses.archive when the record may be needed again.",
         "related": [
-          "ip_addresses.archive"
+          "ip_addresses.delete"
         ]
       },
       "compact": null,
@@ -5782,6 +5854,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -5832,8 +5905,7 @@
         "usage": "Read path for ip_addresses returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer ip_addresses.search or ip_addresses.resolve for a single lookup.",
         "related": [
-          "ip_addresses.resolve",
-          "ip_addresses.search"
+          "ip_addresses.resolve"
         ]
       },
       "compact": null,
@@ -5841,6 +5913,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED"
       ],
@@ -5881,8 +5954,8 @@
         "usage": "Read path for ip_addresses returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; ip_addresses.resolve is for a name, slug or domain.",
         "related": [
-          "ip_addresses.resolve",
-          "ip_addresses.list"
+          "ip_addresses.list",
+          "ip_addresses.resolve"
         ]
       },
       "compact": null,
@@ -5890,6 +5963,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -5939,6 +6013,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -5990,6 +6065,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -6037,8 +6113,8 @@
         "usage": "Bare values are read in the order: numeric id, exact address, exact FQDN. GET /ip_addresses is not paginated (a single complete fetch). NOTE: the vendor's IpAddress definition does not declare an id field even though /ip_addresses/{id} exists, so candidate labels fall back to the address.",
         "preferredWhen": "Use when the identifier is a CIDR address or an FQDN; ip_addresses.get is cheaper for a known id.",
         "related": [
-          "ip_addresses.get",
-          "ip_addresses.findByAddress"
+          "ip_addresses.findByAddress",
+          "ip_addresses.get"
         ]
       },
       "compact": "IpAddressSummary",
@@ -6113,8 +6189,8 @@
         "usage": "Uses the vendor `address` filter with an exact compare. The most common agent lookup in this resource.",
         "preferredWhen": "Preferred over ip_addresses.listAll for any address lookup.",
         "related": [
-          "ip_addresses.resolve",
-          "ip_addresses.get"
+          "ip_addresses.get",
+          "ip_addresses.resolve"
         ]
       },
       "compact": "IpAddressSummary",
@@ -6171,7 +6247,7 @@
         "usage": "Mutating path for rack_storages; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer rack_storages.archive when the record may be needed again.",
         "related": [
-          "rack_storages.archive"
+          "rack_storages.delete"
         ]
       },
       "compact": null,
@@ -6179,6 +6255,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -6228,8 +6305,7 @@
         "usage": "Read path for rack_storages returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer rack_storages.search or rack_storages.resolve for a single lookup.",
         "related": [
-          "rack_storages.resolve",
-          "rack_storages.search"
+          "rack_storages.resolve"
         ]
       },
       "compact": null,
@@ -6237,6 +6313,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -6278,8 +6355,8 @@
         "usage": "Read path for rack_storages returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; rack_storages.resolve is for a name, slug or domain.",
         "related": [
-          "rack_storages.resolve",
-          "rack_storages.list"
+          "rack_storages.list",
+          "rack_storages.resolve"
         ]
       },
       "compact": null,
@@ -6287,6 +6364,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -6336,6 +6414,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -6387,8 +6466,10 @@
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -6439,8 +6520,8 @@
         "usage": "An id is fetched directly. Hudu declares no name filter on /rack_storages, so a name lookup is a bounded client scan (500 records, one page - the endpoint is not paginated) with an exact compare. The accepted kinds are id and name; anything else throws a validation error.",
         "preferredWhen": "Use when the identifier is a rack name; rack_storages.get is cheaper for a known id.",
         "related": [
-          "rack_storages.get",
-          "rack_storage_items.listAll"
+          "rack_storage_items.list",
+          "rack_storages.get"
         ]
       },
       "compact": "RackStorageSummary",
@@ -6518,7 +6599,7 @@
         "usage": "Mutating path for rack_storage_items; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer rack_storage_items.archive when the record may be needed again.",
         "related": [
-          "rack_storage_items.archive"
+          "rack_storage_items.delete"
         ]
       },
       "compact": null,
@@ -6526,6 +6607,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -6576,8 +6658,7 @@
         "usage": "Read path for rack_storage_items returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer rack_storage_items.search or rack_storage_items.resolve for a single lookup.",
         "related": [
-          "rack_storage_items.resolve",
-          "rack_storage_items.search"
+          "rack_storage_items.resolve"
         ]
       },
       "compact": null,
@@ -6585,6 +6666,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -6626,8 +6708,8 @@
         "usage": "Read path for rack_storage_items returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; rack_storage_items.resolve is for a name, slug or domain.",
         "related": [
-          "rack_storage_items.resolve",
-          "rack_storage_items.list"
+          "rack_storage_items.list",
+          "rack_storage_items.resolve"
         ]
       },
       "compact": null,
@@ -6635,6 +6717,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -6684,6 +6767,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -6735,6 +6819,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -6783,7 +6868,7 @@
         "preferredWhen": "Use when the item id is known; rack_storage_items.listAll is the enumeration path.",
         "related": [
           "rack_storage_items.get",
-          "rack_storage_items.listAll"
+          "rack_storage_items.list"
         ]
       },
       "compact": "RackStorageItemSummary",
@@ -6845,7 +6930,7 @@
         "usage": "Mutating path for relations; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer relations.archive when the record may be needed again.",
         "related": [
-          "relations.archive"
+          "relations.delete"
         ]
       },
       "compact": null,
@@ -6853,6 +6938,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -6903,8 +6989,7 @@
         "usage": "Read path for relations returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer relations.search or relations.resolve for a single lookup.",
         "related": [
-          "relations.resolve",
-          "relations.search"
+          "relations.resolve"
         ]
       },
       "compact": null,
@@ -6912,6 +6997,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED"
       ],
@@ -6951,15 +7037,14 @@
         "purpose": "Create a Relation.",
         "usage": "Mutating path for relations; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Only for a record that does not exist yet; prefer relations.update for an id you already have.",
-        "related": [
-          "relations.update"
-        ]
+        "related": []
       },
       "compact": null,
       "resolution": null,
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -7002,7 +7087,7 @@
         "preferredWhen": "Prefer relations.findByEndpoints whenever the endpoints are known; resolve is only for a known relation id.",
         "related": [
           "relations.findByEndpoints",
-          "relations.listAll"
+          "relations.list"
         ]
       },
       "compact": "RelationSummary",
@@ -7062,8 +7147,8 @@
         "usage": "Uses the vendor fromable_*/toable_* filters, so no scan is needed. Returns every matching relation as RelationSummary (bounded by limit, default 25, max 100), because two records can legitimately be connected more than once.",
         "preferredWhen": "Preferred over relations.listAll for the 'what is this record related to' question.",
         "related": [
-          "relations.resolve",
-          "relations.listAll"
+          "relations.list",
+          "relations.resolve"
         ]
       },
       "compact": "RelationSummary",
@@ -7124,7 +7209,7 @@
         "usage": "Mutating path for flags; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer flags.archive when the record may be needed again.",
         "related": [
-          "flags.archive"
+          "flags.delete"
         ]
       },
       "compact": null,
@@ -7132,6 +7217,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -7181,8 +7267,7 @@
         "usage": "Read path for flags returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer flags.search or flags.resolve for a single lookup.",
         "related": [
-          "flags.resolve",
-          "flags.search"
+          "flags.resolve"
         ]
       },
       "compact": null,
@@ -7190,6 +7275,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -7231,8 +7317,8 @@
         "usage": "Read path for flags returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; flags.resolve is for a name, slug or domain.",
         "related": [
-          "flags.resolve",
-          "flags.list"
+          "flags.list",
+          "flags.resolve"
         ]
       },
       "compact": null,
@@ -7240,6 +7326,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -7290,6 +7377,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -7341,8 +7429,10 @@
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -7393,8 +7483,8 @@
         "usage": "Flags are identified by id (GET /flags/{id}); their text lives in `description`, and there is no name filter, so the accepted kind is id. Use flags.findByFlagable to list the flags on a record. Only an id is accepted, so this helper never scans and never raises a resolution error.",
         "preferredWhen": "Prefer flags.findByFlagable when the flagged record is known; resolve is for a known flag id.",
         "related": [
-          "flags.get",
-          "flags.findByFlagable"
+          "flags.findByFlagable",
+          "flags.get"
         ]
       },
       "compact": "FlagSummary",
@@ -7448,8 +7538,8 @@
         "usage": "Uses the vendor flagable_type + flagable_id filters. Returns FlagSummary records (bounded by limit, default 25, max 100).",
         "preferredWhen": "Preferred over flags.listAll for the 'is this record flagged' question.",
         "related": [
-          "flags.resolve",
-          "flag_types.resolve"
+          "flag_types.resolve",
+          "flags.resolve"
         ]
       },
       "compact": "FlagSummary",
@@ -7505,7 +7595,7 @@
         "usage": "Mutating path for flag_types; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer flag_types.archive when the record may be needed again.",
         "related": [
-          "flag_types.archive"
+          "flag_types.delete"
         ]
       },
       "compact": null,
@@ -7513,6 +7603,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -7561,8 +7652,7 @@
         "usage": "Read path for flag_types returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer flag_types.search or flag_types.resolve for a single lookup.",
         "related": [
-          "flag_types.resolve",
-          "flag_types.search"
+          "flag_types.resolve"
         ]
       },
       "compact": null,
@@ -7570,6 +7660,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -7611,8 +7702,8 @@
         "usage": "Read path for flag_types returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; flag_types.resolve is for a name, slug or domain.",
         "related": [
-          "flag_types.resolve",
-          "flag_types.list"
+          "flag_types.list",
+          "flag_types.resolve"
         ]
       },
       "compact": null,
@@ -7620,6 +7711,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -7670,6 +7762,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -7721,8 +7814,10 @@
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -7847,7 +7942,7 @@
         "usage": "Mutating path for procedures; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer procedures.archive when the record may be needed again.",
         "related": [
-          "procedures.archive"
+          "procedures.delete"
         ]
       },
       "compact": null,
@@ -7855,6 +7950,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -7910,8 +8006,7 @@
         "usage": "Read path for procedures returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer procedures.search or procedures.resolve for a single lookup.",
         "related": [
-          "procedures.resolve",
-          "procedures.search"
+          "procedures.resolve"
         ]
       },
       "compact": null,
@@ -7919,6 +8014,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -7960,8 +8056,8 @@
         "usage": "Read path for procedures returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; procedures.resolve is for a name, slug or domain.",
         "related": [
-          "procedures.resolve",
-          "procedures.list"
+          "procedures.list",
+          "procedures.resolve"
         ]
       },
       "compact": null,
@@ -7969,6 +8065,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -8019,6 +8116,7 @@
       "redaction": "none",
       "errors": [
         "BAD_REQUEST",
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -8073,6 +8171,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -8119,8 +8218,8 @@
         "usage": "Mutating path for procedures; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Prefer duplicate over create when copying an existing process.",
         "related": [
-          "procedures.createFromTemplate",
-          "procedures.create"
+          "procedures.create",
+          "procedures.createFromTemplate"
         ]
       },
       "compact": null,
@@ -8128,6 +8227,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -8173,8 +8273,8 @@
         "usage": "Mutating path for procedures; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Use to start a run; procedures.getWithTasks is the read path for a process and its tasks.",
         "related": [
-          "procedures.getWithTasks",
-          "procedures.duplicate"
+          "procedures.duplicate",
+          "procedures.getWithTasks"
         ]
       },
       "compact": null,
@@ -8182,6 +8282,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNPROCESSABLE_ENTITY"
@@ -8233,8 +8334,10 @@
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -8285,9 +8388,9 @@
         "usage": "Bare values are read in the order: numeric id, slug, exact name (narrow with companyId). Accepted kinds are id, slug and name; anything else throws a validation error.",
         "preferredWhen": "Use when the identifier is a name or slug; procedures.get is cheaper for a known id.",
         "related": [
+          "procedure_tasks.list",
           "procedures.get",
-          "procedures.getWithTasks",
-          "procedure_tasks.listAll"
+          "procedures.getWithTasks"
         ]
       },
       "compact": "ProcedureSummary",
@@ -8362,8 +8465,8 @@
         "usage": "Combines GET /procedures/{id} with GET /procedure_tasks?procedure_id={id} (a non-paginated endpoint) so an agent does not have to know that the tasks live in another resource. The task list is bounded by limit (default 25, max 100).",
         "preferredWhen": "Preferred over calling procedures.get and procedure_tasks.listAll yourself whenever the goal is to read or report on a process.",
         "related": [
+          "procedure_tasks.list",
           "procedures.get",
-          "procedure_tasks.listAll",
           "procedures.kickoff"
         ]
       },
@@ -8421,7 +8524,7 @@
         "usage": "Mutating path for procedure_tasks; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer procedure_tasks.archive when the record may be needed again.",
         "related": [
-          "procedure_tasks.archive"
+          "procedure_tasks.delete"
         ]
       },
       "compact": null,
@@ -8429,6 +8532,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNPROCESSABLE_ENTITY"
@@ -8474,8 +8578,7 @@
         "usage": "Read path for procedure_tasks returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer procedure_tasks.search or procedure_tasks.resolve for a single lookup.",
         "related": [
-          "procedure_tasks.resolve",
-          "procedure_tasks.search"
+          "procedure_tasks.resolve"
         ]
       },
       "compact": null,
@@ -8483,6 +8586,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED"
       ],
@@ -8523,8 +8627,8 @@
         "usage": "Read path for procedure_tasks returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; procedure_tasks.resolve is for a name, slug or domain.",
         "related": [
-          "procedure_tasks.resolve",
-          "procedure_tasks.list"
+          "procedure_tasks.list",
+          "procedure_tasks.resolve"
         ]
       },
       "compact": null,
@@ -8532,6 +8636,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -8581,6 +8686,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNPROCESSABLE_ENTITY"
@@ -8632,8 +8738,10 @@
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNPROCESSABLE_ENTITY"
       ],
       "tests": [
@@ -8753,15 +8861,14 @@
         "purpose": "Jump to an asset with integration details without API key authentication, only requiring authentication at the time of jump.",
         "usage": "Read path for cards returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the caller has an integration identifier instead of a Hudu id; cards.get is for a known id.",
-        "related": [
-          "cards.get"
-        ]
+        "related": []
       },
       "compact": null,
       "resolution": null,
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -8802,8 +8909,8 @@
         "usage": "Read path for cards returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Prefer cards.resolve over calling lookup and jump yourself when the goal is one integration record.",
         "related": [
-          "cards.resolve",
-          "cards.jump"
+          "cards.jump",
+          "cards.resolve"
         ]
       },
       "compact": null,
@@ -8811,6 +8918,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -8847,8 +8955,8 @@
         "usage": "Uses GET /cards/lookup with the vendor's integration filters, so the caller does not have to know that two endpoints (lookup and jump) exist. Returns the matching integrator cards (bounded by limit); when the integration exposes a jump target, the resolved URL is included.",
         "preferredWhen": "Preferred over calling cards.lookup and cards.jump directly when the goal is 'give me the card for this integration record'.",
         "related": [
-          "cards.lookup",
-          "cards.jump"
+          "cards.jump",
+          "cards.lookup"
         ]
       },
       "compact": "IntegratorCardSummary",
@@ -8914,8 +9022,8 @@
         "usage": "Mutating path for activity_logs; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "There is no narrower bulk delete: this endpoint removes every log from a datetime on. Refuses to run without an explicit bound.",
         "related": [
-          "activity_logs.listAll",
-          "activity_logs.findByResource"
+          "activity_logs.findByResource",
+          "activity_logs.list"
         ]
       },
       "compact": null,
@@ -8924,6 +9032,7 @@
       "redaction": "none",
       "errors": [
         "BAD_REQUEST",
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "POLICY_DENIED",
         "UNAUTHORIZED"
@@ -8982,8 +9091,7 @@
         "usage": "Read path for activity_logs returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer activity_logs.search or activity_logs.resolve for a single lookup.",
         "related": [
-          "activity_logs.resolve",
-          "activity_logs.search"
+          "activity_logs.resolve"
         ]
       },
       "compact": null,
@@ -8991,6 +9099,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -9033,7 +9142,7 @@
         "preferredWhen": "Use activity_logs.findByResource instead whenever the resource is known - it uses server filters and needs no scan.",
         "related": [
           "activity_logs.findByResource",
-          "activity_logs.listAll"
+          "activity_logs.list"
         ]
       },
       "compact": "ActivityLogSummary",
@@ -9093,8 +9202,8 @@
         "usage": "Uses the vendor resource_id + resource_type filters, optionally bounded by startDate. No scan is needed. Returns ActivityLogSummary records (limit default 25, max 100).",
         "preferredWhen": "Preferred over activity_logs.listAll for 'what happened to this record'.",
         "related": [
-          "activity_logs.resolve",
-          "activity_logs.listAll"
+          "activity_logs.list",
+          "activity_logs.resolve"
         ]
       },
       "compact": "ActivityLogSummary",
@@ -9155,7 +9264,7 @@
         "usage": "Mutating path for expirations; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer expirations.archive when the record may be needed again.",
         "related": [
-          "expirations.archive"
+          "expirations.delete"
         ]
       },
       "compact": null,
@@ -9163,6 +9272,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -9211,8 +9321,7 @@
         "usage": "Read path for expirations returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer expirations.search or expirations.resolve for a single lookup.",
         "related": [
-          "expirations.resolve",
-          "expirations.search"
+          "expirations.resolve"
         ]
       },
       "compact": null,
@@ -9220,6 +9329,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -9262,17 +9372,17 @@
         "purpose": "Update an expiration.",
         "usage": "Mutating path for expirations; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Preferred over create or delete when the record exists and only some fields change.",
-        "related": [
-          "expirations.get"
-        ]
+        "related": []
       },
       "compact": null,
       "resolution": null,
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -9323,7 +9433,6 @@
         "usage": "Bare values are read in the order: numeric id, {resourceType, resourceId} (server filter). An id is fetched directly; a resource lookup can legitimately match several expirations and then throws RESOLUTION_AMBIGUOUS with the candidate ids.",
         "preferredWhen": "Use when the identifier is a resource pair; expirations.get is cheaper for a known id.",
         "related": [
-          "expirations.get",
           "expirations.findByResource"
         ]
       },
@@ -9394,8 +9503,8 @@
         "usage": "Uses the vendor resource_id + resource_type filters. No scan is needed. Returns ExpirationSummary records (limit default 25, max 100).",
         "preferredWhen": "Preferred over expirations.listAll for 'when does this record expire'.",
         "related": [
-          "expirations.resolve",
-          "expirations.listAll"
+          "expirations.list",
+          "expirations.resolve"
         ]
       },
       "compact": "ExpirationSummary",
@@ -9451,7 +9560,7 @@
         "usage": "Mutating path for matchers; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer matchers.archive when the record may be needed again.",
         "related": [
-          "matchers.archive"
+          "matchers.delete"
         ]
       },
       "compact": null,
@@ -9459,6 +9568,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -9506,8 +9616,7 @@
         "usage": "Read path for matchers returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer matchers.search or matchers.resolve for a single lookup.",
         "related": [
-          "matchers.resolve",
-          "matchers.search"
+          "matchers.resolve"
         ]
       },
       "compact": null,
@@ -9515,6 +9624,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -9557,15 +9667,14 @@
         "purpose": "Update a Matcher.",
         "usage": "Mutating path for matchers; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Preferred over create or delete when the record exists and only some fields change.",
-        "related": [
-          "matchers.get"
-        ]
+        "related": []
       },
       "compact": null,
       "resolution": null,
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -9614,7 +9723,7 @@
         "preferredWhen": "Use when correlating a Hudu record with an external system; matchers.listAll is the enumeration path.",
         "related": [
           "matchers.findBySyncId",
-          "matchers.listAll"
+          "matchers.list"
         ]
       },
       "compact": null,
@@ -9674,8 +9783,8 @@
         "usage": "Uses the vendor sync_id filter. Returns the matching Matcher records (limit default 25, max 100); integrator syncs commonly match more than one.",
         "preferredWhen": "Preferred over matchers.listAll for any sync-id lookup.",
         "related": [
-          "matchers.resolve",
-          "matchers.listAll"
+          "matchers.list",
+          "matchers.resolve"
         ]
       },
       "compact": null,
@@ -9732,7 +9841,7 @@
         "usage": "Mutating path for magic_dash; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer magic_dash.archive when the record may be needed again.",
         "related": [
-          "magic_dash.archive"
+          "magic_dash.delete"
         ]
       },
       "compact": null,
@@ -9740,6 +9849,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "POLICY_DENIED",
@@ -9804,6 +9914,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -9859,8 +9970,7 @@
         "usage": "Read path for magic_dash returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer magic_dash.search or magic_dash.resolve for a single lookup.",
         "related": [
-          "magic_dash.resolve",
-          "magic_dash.search"
+          "magic_dash.resolve"
         ]
       },
       "compact": null,
@@ -9868,6 +9978,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -9908,15 +10019,14 @@
         "purpose": "Create or update a Magic Dash Item.",
         "usage": "Mutating path for magic_dash; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Only for a record that does not exist yet; prefer magic_dash.update for an id you already have.",
-        "related": [
-          "magic_dash.update"
-        ]
+        "related": []
       },
       "compact": null,
       "resolution": null,
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -9963,7 +10073,7 @@
         "preferredWhen": "Bulk fan-out across many positions in one call; declares its bound and refuses to run unconfirmed.",
         "related": [
           "magic_dash.create",
-          "magic_dash.listAll"
+          "magic_dash.list"
         ]
       },
       "compact": null,
@@ -9971,6 +10081,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "POLICY_DENIED",
         "UNAUTHORIZED",
@@ -10024,7 +10135,7 @@
         "preferredWhen": "Use when the identifier is a dashboard title; magic_dash.findByCompany is the company-scoped path.",
         "related": [
           "magic_dash.findByCompany",
-          "magic_dash.listAll"
+          "magic_dash.list"
         ]
       },
       "compact": "MagicDashSummary",
@@ -10089,8 +10200,8 @@
         "usage": "Uses the vendor company_id filter. Returns MagicDashSummary records (limit default 25, max 100).",
         "preferredWhen": "Preferred over magic_dash.listAll for the per-company dashboard read.",
         "related": [
-          "magic_dash.resolve",
-          "magic_dash.listAll"
+          "magic_dash.list",
+          "magic_dash.resolve"
         ]
       },
       "compact": "MagicDashSummary",
@@ -10143,8 +10254,7 @@
         "usage": "Read path for api_info returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; api_info.resolve is for a name, slug or domain.",
         "related": [
-          "api_info.resolve",
-          "api_info.list"
+          "api_info.resolve"
         ]
       },
       "compact": null,
@@ -10152,6 +10262,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -10236,7 +10347,7 @@
         "usage": "Mutating path for uploads; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer uploads.archive when the record may be needed again.",
         "related": [
-          "uploads.archive"
+          "uploads.delete"
         ]
       },
       "compact": null,
@@ -10244,6 +10355,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -10285,8 +10397,7 @@
         "usage": "Read path for uploads returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer uploads.search or uploads.resolve for a single lookup.",
         "related": [
-          "uploads.resolve",
-          "uploads.search"
+          "uploads.resolve"
         ]
       },
       "compact": null,
@@ -10294,6 +10405,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED"
       ],
@@ -10334,8 +10446,8 @@
         "usage": "Read path for uploads returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; uploads.resolve is for a name, slug or domain.",
         "related": [
-          "uploads.resolve",
-          "uploads.list"
+          "uploads.list",
+          "uploads.resolve"
         ]
       },
       "compact": null,
@@ -10343,6 +10455,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -10385,7 +10498,7 @@
         "preferredWhen": "The only create path for uploads; photos.create is the photo-specific upload.",
         "related": [
           "uploads.get",
-          "uploads.listAll"
+          "uploads.list"
         ]
       },
       "compact": null,
@@ -10394,6 +10507,7 @@
       "redaction": "none",
       "errors": [
         "BAD_REQUEST",
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -10436,7 +10550,7 @@
         "preferredWhen": "Use when the upload id is known; uploads.listAll is the enumeration path.",
         "related": [
           "uploads.get",
-          "uploads.listAll"
+          "uploads.list"
         ]
       },
       "compact": "UploadSummary",
@@ -10498,7 +10612,7 @@
         "usage": "Mutating path for photos; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer photos.archive when the record may be needed again.",
         "related": [
-          "photos.archive"
+          "photos.delete"
         ]
       },
       "compact": null,
@@ -10506,6 +10620,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -10556,8 +10671,7 @@
         "usage": "Read path for photos returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer photos.search or photos.resolve for a single lookup.",
         "related": [
-          "photos.resolve",
-          "photos.search"
+          "photos.resolve"
         ]
       },
       "compact": null,
@@ -10565,6 +10679,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED"
       ],
@@ -10605,8 +10720,8 @@
         "usage": "Read path for photos returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; photos.resolve is for a name, slug or domain.",
         "related": [
-          "photos.resolve",
-          "photos.list"
+          "photos.list",
+          "photos.resolve"
         ]
       },
       "compact": null,
@@ -10614,6 +10729,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -10663,6 +10779,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -10715,8 +10832,10 @@
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -10767,8 +10886,8 @@
         "usage": "Bare values are read in the order: numeric id, {photoableType, photoableId}. An id is fetched directly; a photoable lookup uses the vendor filters and can legitimately match several photos, so it throws RESOLUTION_AMBIGUOUS with candidate ids (use photos.findByPhotoable for the list).",
         "preferredWhen": "Use when the identifier is a photoable pair; photos.get is cheaper for a known id.",
         "related": [
-          "photos.get",
-          "photos.findByPhotoable"
+          "photos.findByPhotoable",
+          "photos.get"
         ]
       },
       "compact": "PhotoSummary",
@@ -10838,8 +10957,8 @@
         "usage": "Uses the vendor photoable_type + photoable_id filters (optionally narrowed by folder_id). No scan is needed. Returns PhotoSummary records (limit default 25, max 100).",
         "preferredWhen": "Preferred over photos.listAll for 'show me the photos of this record'.",
         "related": [
-          "photos.resolve",
-          "photos.listAll"
+          "photos.list",
+          "photos.resolve"
         ]
       },
       "compact": "PhotoSummary",
@@ -10892,8 +11011,7 @@
         "usage": "Read path for public_photos returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer public_photos.search or public_photos.resolve for a single lookup.",
         "related": [
-          "public_photos.resolve",
-          "public_photos.search"
+          "public_photos.resolve"
         ]
       },
       "compact": null,
@@ -10901,6 +11019,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -10942,8 +11061,8 @@
         "usage": "Read path for public_photos returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; public_photos.resolve is for a name, slug or domain.",
         "related": [
-          "public_photos.resolve",
-          "public_photos.list"
+          "public_photos.list",
+          "public_photos.resolve"
         ]
       },
       "compact": null,
@@ -10951,6 +11070,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -11000,6 +11120,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -11052,6 +11173,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -11100,7 +11222,7 @@
         "preferredWhen": "Use when correlating a public photo with the record it exposes; public_photos.listAll is the enumeration path.",
         "related": [
           "public_photos.get",
-          "public_photos.listAll"
+          "public_photos.list"
         ]
       },
       "compact": null,
@@ -11160,8 +11282,7 @@
         "usage": "Read path for exports returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer exports.search or exports.resolve for a single lookup.",
         "related": [
-          "exports.resolve",
-          "exports.search"
+          "exports.resolve"
         ]
       },
       "compact": null,
@@ -11169,6 +11290,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED"
       ],
@@ -11209,8 +11331,8 @@
         "usage": "Read path for exports returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; exports.resolve is for a name, slug or domain.",
         "related": [
-          "exports.resolve",
-          "exports.list"
+          "exports.list",
+          "exports.resolve"
         ]
       },
       "compact": null,
@@ -11218,6 +11340,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -11258,15 +11381,14 @@
         "purpose": "Initiate an export of a company.",
         "usage": "Mutating path for exports; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Only for a record that does not exist yet; prefer exports.update for an id you already have.",
-        "related": [
-          "exports.update"
-        ]
+        "related": []
       },
       "compact": null,
       "resolution": null,
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -11309,7 +11431,7 @@
         "preferredWhen": "Use when the identifier is a file name; exports.get is cheaper for a known id.",
         "related": [
           "exports.get",
-          "exports.listAll"
+          "exports.list"
         ]
       },
       "compact": null,
@@ -11373,15 +11495,14 @@
         "purpose": "Initiate a s3 export.",
         "usage": "Mutating path for s3_exports; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Only for a record that does not exist yet; prefer s3_exports.update for an id you already have.",
-        "related": [
-          "s3_exports.update"
-        ]
+        "related": []
       },
       "compact": null,
       "resolution": null,
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -11426,7 +11547,7 @@
         "usage": "Mutating path for lists; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer lists.archive when the record may be needed again.",
         "related": [
-          "lists.archive"
+          "lists.delete"
         ]
       },
       "compact": null,
@@ -11434,6 +11555,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -11479,8 +11601,7 @@
         "usage": "Read path for lists returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer lists.search or lists.resolve for a single lookup.",
         "related": [
-          "lists.resolve",
-          "lists.search"
+          "lists.resolve"
         ]
       },
       "compact": null,
@@ -11488,6 +11609,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -11529,8 +11651,8 @@
         "usage": "Read path for lists returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; lists.resolve is for a name, slug or domain.",
         "related": [
-          "lists.resolve",
-          "lists.list"
+          "lists.list",
+          "lists.resolve"
         ]
       },
       "compact": null,
@@ -11538,6 +11660,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -11588,6 +11711,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -11639,8 +11763,10 @@
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -11691,8 +11817,8 @@
         "usage": "Bare values are read in the order: numeric id, exact name. GET /lists is not paginated, so a name lookup fetches the collection once and nothing is left unread.",
         "preferredWhen": "Use when the identifier is a list name; lists.get is cheaper for a known id.",
         "related": [
-          "lists.get",
-          "lists.findByName"
+          "lists.findByName",
+          "lists.get"
         ]
       },
       "compact": null,
@@ -11757,8 +11883,8 @@
         "usage": "Uses the vendor name filter with an exact compare. Lists are small configuration records, so the full record is returned (no compact shape).",
         "preferredWhen": "Preferred over lists.listAll for a name lookup.",
         "related": [
-          "lists.resolve",
-          "lists.get"
+          "lists.get",
+          "lists.resolve"
         ]
       },
       "compact": null,
@@ -11810,7 +11936,7 @@
         "usage": "Mutating path for label_types; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer label_types.archive when the record may be needed again.",
         "related": [
-          "label_types.archive"
+          "label_types.delete"
         ]
       },
       "compact": null,
@@ -11818,6 +11944,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -11866,8 +11993,7 @@
         "usage": "Read path for label_types returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer label_types.search or label_types.resolve for a single lookup.",
         "related": [
-          "label_types.resolve",
-          "label_types.search"
+          "label_types.resolve"
         ]
       },
       "compact": null,
@@ -11875,6 +12001,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -11916,8 +12043,8 @@
         "usage": "Read path for label_types returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; label_types.resolve is for a name, slug or domain.",
         "related": [
-          "label_types.resolve",
-          "label_types.list"
+          "label_types.list",
+          "label_types.resolve"
         ]
       },
       "compact": null,
@@ -11925,6 +12052,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -11975,6 +12103,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -12026,8 +12155,10 @@
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -12147,7 +12278,7 @@
         "usage": "Mutating path for labels; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer labels.archive when the record may be needed again.",
         "related": [
-          "labels.archive"
+          "labels.delete"
         ]
       },
       "compact": null,
@@ -12155,6 +12286,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -12204,8 +12336,7 @@
         "usage": "Read path for labels returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer labels.search or labels.resolve for a single lookup.",
         "related": [
-          "labels.resolve",
-          "labels.search"
+          "labels.resolve"
         ]
       },
       "compact": null,
@@ -12213,6 +12344,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -12254,8 +12386,8 @@
         "usage": "Read path for labels returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; labels.resolve is for a name, slug or domain.",
         "related": [
-          "labels.resolve",
-          "labels.list"
+          "labels.list",
+          "labels.resolve"
         ]
       },
       "compact": null,
@@ -12263,6 +12395,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -12313,6 +12446,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -12364,8 +12498,10 @@
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -12416,8 +12552,8 @@
         "usage": "Labels have no name field, so the accepted kinds are id (fetched directly) and a {labelableType, labelableId} pair (server filters; can match several labels and then throws RESOLUTION_AMBIGUOUS with candidate ids).",
         "preferredWhen": "Use labels.findByLabelable for the list form; resolve is for a single known label.",
         "related": [
-          "labels.get",
-          "labels.findByLabelable"
+          "labels.findByLabelable",
+          "labels.get"
         ]
       },
       "compact": "LabelSummary",
@@ -12477,8 +12613,8 @@
         "usage": "Uses the vendor labelable_type + labelable_id filters (optionally narrowed by label_type_id). Returns LabelSummary records (limit default 25, max 100).",
         "preferredWhen": "Preferred over labels.listAll for 'what is this record tagged with'.",
         "related": [
-          "labels.resolve",
-          "label_types.resolve"
+          "label_types.resolve",
+          "labels.resolve"
         ]
       },
       "compact": "LabelSummary",
@@ -12548,6 +12684,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -12589,8 +12726,8 @@
         "usage": "Read path for users returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; users.resolve is for a name, slug or domain.",
         "related": [
-          "users.resolve",
-          "users.list"
+          "users.list",
+          "users.resolve"
         ]
       },
       "compact": null,
@@ -12598,6 +12735,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -12639,8 +12777,8 @@
         "usage": "Bare values are read in the order: numeric id, exact email, slug, exact name. Email is the natural key, so prefer users.findByEmail when the email is known.",
         "preferredWhen": "Use when the identifier is an email or a name; users.get is cheaper for a known id.",
         "related": [
-          "users.get",
           "users.findByEmail",
+          "users.get",
           "users.search"
         ]
       },
@@ -12721,8 +12859,8 @@
         "usage": "Uses the vendor email filter with an exact compare.",
         "preferredWhen": "Preferred over users.listAll for any email lookup.",
         "related": [
-          "users.resolve",
-          "users.get"
+          "users.get",
+          "users.resolve"
         ]
       },
       "compact": "UserSummary",
@@ -12776,8 +12914,8 @@
         "usage": "Vendor search filter, optionally narrowed by archived or security_level. limit defaults to 25, max 100.",
         "preferredWhen": "Preferred over users.listAll for any text search.",
         "related": [
-          "users.listAll",
-          "users.findByEmail"
+          "users.findByEmail",
+          "users.list"
         ]
       },
       "compact": "UserSummary",
@@ -12826,14 +12964,14 @@
         "usage": "Runs each resource's own helper-tier `search` (vendor text search, never listAll) across the requested resources, at most `concurrency` requests in flight (default 4, from client config). limit defaults to 25 per resource and is capped at 100; an unknown resource name is rejected with CONFIG_ERROR. Results are compact summaries.",
         "preferredWhen": "Preferred over calling several resources' search methods yourself whenever the caller does not know which resource holds the record.",
         "related": [
-          "companies.search",
           "articles.search",
-          "assets.search",
-          "websites.search",
           "asset_passwords.search",
-          "password_folders.search",
+          "assets.search",
+          "companies.search",
           "groups.search",
-          "users.search"
+          "password_folders.search",
+          "users.search",
+          "websites.search"
         ]
       },
       "compact": "SearchHit",
@@ -12892,11 +13030,11 @@
         "usage": "Calls each requested resource's `resolve` with the same identifier. Unlike a single-resource resolve it never throws RESOLUTION_AMBIGUOUS across the set: it returns every match as a candidate, so the caller can decide. A per-resource complete miss contributes nothing; a per-resource truncated scan is reported in `truncated` rather than silently dropped. Unsupported resource names are rejected with CONFIG_ERROR.",
         "preferredWhen": "Preferred when the caller has an identifier but not the resource type; use the resource's own resolve when the type is known.",
         "related": [
-          "companies.resolve",
-          "assets.resolve",
           "articles.resolve",
-          "websites.resolve",
-          "users.resolve"
+          "assets.resolve",
+          "companies.resolve",
+          "users.resolve",
+          "websites.resolve"
         ]
       },
       "compact": "ResolutionCandidateHit",

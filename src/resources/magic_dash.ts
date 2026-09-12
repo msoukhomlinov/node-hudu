@@ -16,7 +16,8 @@ import type {
 import type { MagicDash, MagicDashCreate } from '../types/index.js';
 import type { MagicDashIdentifier, MagicDashSummary } from '../types/magic_dash.js';
 import {
-  decideResolution, helperLimit, identifierError, numericIds, requirePositiveId,
+  MAX_HELPER_LIMIT, decideResolution, helperLimit, identifierError, numericIds,
+  refuseExpectedUpdatedAtOutsideUpdate, requirePositiveId,
 } from './agent-layer-helpers.js';
 
 export interface MagicDashListParams extends ListParams {
@@ -69,6 +70,8 @@ export class MagicDashResource extends BaseResource<MagicDash> {
   async create(data: MagicDashCreate, opts: MutationOptions & { dryRun?: false }): Promise<MagicDash>;
   async create(data: MagicDashCreate, opts: MutationOptions | undefined): Promise<MagicDash | DryRunResult<MagicDash>>;
   async create(data: MagicDashCreate, opts?: MutationOptions): Promise<MagicDash | DryRunResult<MagicDash>> {
+    // staleCheck is "unavailable" for a create: `expectedUpdatedAt` is refused, not ignored.
+    refuseExpectedUpdatedAtOutsideUpdate('magic_dash.create', opts);
     return this.createOne<MagicDash>(data, undefined, opts);
   }
 
@@ -94,6 +97,7 @@ export class MagicDashResource extends BaseResource<MagicDash> {
     opts?: MutationOptions,
   ): Promise<void | DryRunResult<void>> {
     const operation = 'magic_dash.delete';
+    refuseExpectedUpdatedAtOutsideUpdate(operation, opts);
     const title = typeof data?.title === 'string' ? data.title.trim() : '';
     const company = typeof data?.company_name === 'string' ? data.company_name.trim() : '';
     if (title.length === 0 || company.length === 0) {
@@ -107,17 +111,22 @@ export class MagicDashResource extends BaseResource<MagicDash> {
       );
     }
     if (opts?.dryRun === true) {
+      // The affected set is server-computed, so a literal count would understate it: one
+      // bounded page (page_size 100) with the same title filter supplies a FLOOR instead.
+      const floor = await this.countTitleFloor(title, company);
       return this.buildDryRunResult<void>({
         operation,
         method: 'DELETE',
         path: '/magic_dash',
         checks: [{ name: 'bulk-bound', ok: true, detail: `title "${title}" in company "${company}"` }],
-        affected: 1,
+        affected: floor,
         scope: 'bulk',
         reversible: false,
+        exact: false,
         warnings: [
           `bulk delete by a server-side bound: every Magic Dash item titled "${title}" in "${company}"`,
-          'the affected count is computed by the server and cannot be promised by dry-run',
+          `affected ${floor} is a FLOOR from ONE bounded page (page_size ${MAX_HELPER_LIMIT}) filtered by title; ` +
+            'the server decides the final target set',
         ],
       });
     }
@@ -136,6 +145,7 @@ export class MagicDashResource extends BaseResource<MagicDash> {
   async deleteById(id: number, opts: MutationOptions | undefined): Promise<void | DryRunResult<void>>;
   async deleteById(id: number, opts?: MutationOptions): Promise<void | DryRunResult<void>> {
     const operation = 'magic_dash.deleteById';
+    refuseExpectedUpdatedAtOutsideUpdate(operation, opts);
     const itemId = requirePositiveId(id, operation);
     if (opts?.dryRun === true) {
       return this.buildDryRunResult<void>({
@@ -177,6 +187,7 @@ export class MagicDashResource extends BaseResource<MagicDash> {
     opts?: MutationOptions,
   ): Promise<{ success: boolean } | DryRunResult<{ success: boolean }>> {
     const operation = 'magic_dash.updatePositions';
+    refuseExpectedUpdatedAtOutsideUpdate(operation, opts);
     const positions = Array.isArray(data?.positions) ? data.positions : [];
     if (positions.length === 0) {
       throw new PolicyDeniedError(
@@ -203,6 +214,8 @@ export class MagicDashResource extends BaseResource<MagicDash> {
         affected: positions.length,
         scope: 'bulk',
         reversible: true,
+        // The caller supplied the bound, so the count IS the affected set.
+        exact: true,
         warnings: [
           `multi-record fan-out: ${positions.length} Magic Dash item(s) are repositioned in one call`,
           'the affected count is the number of positions supplied',
@@ -266,6 +279,12 @@ export class MagicDashResource extends BaseResource<MagicDash> {
     const id = requirePositiveId(companyId, method);
     const items = await this.collectBounded({ company_id: id }, limit);
     return opts?.expand === true ? items : items.map(toMagicDashSummary);
+  }
+
+  /** One bounded page read (page_size 100) used as an `affected` FLOOR for a bulk dry-run. */
+  private async countTitleFloor(title: string, company: string): Promise<number> {
+    const page = await this.pageFetcher({ title })(1, MAX_HELPER_LIMIT);
+    return page.items.filter((item) => item.title === title && item.company_name === company).length;
   }
 
   /** Collect at most `limit` rows through one bounded scan. */

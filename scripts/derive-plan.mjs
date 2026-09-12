@@ -102,13 +102,25 @@ const EXTRA_ERRORS = {
   'PUT /magic_dash/update_positions': ['POLICY_DENIED'],
 };
 
+/** The 20 resources whose update path carries the base-class expectedUpdatedAt guard (plan staleCheck). */
+const STALE_GUARD_RESOURCES = new Set([
+  'companies', 'articles', 'asset_layouts', 'asset_passwords', 'websites', 'folders', 'password_folders',
+  'networks', 'vlans', 'vlan_zones', 'rack_storages', 'flags', 'flag_types',
+  'procedures', 'procedure_tasks', 'expirations',
+  'photos', 'lists', 'label_types', 'labels',
+]);
+
 const STATUS_CODES = {
   400: 'BAD_REQUEST', 401: 'UNAUTHORIZED', 403: 'FORBIDDEN', 404: 'NOT_FOUND',
   405: 'METHOD_NOT_ALLOWED', 406: 'NOT_ACCEPTABLE', 409: 'CONFLICT', 412: 'STALE_OBJECT',
   422: 'UNPROCESSABLE_ENTITY', 429: 'RATE_LIMIT',
 };
-function errorsFor(op, endpoint) {
-  const out = new Set(['NETWORK_ERROR', ...(EXTRA_ERRORS[endpoint] ?? [])]);
+function errorsFor(op, endpoint, resource, method) {
+  // CONFIG_ERROR is universal: every operation validates its own inputs and a bad limit, page_size or
+  // identifier kind surfaces as HuduConfigError without a request (policy §8 category 'validation').
+  const out = new Set(['NETWORK_ERROR', 'CONFIG_ERROR', ...(EXTRA_ERRORS[endpoint] ?? [])]);
+  // STALE_OBJECT belongs exactly to the update rows that carry the expectedUpdatedAt guard.
+  if (method === 'update' && STALE_GUARD_RESOURCES.has(resource)) out.add('STALE_OBJECT');
   for (const st of Object.keys(op.responses || {})) {
     const n = Number(st);
     if (Number.isNaN(n)) continue;
@@ -223,7 +235,7 @@ for (const [path, item] of Object.entries(spec.paths)) {
       resolution: null,
       staleCheck: null,
       redaction: 'none',
-      errors: errorsFor(op, key),
+      errors: errorsFor(op, key, resource, primitive),
       tests: testsSkeleton(resource, `${resource}.${primitive}`, shape, file),
       group: GROUP_OF[resource] ?? null,
       status: METHODS[resource].has(primitive) ? 'implemented' : 'planned',

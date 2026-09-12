@@ -6,7 +6,7 @@ import { withAuth } from './auth.js';
 import type { ResolutionConfig, ResolvedConfig } from './config.js';
 import { errorFromStatus, HuduError, HuduNetworkError, RateLimitError } from './errors.js';
 import { redact } from './logger.js';
-import type { AuditEvent, OperationEffect } from './types/common.js';
+import type { AuditEvent, OperationEffect, OperationImpact } from './types/common.js';
 import { isRecord } from './utils.js';
 
 /** Hard cap on any single retry/backoff sleep (B6). */
@@ -48,6 +48,13 @@ export interface RequestOptions {
    * it returns a `DryRunRequest` marker and audits the event with `dryRun: true`.
    */
   dryRun?: boolean;
+  /**
+   * Impact statement for a mutation, carried into the audit event as the executed-result
+   * metadata (policy §7.3). Defaults to a single-record change whose reversibility follows
+   * the HTTP verb. Bulk callers pass `{ affected, scope: 'bulk', exact: false }` when the
+   * server computes the real target set.
+   */
+  impact?: OperationImpact;
 }
 
 /** Marker returned instead of a server response when `{ dryRun: true }` short-circuits the transport. */
@@ -64,6 +71,14 @@ function effectForMethod(method: string): OperationEffect {
   if (method === 'GET') return 'read';
   if (method === 'DELETE') return 'destructive';
   return 'write';
+}
+
+/**
+ * Best-effort impact for a single-record mutation when the caller supplies none
+ * (policy §7.3): a write is reversible, a destructive call is not.
+ */
+function defaultImpactFor(effect: OperationEffect): OperationImpact {
+  return { affected: 1, scope: 'single', reversible: effect !== 'destructive' };
 }
 
 /** Numeric path segments, used as the resource ids when the caller does not name them. */
@@ -295,6 +310,8 @@ export class HttpClient {
     const ids = resourceIdsFor(opts);
     if (ids !== undefined) event.resourceIds = ids;
     if (opts.query !== undefined) event.query = opts.query;
+    // Executed-result metadata: every mutation reports its impact, reads never do.
+    if (event.effect !== 'read') event.impact = opts.impact ?? defaultImpactFor(event.effect);
     hook(redact(event) as AuditEvent);
   }
 

@@ -7,11 +7,37 @@ import type { ListParams, Page, PaginateOptions } from '../pagination.js';
 import { collectAll, paginate, paginateItems } from '../pagination.js';
 import type { Asset, AssetCreate, AssetUpdate } from '../types/index.js';
 import type { AssetContext, AssetContextExpand, AssetIdentifier, AssetSummary } from '../types/asset.js';
-import type { DryRunResult, HelperOptions, MutationOptions, Resolution, ResolutionCandidate } from '../types/common.js';
+import type { DryRunResult, HelperOptions, Resolution, ResolutionCandidate } from '../types/common.js';
 import { HuduConfigError, HuduError, NotFoundError, ResolutionError } from '../errors.js';
 import { AssetLayoutsResource } from './asset_layouts.js';
 import { ExpirationsResource } from './expirations.js';
 import { RelationsResource } from './relations.js';
+
+/**
+ * Options of `assets.search`. A search returns a LIST, so it offers neither
+ * `resolutionDetails` (a `Resolution<T>` wrapper is meaningless for a list) nor a
+ * guard: only `limit`, `expand` and the optional `company_id` narrowing are
+ * accepted, and all three are honoured.
+ */
+export interface AssetSearchOptions {
+  /** Maximum rows returned; default 25, hard maximum 100. */
+  limit?: number;
+  /** Return the full records instead of the compact summaries. */
+  expand?: boolean;
+  /** Narrow the account-wide `search` filter to one company. */
+  company_id?: number;
+}
+
+/**
+ * Options of the asset writers that have no prior revision and no stale guard
+ * (`create`, `update`, `delete`, `archive`, `unarchive`, `moveLayout`). The asset
+ * update is hand-rolled (the resource path is company-scoped and the vendor PUT
+ * returns a flat record), so `expectedUpdatedAt` is not offered here at all: it is
+ * deliberately absent rather than declared and ignored.
+ */
+export interface AssetWriteOptions {
+  dryRun?: boolean;
+}
 
 /** Helper `limit` bounds (policy §9): default 25, hard maximum 100. */
 const DEFAULT_HELPER_LIMIT = 25;
@@ -136,8 +162,8 @@ export class AssetsResource extends BaseResource<Asset> {
 
   async create(companyId: number, data: AssetCreate): Promise<Asset>;
   /** Dry-run: describe the create without issuing it. */
-  async create(companyId: number, data: AssetCreate, opts: MutationOptions & { dryRun: true }): Promise<DryRunResult<Asset>>;
-  async create(companyId: number, data: AssetCreate, opts?: MutationOptions): Promise<Asset | DryRunResult<Asset>>;
+  async create(companyId: number, data: AssetCreate, opts: { dryRun: true }): Promise<DryRunResult<Asset>>;
+  async create(companyId: number, data: AssetCreate, opts?: AssetWriteOptions): Promise<Asset | DryRunResult<Asset>>;
   /**
    * POST /companies/{companyId}/assets.
    * A-1/QA: the live n8n node and the PUT example wrap the body in { asset };
@@ -145,7 +171,7 @@ export class AssetsResource extends BaseResource<Asset> {
    * The 201 response is a flat Asset, so no unwrap is applied.
    * The `expectedUpdatedAt` guard is an UPDATE guard and is ignored here.
    */
-  async create(companyId: number, data: AssetCreate, opts?: MutationOptions): Promise<Asset | DryRunResult<Asset>> {
+  async create(companyId: number, data: AssetCreate, opts?: AssetWriteOptions): Promise<Asset | DryRunResult<Asset>> {
     const operation = 'assets.create';
     const path = `/companies/${companyId}/assets`;
     if (opts?.dryRun === true) {
@@ -166,15 +192,15 @@ export class AssetsResource extends BaseResource<Asset> {
   /** PUT /companies/{companyId}/assets/{id}. Wraps the body in { asset } — the api-docs.json PUT example and the live n8n node (_assetFieldUtils_ ~L522) both nest it; the 200 response is a flat Asset, so no unwrap is applied (A-1/R6). */
   async update(companyId: number, id: number, data: AssetUpdate): Promise<Asset>;
   /** Dry-run: describe the update without issuing it. */
-  async update(companyId: number, id: number, data: AssetUpdate, opts: MutationOptions & { dryRun: true }): Promise<DryRunResult<Asset>>;
-  async update(companyId: number, id: number, data: AssetUpdate, opts?: MutationOptions): Promise<Asset | DryRunResult<Asset>>;
+  async update(companyId: number, id: number, data: AssetUpdate, opts: { dryRun: true }): Promise<DryRunResult<Asset>>;
+  async update(companyId: number, id: number, data: AssetUpdate, opts?: AssetWriteOptions): Promise<Asset | DryRunResult<Asset>>;
   /**
    * PUT /companies/{companyId}/assets/{id}. `{ dryRun: true }` describes the
    * update without issuing it. `staleCheck` is "unavailable" for assets: the
    * vendor's flat PUT response and the hand-rolled request path are not routed
    * through `updateOne`, so no `{ expectedUpdatedAt }` guard is offered.
    */
-  async update(companyId: number, id: number, data: AssetUpdate, opts?: MutationOptions): Promise<Asset | DryRunResult<Asset>> {
+  async update(companyId: number, id: number, data: AssetUpdate, opts?: AssetWriteOptions): Promise<Asset | DryRunResult<Asset>> {
     const operation = 'assets.update';
     const path = `/companies/${companyId}/assets/${id}`;
     if (opts?.dryRun === true) {
@@ -195,9 +221,9 @@ export class AssetsResource extends BaseResource<Asset> {
 
   async delete(companyId: number, id: number): Promise<void>;
   /** Dry-run: describe the delete without issuing it. */
-  async delete(companyId: number, id: number, opts: MutationOptions & { dryRun: true }): Promise<DryRunResult<void>>;
-  async delete(companyId: number, id: number, opts?: MutationOptions): Promise<void | DryRunResult<void>>;
-  async delete(companyId: number, id: number, opts?: MutationOptions): Promise<void | DryRunResult<void>> {
+  async delete(companyId: number, id: number, opts: { dryRun: true }): Promise<DryRunResult<void>>;
+  async delete(companyId: number, id: number, opts?: AssetWriteOptions): Promise<void | DryRunResult<void>>;
+  async delete(companyId: number, id: number, opts?: AssetWriteOptions): Promise<void | DryRunResult<void>> {
     const operation = 'assets.delete';
     const path = `/companies/${companyId}/assets/${id}`;
     if (opts?.dryRun === true) {
@@ -218,25 +244,25 @@ export class AssetsResource extends BaseResource<Asset> {
 
   async archive(companyId: number, id: number): Promise<void>;
   /** Dry-run: describe the archive without issuing it. */
-  async archive(companyId: number, id: number, opts: MutationOptions & { dryRun: true }): Promise<DryRunResult<void>>;
-  async archive(companyId: number, id: number, opts?: MutationOptions): Promise<void | DryRunResult<void>>;
-  async archive(companyId: number, id: number, opts?: MutationOptions): Promise<void | DryRunResult<void>> {
+  async archive(companyId: number, id: number, opts: { dryRun: true }): Promise<DryRunResult<void>>;
+  async archive(companyId: number, id: number, opts?: AssetWriteOptions): Promise<void | DryRunResult<void>>;
+  async archive(companyId: number, id: number, opts?: AssetWriteOptions): Promise<void | DryRunResult<void>> {
     return this.setArchivedScoped(companyId, id, true, opts);
   }
 
   async unarchive(companyId: number, id: number): Promise<void>;
   /** Dry-run: describe the unarchive without issuing it. */
-  async unarchive(companyId: number, id: number, opts: MutationOptions & { dryRun: true }): Promise<DryRunResult<void>>;
-  async unarchive(companyId: number, id: number, opts?: MutationOptions): Promise<void | DryRunResult<void>>;
-  async unarchive(companyId: number, id: number, opts?: MutationOptions): Promise<void | DryRunResult<void>> {
+  async unarchive(companyId: number, id: number, opts: { dryRun: true }): Promise<DryRunResult<void>>;
+  async unarchive(companyId: number, id: number, opts?: AssetWriteOptions): Promise<void | DryRunResult<void>>;
+  async unarchive(companyId: number, id: number, opts?: AssetWriteOptions): Promise<void | DryRunResult<void>> {
     return this.setArchivedScoped(companyId, id, false, opts);
   }
 
   async moveLayout(companyId: number, id: number, data: { asset_layout_id: number }): Promise<Asset>;
   /** Dry-run: describe the move without issuing it. */
-  async moveLayout(companyId: number, id: number, data: { asset_layout_id: number }, opts: MutationOptions & { dryRun: true }): Promise<DryRunResult<Asset>>;
-  async moveLayout(companyId: number, id: number, data: { asset_layout_id: number }, opts?: MutationOptions): Promise<Asset | DryRunResult<Asset>>;
-  async moveLayout(companyId: number, id: number, data: { asset_layout_id: number }, opts?: MutationOptions): Promise<Asset | DryRunResult<Asset>> {
+  async moveLayout(companyId: number, id: number, data: { asset_layout_id: number }, opts: { dryRun: true }): Promise<DryRunResult<Asset>>;
+  async moveLayout(companyId: number, id: number, data: { asset_layout_id: number }, opts?: AssetWriteOptions): Promise<Asset | DryRunResult<Asset>>;
+  async moveLayout(companyId: number, id: number, data: { asset_layout_id: number }, opts?: AssetWriteOptions): Promise<Asset | DryRunResult<Asset>> {
     const operation = 'assets.moveLayout';
     const path = `/companies/${companyId}/assets/${id}/move_layout`;
     if (opts?.dryRun === true) {
@@ -282,6 +308,9 @@ export class AssetsResource extends BaseResource<Asset> {
    * means a complete bounded scan found nothing; a scan stopped by the cap throws
    * `RESOLUTION_TRUNCATED`; several matches throw `RESOLUTION_AMBIGUOUS` with the
    * candidate ids in `resourceIds`.
+   *
+   * `limit` bounds the page size of a server-filtered scan; a direct company-scoped
+   * `{ companyId, id }` fetch has nothing to scan, so `limit` has no effect there.
    */
   async resolve(identifier: number | string | AssetIdentifier): Promise<AssetSummary | null>;
   /** `expand: true` returns the full record. */
@@ -327,9 +356,9 @@ export class AssetsResource extends BaseResource<Asset> {
    */
   async search(query: string): Promise<AssetSummary[]>;
   /** `expand: true` returns the full records. */
-  async search(query: string, opts: HelperOptions & { expand: true }): Promise<Asset[]>;
-  async search(query: string, opts?: HelperOptions & { company_id?: number }): Promise<AssetSummary[] | Asset[]>;
-  async search(query: string, opts?: HelperOptions & { company_id?: number }): Promise<AssetSummary[] | Asset[]> {
+  async search(query: string, opts: { expand: true; limit?: number; company_id?: number }): Promise<Asset[]>;
+  async search(query: string, opts?: AssetSearchOptions): Promise<AssetSummary[] | Asset[]>;
+  async search(query: string, opts?: AssetSearchOptions): Promise<AssetSummary[] | Asset[]> {
     const size = helperLimit(opts?.limit);
     if (typeof query !== 'string' || query.trim().length === 0) {
       throw new HuduConfigError('assets.search requires a non-empty query');
@@ -516,7 +545,7 @@ export class AssetsResource extends BaseResource<Asset> {
     companyId: number,
     id: number,
     archive: boolean,
-    opts?: MutationOptions,
+    opts?: AssetWriteOptions,
   ): Promise<void | DryRunResult<void>> {
     const action = archive ? 'archive' : 'unarchive';
     const operation = `assets.${action}`;

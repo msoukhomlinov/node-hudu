@@ -43,6 +43,10 @@
 //   emission-planhash        capabilities.json is stale (planHash mismatch) — SKIPPED when --plan
 //                            points somewhere other than capabilities.plan.json, so a fixture can
 //                            exercise the other rules without a matching emission
+//   manifest-planhash        MCP_TOOL_MANIFEST.md does not carry the current planHash, or claims a
+//                            registry record count that disagrees with src/capabilities.ts. A
+//                            stale manifest is a shipped lie about helper coverage, so it fails
+//                            here. Test it directly with --manifest <path>.
 //   emission-missing         capabilities.json / capabilities.schema.json / src/capabilities.ts absent
 //
 // Warnings (never failures): a public source method in neither the plan nor the registry
@@ -52,7 +56,7 @@
 // Exit 1 on any failure. Prints every failure with its reason and the offending JSON path, then a
 // PASS/FAIL summary with counts.
 //
-// Flags: --group <A|B|C|D|operations>  --ship  --plan <path>  --registry <path>
+// Flags: --group <A|B|C|D|operations>  --ship  --plan <path>  --registry <path>  --manifest <path>
 
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -72,6 +76,7 @@ const IS_DEFAULT_PLAN = path.resolve(ROOT, PLAN_ARG) === path.resolve(ROOT, DEFA
 const GROUP = argValue('--group', null);
 const SHIP = argv.includes('--ship');
 const REGISTRY_PATH = path.resolve(ROOT, argValue('--registry', 'src/capabilities.ts'));
+const MANIFEST_PATH = path.resolve(ROOT, argValue('--manifest', 'MCP_TOOL_MANIFEST.md'));
 const failures = [];
 const warnings = [];
 function fail(rule, jsonPath, reason) {
@@ -387,6 +392,29 @@ if (IS_DEFAULT_PLAN) {
   }
   if (!existsSync(path.join(ROOT, 'capabilities.schema.json'))) fail('emission-missing', 'capabilities.schema.json', 'not emitted — run `npm run capabilities:build`');
   if (registryProblem) fail('emission-missing', 'src/capabilities.ts', registryProblem);
+
+  // The MCP projection pins the planHash and a record count at generation time, so it goes stale
+  // silently whenever the registry is rebuilt. Gate it: a stale manifest tells an integrator that
+  // helpers are unbuilt when they exist (and vice versa).
+  const manifestRel = path.relative(ROOT, MANIFEST_PATH);
+  if (!existsSync(MANIFEST_PATH)) {
+    fail('manifest-planhash', manifestRel, 'not emitted — run `npm run mcp:project`');
+  } else {
+    const manifestText = readFileSync(MANIFEST_PATH, 'utf8');
+    const hashMatch = /planHash\s+`([0-9a-f]{64})`/.exec(manifestText);
+    if (!hashMatch) {
+      fail('manifest-planhash', `${manifestRel} (header)`, 'carries no planHash — regenerate with `npm run mcp:project`');
+    } else if (hashMatch[1] !== planHash) {
+      fail('manifest-planhash', `${manifestRel} (header planHash)`, `stale: manifest pins ${hashMatch[1]}, plan is ${planHash} — re-run \`npm run mcp:project\``);
+    }
+    const countMatch = /registry records:\s*(\d+)/.exec(manifestText);
+    const registryRecordCount = registry ? registry.size : null;
+    if (!countMatch) {
+      fail('manifest-planhash', `${manifestRel} (record count)`, 'states no registry record count — regenerate with `npm run mcp:project`');
+    } else if (registryRecordCount !== null && Number(countMatch[1]) !== registryRecordCount) {
+      fail('manifest-planhash', `${manifestRel} (record count)`, `claims ${countMatch[1]} registry records but the registry holds ${registryRecordCount} — the projection is stale, re-run \`npm run mcp:project\``);
+    }
+  }
 } else {
   console.log(`capabilities:check — --plan ${PLAN_ARG}: emission rules (planHash comparison, emitted-file presence) are SKIPPED by design so a fixture can exercise the other rules.`);
 }

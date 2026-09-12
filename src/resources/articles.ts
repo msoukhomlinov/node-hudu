@@ -11,6 +11,31 @@ import { HuduConfigError, HuduError, ResolutionError } from '../errors.js';
 import { CompaniesResource, toCompanySummary } from './companies.js';
 import { FoldersResource } from './folders.js';
 
+/**
+ * Options of `articles.search`. A search returns a LIST, so it offers neither
+ * `resolutionDetails` (a `Resolution<T>` wrapper is meaningless for a list) nor a
+ * guard: only `limit`, `expand` and the optional `company_id` narrowing are
+ * accepted, and all three are honoured.
+ */
+export interface ArticleSearchOptions {
+  /** Maximum rows returned; default 25, hard maximum 100. */
+  limit?: number;
+  /** Return the full records instead of the compact summaries. */
+  expand?: boolean;
+  /** Narrow the vendor `search` filter to one company. */
+  company_id?: number;
+}
+
+/**
+ * Options of the writers that have no prior revision and no stale guard: `create`,
+ * `delete`, `archive` and `unarchive`. `{ dryRun: true }` describes the call
+ * without issuing it. `expectedUpdatedAt` is deliberately NOT accepted here — it is
+ * an update guard, and a declared-but-ignored option would mislead a caller.
+ */
+export interface WriteOptions {
+  dryRun?: boolean;
+}
+
 /** Helper `limit` bounds (policy §9): default 25, hard maximum 100. */
 const DEFAULT_HELPER_LIMIT = 25;
 const MAX_HELPER_LIMIT = 100;
@@ -112,14 +137,14 @@ export class ArticlesResource extends BaseResource<Article> {
 
   async create(data: ArticleCreate): Promise<Article>;
   /** Dry-run: describe the create without issuing it. */
-  async create(data: ArticleCreate, opts: MutationOptions & { dryRun: true }): Promise<DryRunResult<Article>>;
-  async create(data: ArticleCreate, opts?: MutationOptions): Promise<Article | DryRunResult<Article>>;
+  async create(data: ArticleCreate, opts: { dryRun: true }): Promise<DryRunResult<Article>>;
+  async create(data: ArticleCreate, opts?: WriteOptions): Promise<Article | DryRunResult<Article>>;
   /**
    * POST /articles. `{ dryRun: true }` describes the create without issuing it.
-   * The `expectedUpdatedAt` guard is an UPDATE guard: a create has no prior
-   * revision to compare against, so the option is accepted and ignored here.
+   * A create has no prior revision, so there is no `expectedUpdatedAt` guard and
+   * the option is not part of this signature.
    */
-  async create(data: ArticleCreate, opts?: MutationOptions): Promise<Article | DryRunResult<Article>> {
+  async create(data: ArticleCreate, opts?: WriteOptions): Promise<Article | DryRunResult<Article>> {
     return this.createOne<Article>(data, undefined, opts);
   }
 
@@ -135,25 +160,25 @@ export class ArticlesResource extends BaseResource<Article> {
 
   async delete(id: number): Promise<void>;
   /** Dry-run: describe the delete without issuing it. */
-  async delete(id: number, opts: MutationOptions & { dryRun: true }): Promise<DryRunResult<void>>;
-  async delete(id: number, opts?: MutationOptions): Promise<void | DryRunResult<void>>;
-  async delete(id: number, opts?: MutationOptions): Promise<void | DryRunResult<void>> {
+  async delete(id: number, opts: { dryRun: true }): Promise<DryRunResult<void>>;
+  async delete(id: number, opts?: WriteOptions): Promise<void | DryRunResult<void>>;
+  async delete(id: number, opts?: WriteOptions): Promise<void | DryRunResult<void>> {
     return this.deleteOne(id, opts);
   }
 
   async archive(id: number): Promise<void>;
   /** Dry-run: describe the archive without issuing it. */
-  async archive(id: number, opts: MutationOptions & { dryRun: true }): Promise<DryRunResult<void>>;
-  async archive(id: number, opts?: MutationOptions): Promise<void | DryRunResult<void>>;
-  async archive(id: number, opts?: MutationOptions): Promise<void | DryRunResult<void>> {
+  async archive(id: number, opts: { dryRun: true }): Promise<DryRunResult<void>>;
+  async archive(id: number, opts?: WriteOptions): Promise<void | DryRunResult<void>>;
+  async archive(id: number, opts?: WriteOptions): Promise<void | DryRunResult<void>> {
     return this.setArchived(id, true, opts);
   }
 
   async unarchive(id: number): Promise<void>;
   /** Dry-run: describe the unarchive without issuing it. */
-  async unarchive(id: number, opts: MutationOptions & { dryRun: true }): Promise<DryRunResult<void>>;
-  async unarchive(id: number, opts?: MutationOptions): Promise<void | DryRunResult<void>>;
-  async unarchive(id: number, opts?: MutationOptions): Promise<void | DryRunResult<void>> {
+  async unarchive(id: number, opts: { dryRun: true }): Promise<DryRunResult<void>>;
+  async unarchive(id: number, opts?: WriteOptions): Promise<void | DryRunResult<void>>;
+  async unarchive(id: number, opts?: WriteOptions): Promise<void | DryRunResult<void>> {
     return this.setArchived(id, false, opts);
   }
 
@@ -172,6 +197,9 @@ export class ArticlesResource extends BaseResource<Article> {
    * A complete bounded scan with no match returns `null`; a scan stopped by the
    * cap throws `RESOLUTION_TRUNCATED`; several matches throw
    * `RESOLUTION_AMBIGUOUS` with the candidate ids in `resourceIds`.
+   *
+   * `limit` bounds the page size of a server-filtered scan; a direct `{ id }` fetch
+   * has nothing to scan, so `limit` has no effect on that path.
    */
   async resolve(identifier: number | string | ArticleIdentifier): Promise<ArticleSummary | null>;
   /** `expand: true` returns the full record. */
@@ -212,9 +240,9 @@ export class ArticlesResource extends BaseResource<Article> {
    */
   async search(query: string): Promise<ArticleSummary[]>;
   /** `expand: true` returns the full records. */
-  async search(query: string, opts: HelperOptions & { expand: true }): Promise<Article[]>;
-  async search(query: string, opts?: HelperOptions & { company_id?: number }): Promise<ArticleSummary[] | Article[]>;
-  async search(query: string, opts?: HelperOptions & { company_id?: number }): Promise<ArticleSummary[] | Article[]> {
+  async search(query: string, opts: { expand: true; limit?: number; company_id?: number }): Promise<Article[]>;
+  async search(query: string, opts?: ArticleSearchOptions): Promise<ArticleSummary[] | Article[]>;
+  async search(query: string, opts?: ArticleSearchOptions): Promise<ArticleSummary[] | Article[]> {
     const size = helperLimit(opts?.limit);
     if (typeof query !== 'string' || query.trim().length === 0) {
       throw new HuduConfigError('articles.search requires a non-empty query');
@@ -232,14 +260,17 @@ export class ArticlesResource extends BaseResource<Article> {
   }
 
   /**
-   * The article plus its company and folder (policy §9). Each part is a bounded
-   * fetch; a related record that no longer exists is `null`, never an error.
+   * The article plus its company and folder (policy §9). The article, its company and
+   * its folder are three single-record fetches — there is no list to bound, so this
+   * signature takes no `limit` (unlike `companies.getContext` / `assets.getContext`,
+   * which do have sub-lists). A related record that no longer exists is `null`, never
+   * an error.
    */
-  async getContext(id: number, opts?: { limit?: number }): Promise<ArticleContext>;
+  async getContext(id: number, opts?: { expand?: boolean }): Promise<ArticleContext>;
   /** `expand: true` returns the full article record. */
-  async getContext(id: number, opts: { limit?: number; expand: true }): Promise<ArticleContextExpand>;
-  async getContext(id: number, opts?: { limit?: number; expand?: boolean }): Promise<ArticleContext | ArticleContextExpand>;
-  async getContext(id: number, opts?: { limit?: number; expand?: boolean }): Promise<ArticleContext | ArticleContextExpand> {
+  async getContext(id: number, opts: { expand: true }): Promise<ArticleContextExpand>;
+  async getContext(id: number, opts?: { expand?: boolean }): Promise<ArticleContext | ArticleContextExpand>;
+  async getContext(id: number, opts?: { expand?: boolean }): Promise<ArticleContext | ArticleContextExpand> {
     const article = await this.get(id);
     const companyId = typeof article.company_id === 'number' && article.company_id > 0 ? article.company_id : undefined;
     const folderId = typeof article.folder_id === 'number' && article.folder_id > 0 ? article.folder_id : undefined;

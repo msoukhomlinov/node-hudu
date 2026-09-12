@@ -13,7 +13,8 @@ import type {
 } from '../types/procedure.js';
 import { ProcedureTasksResource, toProcedureTaskSummary } from './procedure_tasks.js';
 import {
-  decideResolution, helperLimit, identifierError, numericIds, requirePositiveId,
+  decideResolution, helperLimit, identifierError, numericIds,
+  refuseExpectedUpdatedAtOutsideUpdate, requirePositiveId,
 } from './agent-layer-helpers.js';
 
 export interface ProceduresListParams extends ListParams {
@@ -83,9 +84,9 @@ export class ProceduresResource extends BaseResource<Procedure> {
   async create(data: ProcedureCreate, opts: MutationOptions & { dryRun?: false }): Promise<Procedure>;
   async create(data: ProcedureCreate, opts: MutationOptions | undefined): Promise<Procedure | DryRunResult<Procedure>>;
   async create(data: ProcedureCreate, opts?: MutationOptions): Promise<Procedure | DryRunResult<Procedure>> {
-    // The stale guard is a read-then-compare on an EXISTING revision; a create has none,
-    // so `MutationOptions` is passed through and `expectedUpdatedAt` is a no-op here
-    // (base.ts documents the guard as update-only).
+    // staleCheck is "unavailable" for a create: the guard reads an EXISTING revision, so
+    // `expectedUpdatedAt` is refused (not silently ignored) instead of pretending it ran.
+    refuseExpectedUpdatedAtOutsideUpdate('procedures.create', opts);
     return this.createOne<Procedure>(data, undefined, opts);
   }
 
@@ -109,7 +110,8 @@ export class ProceduresResource extends BaseResource<Procedure> {
   async delete(id: number, opts: MutationOptions | undefined): Promise<void | DryRunResult<void>>;
   async delete(id: number, opts?: MutationOptions): Promise<void | DryRunResult<void>> {
     // staleCheck is "unavailable" for a delete (no prior revision to compare, no
-    // conditional delete in the vendor API), so `expectedUpdatedAt` is not consulted here.
+    // conditional delete in the vendor API), so `expectedUpdatedAt` is refused here.
+    refuseExpectedUpdatedAtOutsideUpdate('procedures.delete', opts);
     // The spec's 200 response body is not guaranteed to be present; return void
     // so an empty body (undefined) is never mis-typed as `{ message }` (R4).
     return this.deleteOne(id, opts);
@@ -138,6 +140,7 @@ export class ProceduresResource extends BaseResource<Procedure> {
     options?: MutationOptions,
   ): Promise<Procedure | DryRunResult<Procedure>> {
     const operation = 'procedures.duplicate';
+    refuseExpectedUpdatedAtOutsideUpdate(operation, options);
     if (options?.dryRun === true) {
       return this.buildDryRunResult<Procedure>({
         operation,
@@ -182,6 +185,7 @@ export class ProceduresResource extends BaseResource<Procedure> {
     options?: MutationOptions,
   ): Promise<Procedure | DryRunResult<Procedure>> {
     const operation = 'procedures.createFromTemplate';
+    refuseExpectedUpdatedAtOutsideUpdate(operation, options);
     if (options?.dryRun === true) {
       return this.buildDryRunResult<Procedure>({
         operation,
@@ -223,6 +227,7 @@ export class ProceduresResource extends BaseResource<Procedure> {
     options?: MutationOptions,
   ): Promise<{ message: string } | DryRunResult<{ message: string }>> {
     const operation = 'procedures.kickoff';
+    refuseExpectedUpdatedAtOutsideUpdate(operation, options);
     if (options?.dryRun === true) {
       // kickoff returns { message } — NOT a Procedure — so the dry-run pins that type.
       return this.buildDryRunResult<{ message: string }>({

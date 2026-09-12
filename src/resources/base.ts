@@ -12,6 +12,7 @@ import type {
   FieldDiff,
   Identifier,
   MutationOptions,
+  OperationImpact,
   Resolution,
   ResolutionCost,
 } from '../types/common.js';
@@ -38,6 +39,8 @@ export interface DryRunOperation {
   affected?: number;
   scope?: 'single' | 'bulk';
   reversible?: boolean;
+  /** false = `affected` is a LOWER BOUND (server-computed target set). Absent keeps `affected` exact. */
+  exact?: boolean;
   warnings?: string[];
 }
 
@@ -211,15 +214,16 @@ export abstract class BaseResource<T = unknown> {
   protected async createOne<U = T>(data: unknown, query?: Record<string, unknown>, opts?: MutationOptions): Promise<U | DryRunResult<U>> {
     const operation = `${this.resourcePath}.create`;
     this.assertNoExpectedUpdatedAt('createOne', opts);
+    // One impact statement in both channels: the dry-run result and the audit event
+    // that carries the executed-result metadata (policy §7.2/§7.3).
+    const impact: OperationImpact = { affected: 1, scope: 'single', reversible: true };
     if (opts?.dryRun) {
       return this.buildDryRunResult<U>({
         operation,
         method: 'POST',
         path: `/${this.resourcePath}`,
         checks: [this.payloadCheck(data)],
-        affected: 1,
-        scope: 'single',
-        reversible: true,
+        ...impact,
       });
     }
     const body = await this.http.request<unknown>({
@@ -228,6 +232,7 @@ export abstract class BaseResource<T = unknown> {
       body: data,
       query,
       operation,
+      impact,
     });
     return this.createType === 'wrapped' ? this.unwrapSingle<U>(body) : (body as U);
   }
@@ -250,6 +255,7 @@ export abstract class BaseResource<T = unknown> {
   protected async updateOne<U = T>(id: number | string, data: unknown, query?: Record<string, unknown>, opts?: MutationOptions): Promise<U | DryRunResult<U>> {
     const operation = `${this.resourcePath}.update`;
     const ids = identifierIds(id);
+    const impact: OperationImpact = { affected: 1, scope: 'single', reversible: true };
     if (opts === undefined && query !== undefined && looksLikeMutationOptions(query)) {
       throw new HuduConfigError(
         'Mutation options must be the 4th argument: updateOne(id, data, query, { dryRun: true })',
@@ -262,9 +268,7 @@ export abstract class BaseResource<T = unknown> {
         path: `/${this.resourcePath}/${id}`,
         ids,
         checks: [this.targetCheck(id), this.payloadCheck(data)],
-        affected: 1,
-        scope: 'single',
-        reversible: true,
+        ...impact,
       });
     }
     if (opts?.expectedUpdatedAt !== undefined) {
@@ -279,6 +283,7 @@ export abstract class BaseResource<T = unknown> {
       query,
       operation,
       resourceIds: ids,
+      impact,
     });
     // Always unwrap by singleKey on PUT; when singleKey is undefined this is a pass-through.
     return this.unwrapSingle<U>(body);
@@ -294,6 +299,7 @@ export abstract class BaseResource<T = unknown> {
     const operation = `${this.resourcePath}.delete`;
     const ids = identifierIds(id);
     this.assertNoExpectedUpdatedAt('deleteOne', opts);
+    const impact: OperationImpact = { affected: 1, scope: 'single', reversible: false };
     if (opts?.dryRun) {
       return this.buildDryRunResult<void>({
         operation,
@@ -301,9 +307,7 @@ export abstract class BaseResource<T = unknown> {
         path: `/${this.resourcePath}/${id}`,
         ids,
         checks: [this.targetCheck(id)],
-        affected: 1,
-        scope: 'single',
-        reversible: false,
+        ...impact,
         warnings: ['dry-run does not inspect dependent records'],
       });
     }
@@ -312,6 +316,7 @@ export abstract class BaseResource<T = unknown> {
       path: `/${this.resourcePath}/${id}`,
       operation,
       resourceIds: ids,
+      impact,
     });
   }
 
@@ -326,6 +331,8 @@ export abstract class BaseResource<T = unknown> {
     const operation = `${this.resourcePath}.${action}`;
     const ids = identifierIds(id);
     this.assertNoExpectedUpdatedAt('setArchived', opts);
+    // Archiving is reversible: the unarchive endpoint exists for the same id.
+    const impact: OperationImpact = { affected: 1, scope: 'single', reversible: true };
     if (opts?.dryRun) {
       return this.buildDryRunResult<void>({
         operation,
@@ -333,10 +340,7 @@ export abstract class BaseResource<T = unknown> {
         path: `/${this.resourcePath}/${id}/${action}`,
         ids,
         checks: [this.targetCheck(id)],
-        affected: 1,
-        scope: 'single',
-        // Archiving is reversible: the unarchive endpoint exists for the same id.
-        reversible: true,
+        ...impact,
       });
     }
     await this.http.request<unknown>({
@@ -344,6 +348,7 @@ export abstract class BaseResource<T = unknown> {
       path: `/${this.resourcePath}/${id}/${action}`,
       operation,
       resourceIds: ids,
+      impact,
     });
   }
 
@@ -378,6 +383,9 @@ export abstract class BaseResource<T = unknown> {
       warnings: op.warnings ?? ['server-computed fields are not guaranteed by dry-run'],
     };
     if (op.diff !== undefined) result.diff = op.diff;
+    // `exact: false` marks `affected` as a floor; when the caller says nothing the
+    // key stays absent, which keeps the previous meaning of `affected` (policy §7.2).
+    if (op.exact !== undefined) result.impact.exact = op.exact;
     return result;
   }
 

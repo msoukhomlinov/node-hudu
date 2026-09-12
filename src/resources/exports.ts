@@ -168,10 +168,12 @@ export class ExportsResource extends BaseResource<Export> {
         checks: [this.payloadCheck(data), this.exportRequestCheck(data)],
         affected: 1,
         scope: 'single',
-        reversible: true,
+        // No compensating undo exists: /exports has GET and POST only (no DELETE, no cancel).
+        reversible: false,
         warnings: [
           'POST /exports returns an empty 200 body, so there is no server-computed result to promise: the export ' +
             'record (id, status, download_url) is created asynchronously and cannot be described by dry-run',
+          'an export runs asynchronously and the API exposes no cancel or delete path for it, so this cannot be undone',
         ],
       });
     }

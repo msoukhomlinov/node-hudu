@@ -89,6 +89,19 @@ for (const rec of records) {
     annotations.bounded = `compact shape ${rec.compact}`;
   }
   if (annotations.sensitive) annotations.sensitiveNotice = 'returns credential-shaped fields; SDK logs/audit payloads redact them by default';
+  const HELPER_TIER_OK = annotations.tier === 'helper';
+  if (!HELPER_TIER_OK) {
+    // Read tools must be backed by the helper tier; while curation is still open, name the
+    // registry's helper-tier alternatives for the same resource so the worklist is precise.
+    const alternatives = records
+      .filter((h) => h.resource === rec.resource && HELPER_TIER_METHODS.test(methodOf(h.name)))
+      .map((h) => h.name);
+    annotations.helperTierAlternatives = alternatives;
+    annotations.helperTierBacked = false;
+  } else {
+    annotations.helperTierBacked = true;
+    annotations.helperTierBacking = rec.name;
+  }
   const inputSchema = { ...(rec.inputSchema ?? {}) };
   if (rec.effect !== 'read') {
     inputSchema.dry_run = { type: 'boolean', required: false, description: 'Validate without issuing the write. Returns DryRunResult with simulated: true.' };
@@ -149,9 +162,14 @@ if (existsSync(OVERRIDES_PATH)) {
 
 // ---------------------------------------------------------------- gaps the coordinator must close
 const helperBackedResources = new Set(tools.filter((t) => t.annotations.tier === 'helper').map((t) => resourceOf(t.backingOperation)));
-const readToolsMissingHelperBacking = tools
-  .filter((t) => t.annotations.tier === 'primitive-read' && !helperBackedResources.has(resourceOf(t.backingOperation)))
+const primitiveBackedReadTools = tools.filter((t) => t.annotations.tier !== 'helper' && t.effect === 'read');
+const readToolsMissingHelperBacking = primitiveBackedReadTools
+  .filter((t) => !helperBackedResources.has(resourceOf(t.backingOperation)))
   .map((t) => `${t.name} (${t.backingOperation})`);
+const primitiveReadWithHelperAlternative = primitiveBackedReadTools
+  .filter((t) => helperBackedResources.has(resourceOf(t.backingOperation)))
+  .map((t) => `${t.name} (${t.backingOperation}) → helper-tier alternatives: ${(t.annotations.helperTierAlternatives ?? []).join(', ')}`);
+const helperTierTools = tools.filter((t) => t.annotations.tier === 'helper');
 const missingPurpose = tools.filter((t) => String(t.description).startsWith('<MISSING')).map((t) => t.name);
 
 // ---------------------------------------------------------------- manifest
@@ -165,7 +183,7 @@ lines.push('');
 lines.push('## Projection summary');
 lines.push('');
 lines.push(`- registry records: ${records.length}`);
-lines.push(`- tools projected: ${tools.length}`);
+lines.push(`- tools projected: ${tools.length} (helper-tier ${helperTierTools.length}, read primitives ${primitiveBackedReadTools.length}, mutations ${tools.filter((t) => t.effect !== 'read').length})`);
 lines.push(`- excluded by rule: ${excluded.length}`);
 lines.push(`- overrides applied: ${overrideLog.length}${existsSync(OVERRIDES_PATH) ? '' : ' (no MCP_TOOL_OVERRIDES.json present)'}`);
 lines.push(`- projection timestamp: ${new Date().toISOString()}`);
@@ -177,7 +195,8 @@ lines.push('');
 lines.push('## Rules applied (mechanical)');
 lines.push('');
 lines.push('1. Read tools must be backed by the helper tier (`resolve` / `findBy*` / `search` / `getContext`).');
-lines.push('   Registry helpers are still `planned`, so read coverage below is **not yet complete** — see "Helper-tier gaps".');
+lines.push(`   The registry currently carries ${helperTierTools.length} helper-tier tools, ${primitiveBackedReadTools.length} read`);
+lines.push('   tools are still backed by a plain primitive — see "Helper-tier gaps" for the worklist.');
 lines.push('2. `listAll` / `listPages` are never projected (unbounded reads).');
 lines.push('3. Every list tool states its bound; every helper scan states its cap.');
 lines.push('4. Mutating tools expose a `dry_run` input affordance.');
@@ -185,15 +204,27 @@ lines.push('5. `sensitive` / `requiresApproval` are stated on the tool.');
 lines.push('6. No binary/download tool (resources ' + [...BINARY_RESOURCES].join(', ') + ') is projected.');
 lines.push('7. `MCP_TOOL_OVERRIDES.json` is the only place a description may change; this script never re-derives one.');
 lines.push('');
-lines.push(`## Helper-tier gaps (${readToolsMissingHelperBacking.length} read tools with no helper backing yet)`);
+lines.push(`## Helper-tier backing`);
 lines.push('');
-lines.push('These read tools are projected from primitives because no helper record exists in the');
-lines.push('registry. The Toolsmith/coordinator owes either helper-tier backing or an explicit decision');
-lines.push('to keep the primitive as the tool.');
+lines.push(`Helper-tier tools in the registry (${helperTierTools.length}): ` + (helperTierTools.length ? helperTierTools.map((t) => `\`${t.name}\``).join(', ') : 'none'));
 lines.push('');
-if (readToolsMissingHelperBacking.length) for (const t of readToolsMissingHelperBacking) lines.push(`- ${t}`);
-else lines.push('- none');
+lines.push(`### WARNING — read tools still backed by a plain primitive (${primitiveBackedReadTools.length})`);
 lines.push('');
+lines.push('A read tool must be backed by the helper tier. These are still the primitive, which is the');
+lines.push('Phase-2 curation worklist. `listAll`/`listPages` are never projected at all.');
+lines.push('');
+for (const t of primitiveBackedReadTools) {
+  const alts = t.annotations.helperTierAlternatives ?? [];
+  lines.push(`- ${t.name} (${t.backingOperation}) — helper-tier alternatives: ${alts.length ? alts.map((a) => `\`${a}\``).join(', ') : 'none in the registry yet'}`);
+}
+if (!primitiveBackedReadTools.length) lines.push('- none');
+lines.push('');
+if (readToolsMissingHelperBacking.length) {
+  lines.push(`### No helper exists for the resource yet (${readToolsMissingHelperBacking.length})`);
+  lines.push('');
+  for (const t of readToolsMissingHelperBacking) lines.push(`- ${t}`);
+  lines.push('');
+}
 lines.push('## Curation still owed (the Toolsmith owns this; the script does not)');
 lines.push('');
 lines.push('- Tool names are mechanical (`' + TOOL_PREFIX + '<resource>_<method>`). Verb-first names and prefixes are curation.');
@@ -247,6 +278,8 @@ console.log(`mcp:project — registry ${path.relative(ROOT, REGISTRY)} planHash=
 console.log(`mcp:project — tools projected=${tools.length}; excluded=${excluded.length}; overrides applied=${overrideLog.length}`);
 console.log(`mcp:project — wrote ${path.relative(ROOT, OUT)}`);
 console.log(`mcp:project — read tools missing helper-tier backing: ${readToolsMissingHelperBacking.length}${readToolsMissingHelperBacking.length ? ' (first 10: ' + readToolsMissingHelperBacking.slice(0, 10).join(', ') + ')' : ''}`);
+console.log(`mcp:project — WARNING: ${primitiveBackedReadTools.length} read tool(s) are still backed by a plain primitive (${primitiveReadWithHelperAlternative.length} have a helper-tier alternative in the registry); listAll/listPages are never projected`);
+console.log(`mcp:project — helper-tier backing stated for every tool; curation worklist in the manifest`);
 if (missingPurpose.length) console.log(`mcp:project — tools with no projected description (missing purpose): ${missingPurpose.join(', ')}`);
 if (unresolvedOverrides.length) {
   console.error(`mcp:project — UNRESOLVED OVERRIDES (${unresolvedOverrides.length}):`);

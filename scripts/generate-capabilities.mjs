@@ -88,9 +88,14 @@ function loadDir(rel) {
   return out;
 }
 const typeFiles = loadDir('src/types');
+// src/pagination.ts declares ListParams/Page, which resource param interfaces extend. Without it
+// those interfaces resolve to nothing and their schemas come out opaque.
+const sharedFiles = existsSync(path.join(ROOT, 'src/pagination.ts'))
+  ? [{ file: path.join(ROOT, 'src/pagination.ts'), rel: 'src/pagination.ts', sf: ts.createSourceFile(path.join(ROOT, 'src/pagination.ts'), readFileSync(path.join(ROOT, 'src/pagination.ts'), 'utf8'), ts.ScriptTarget.Latest, true), text: readFileSync(path.join(ROOT, 'src/pagination.ts'), 'utf8') }]
+  : [];
 const resourceFiles = loadDir('src/resources');
 const operationFiles = loadDir('src/operations');
-const allFiles = [...typeFiles, ...resourceFiles, ...operationFiles];
+const allFiles = [...typeFiles, ...sharedFiles, ...resourceFiles, ...operationFiles];
 
 // interface / type-alias property tables, by type name
 const typeProps = new Map();   // name -> [{name, type, optional, enumValues}]
@@ -125,11 +130,19 @@ function propsOfNode(node) {
   }
   return out;
 }
+const interfaceHeritage = new Map(); // interface name -> [base type texts from `extends`
 for (const f of allFiles) {
   const visit = (node) => {
     if (ts.isInterfaceDeclaration(node)) {
       typeProps.set(node.name.text, propsOfNode(node));
       typeDeclKind.set(node.name.text, 'interface');
+      const bases = [];
+      for (const clause of node.heritageClauses ?? []) {
+        if (ts.isHeritageClause(clause) && clause.token === ts.SyntaxKind.ExtendsKeyword) {
+          for (const t of clause.types) bases.push(t.getText());
+        }
+      }
+      if (bases.length) interfaceHeritage.set(node.name.text, bases);
     } else if (ts.isTypeAliasDeclaration(node)) {
       const p = propsOfNode(node);
       if (p.length) {
@@ -187,7 +200,13 @@ for (const f of [...resourceFiles, ...operationFiles]) {
         const pm = /^Promise<(.+)>$/.exec(ret);
         if (pm) { ret = pm[1]; }
         const jsdoc = (m.jsDoc ?? []).map((d) => (typeof d.comment === 'string' ? d.comment : '')).join(' ').trim();
-        methods.set(name, { name, params, returnType: ret.trim(), stream, jsdoc });
+        // Keep EVERY declaration: the mandated helper pattern is an overload set, and the
+        // caller-facing parameters live in the overloads while the implementation signature is the
+        // one that must (TS 2394) return the union. Input schemas read all declarations; the return
+        // type reads the implementation (last) declaration.
+        const decls = methods.get(name)?.decls ?? [];
+        decls.push({ params, returnType: ret.trim(), stream, jsdoc });
+        methods.set(name, { name, decls, params, returnType: ret.trim(), stream, jsdoc });
       }
     }
     ts.forEachChild(node, visit);
@@ -202,6 +221,7 @@ function jsonType(typeText) {
   const t = typeText.replace(/\s+/g, ' ');
   const m = /^['"`](.*)['"`]$/.exec(t);
   if (m) return { type: 'string', enum: [m[1]] };
+  if (t === 'true' || t === 'false') return { type: 'boolean', enum: [t === 'true'] };
   if (t.endsWith('[]')) {
     const inner = t.slice(0, -2);
     const it = jsonType(inner);
@@ -214,15 +234,30 @@ function jsonType(typeText) {
   }
   const rec = /^Record<(.+),\s*(.+)>$/.exec(t);
   if (rec) return { type: 'object', additionalProperties: { type: jsonType(rec[2]).type }, keyType: jsonType(rec[1]).type };
-  if (t.includes('|')) {
-    const parts = t.split('|').map((s) => s.trim());
-    if (parts.length && parts.every((p) => /^['"`].*['"`]$/.test(p))) {
-      return { type: 'string', enum: parts.map((p) => p.replace(/^['"`]|['"`]$/g, '')) };
+  const unionParts = splitTopLevel(t);
+  if (unionParts.length > 1) {
+    if (unionParts.every((x) => /^['"`].*['"`]$/.test(x))) {
+      return { type: 'string', enum: unionParts.map((x) => x.replace(/^['"`]|['"`]$/g, '')) };
     }
-    return { type: 'union', anyOf: parts.map((p) => jsonType(p).type) };
+    // A union member that resolves to a declared shape keeps its fields, so a caller can see what
+    // the object form accepts instead of reading an opaque type name.
+    const variants = unionParts.map((part) => {
+      const jt = jsonType(part);
+      const fields = fieldsForType(part);
+      return { type: jt.type, ...(jt.typeName ? { typeName: jt.typeName } : {}), ...(fields ? { fields } : {}) };
+    });
+    return { type: 'union', anyOf: variants.map((v) => v.type), variants };
   }
   if (PRIMITIVES.has(t)) return { type: t === 'any' ? 'unknown' : t };
   if (t === 'Date') return { type: 'string', format: 'date-time' };
+  // A named alias whose underlying text is itself a union/intersection (e.g.
+  // `type Identifier = number | string | {...}`) keeps its name but exposes the members, so the
+  // caller sees the accepted object form instead of an opaque type name.
+  if (!typeProps.has(t) && aliasText.has(t) && aliasText.get(t) !== t) {
+    const inner = jsonType(aliasText.get(t));
+    // `Record<string, unknown>` is a free-form bag, not an opaque name: carry `additionalProperties`.
+    if (inner.type !== 'object' || inner.variants || inner.anyOf || inner.additionalProperties) return { ...inner, typeName: t };
+  }
   if (resolveProps(t)) return { type: 'object', typeName: t, resolved: true };
   return { type: 'object', typeName: t, resolved: false };
 }
@@ -232,6 +267,24 @@ function jsonType(typeText) {
 // `{ type: name, resolved: false }` instead of omitting the field.
 function resolveProps(typeText) {
   const t = typeText.replace(/\s+/g, ' ').trim();
+  // `A & B` — an intersection merges the resolvable members' fields (rightmost wins per field).
+  // This is how the helper options are declared: `HelperOptions & { company_id?: number }`.
+  const parts = splitTopLevel(t, '&');
+  if (parts.length > 1) {
+    const merged = [];
+    for (const part of parts) {
+      // An inline object literal (`{ company_id?: number }`) is not a declaration, so it is parsed
+      // directly; a named part that cannot be resolved still fails the whole intersection.
+      const ps = resolveProps(part) ?? inlineProps(part);
+      if (!ps) return null;
+      for (const prop of ps) {
+        const at = merged.findIndex((x) => x.name === prop.name);
+        if (at === -1) merged.push(prop);
+        else merged[at] = prop;
+      }
+    }
+    return merged.length ? merged : null;
+  }
   const simple = /^(Partial|Required)<(.+)>$/.exec(t);
   if (simple) {
     const inner = resolveProps(simple[2]);
@@ -245,12 +298,52 @@ function resolveProps(typeText) {
     const keys = omit[3].split('|').map((k) => k.trim().replace(/^['"`]|['"`]$/g, ''));
     return inner.filter((p) => (omit[1] === 'Omit' ? !keys.includes(p.name) : keys.includes(p.name)));
   }
-  if (typeProps.has(t)) return typeProps.get(t);
+  if (typeProps.has(t)) {
+    const own = typeProps.get(t);
+    const bases = interfaceHeritage.get(t);
+    if (!bases) return own;
+    // `interface X extends HelperOptions` — a caller can pass the inherited fields too.
+    const merged = [];
+    for (const base of bases) {
+      const ps = resolveProps(base);
+      if (ps) for (const prop of ps) if (!merged.some((x) => x.name === prop.name)) merged.push(prop);
+    }
+    for (const prop of own) {
+      const at = merged.findIndex((x) => x.name === prop.name);
+      if (at === -1) merged.push(prop);
+      else merged[at] = prop;
+    }
+    return merged;
+  }
   if (aliasText.has(t) && aliasText.get(t) !== t) {
     const inner = resolveProps(aliasText.get(t));
     if (inner) return inner;
   }
+  // A union type has no single property set; the first member that resolves is used so the caller
+  // still sees the object form (`Identifier` = number | string | { type, id }). The union itself is
+  // reported by jsonType(), which keeps every member in `variants`.
+  const members = splitTopLevel(t);
+  if (members.length > 1) {
+    for (const member of members) {
+      const ps = resolveProps(member) ?? inlineProps(member);
+      if (ps) return ps;
+    }
+  }
   return null;
+}
+// Parse an inline type literal / object shape straight from its text (no declaration exists).
+function inlineProps(text) {
+  const t = text.replace(/\s+/g, ' ').trim();
+  if (!t.startsWith('{')) return null;
+  const sf = ts.createSourceFile('inline.ts', `type __T = ${t};`, ts.ScriptTarget.Latest, true);
+  let out = null;
+  sf.forEachChild((n) => {
+    if (ts.isTypeAliasDeclaration(n)) {
+      const p = propsOfNode(n);
+      if (p.length) out = p;
+    }
+  });
+  return out;
 }
 function fieldsForType(typeText) {
   const t = typeText.replace(/\s+/g, ' ');
@@ -277,22 +370,81 @@ function paramFields(text) {
   });
   return out;
 }
+// Caller-facing parameters: an overload set advertises more parameters than the implementation
+// signature does in some cases and fewer in others, so every declaration is considered and, per
+// position, the declaration whose parameter resolves to the MOST fields wins. The implementation
+// (last) declaration is the fallback. This is what stops a helper emitting a bare opaque `opts`.
 function paramInfo(method) {
-  return method.params.map((p) => {
-    const fields = fieldsForType(p.type) ?? paramFields(p.type);
-    return { name: p.name, type: p.type, required: !p.optional, fields };
-  });
+  const decls = method.decls ?? [{ params: method.params }];
+  const impl = decls[decls.length - 1];
+  const count = decls.reduce((n, d) => Math.max(n, d.params.length), 0);
+  const out = [];
+  for (let i = 0; i < count; i += 1) {
+    let best = null;
+    for (const d of decls) {
+      const cand = d.params[i];
+      if (!cand) continue;
+      const fields = fieldsForType(cand.type) ?? paramFields(cand.type);
+      // `>=` prefers the later declaration on a tie: the implementation advertises the wide type
+      // (`{ expand?: boolean }`), while an overload advertises the narrowed literal (`{ expand: true }`).
+      if (fields && fields.length && (!best || fields.length >= best.fields.length)) best = { param: cand, fields };
+    }
+    const param = best ? best.param : (impl.params[i] ?? decls.flatMap((d) => d.params)[i]);
+    if (!param) continue;
+    const fields = best ? best.fields : (fieldsForType(param.type) ?? paramFields(param.type));
+    out.push({ name: param.name, type: param.type, required: !param.optional, fields: fields ?? null });
+  }
+  return out;
 }
 function inputSchema(method) {
+  const infos = paramInfo(method);
   const schema = {};
-  for (const p of paramInfo(method)) {
+  // One parameter: flatten it, so `create(data)` and `companies.list(params)` expose the callable
+  // fields at the top level (the shape the policy's own example uses for findByDomain(domain)).
+  if (infos.length === 1) {
+    const p = infos[0];
     if (p.fields && p.fields.length) {
       for (const f of p.fields) schema[f.name] = f;
-    } else {
-      schema[p.name] = { ...jsonType(p.type), required: p.required };
+      return schema;
     }
+    schema[p.name] = { ...jsonType(p.type), required: p.required };
+    return schema;
+  }
+  // Several parameters: keep the parameter names, and nest each object parameter's declared fields.
+  // Flattening here would merge `fromable` and `toable` into one set of keys, which is a lie.
+  for (const p of infos) {
+    const jt = jsonType(p.type);
+    const expandable = p.fields && p.fields.length && !jt.variants && !jt.anyOf;
+    const node = { ...jt, required: p.required, ...(expandable ? { fields: p.fields } : {}) };
+    // An inline type literal has no type NAME worth printing: the fields are the whole story.
+    if (p.type.trim().startsWith('{') || expandable) { delete node.typeName; delete node.resolved; }
+    schema[p.name] = node;
   }
   return schema;
+}
+// A schema node is "opaque" when it names a type but exposes no fields: a caller cannot see what to
+// pass. The build reports the count, so an opaque schema is visible instead of silent.
+function opaqueSchemaNodes(node, path = [], acc = []) {
+  if (Array.isArray(node)) {
+    node.forEach((v, i) => opaqueSchemaNodes(v, [...path, String(i)], acc));
+    return acc;
+  }
+  if (!node || typeof node !== 'object') return acc;
+  const PLATFORM_OPAQUE = new Set(['Blob', 'File', 'Buffer', 'ArrayBuffer', 'ReadableStream', 'Uint8Array', 'Date']);
+  if (
+    typeof node.typeName === 'string'
+    && !Array.isArray(node.fields)
+    && !node.variants
+    && !node.anyOf
+    && node.type !== 'array'
+    && !node.additionalProperties
+    && !PLATFORM_OPAQUE.has(node.typeName)
+    && !node.typeName.startsWith('{')
+  ) {
+    acc.push({ path: path.join('.'), typeName: node.typeName });
+  }
+  for (const [k, v] of Object.entries(node)) if (v && typeof v === 'object') opaqueSchemaNodes(v, [...path, k], acc);
+  return acc;
 }
 function sampleValue(field) {
   if (field.enum && field.enum.length) return JSON.stringify(field.enum[0]);
@@ -629,6 +781,10 @@ writeJson(path.join(OUT_DIR, 'capabilities.schema.json'), schemaDoc);
 console.log(`capabilities:build — plan ${path.relative(ROOT, PLAN_PATH)} planHash=${planHash}`);
 console.log(`capabilities:build — spec ${plan.spec ? plan.spec.source + ' v' + plan.spec.version : 'unknown'}; rows=${operations.length}; records emitted=${records.length}`);
 console.log(`capabilities:build — wrote ${WRITE_SRC ? 'src/capabilities.ts, ' : ''}${path.relative(ROOT, path.join(OUT_DIR, 'capabilities.json'))}, ${path.relative(ROOT, path.join(OUT_DIR, 'capabilities.schema.json'))}`);
+const opaqueInputs = records
+  .map((r) => ({ name: r.name, nodes: opaqueSchemaNodes(r.inputSchema) }))
+  .filter((x) => x.nodes.length);
+console.log(`capabilities:build — records with an opaque inputSchema (type name, no fields): ${opaqueInputs.length}${opaqueInputs.length ? ' (' + opaqueInputs.map((x) => x.name).join(', ') + ')' : ''}`);
 const unresolvedDrops = records.filter((r) => r.outputSchema && r.outputSchema.dropsUnresolved === true);
 console.log(`capabilities:build — records with dropsUnresolved=true: ${unresolvedDrops.length}${unresolvedDrops.length ? ' (' + unresolvedDrops.map((r) => r.name).join(', ') + ')' : ''}`);
 if (gaps.length) {

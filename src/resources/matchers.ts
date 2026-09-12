@@ -14,7 +14,8 @@ import type {
 import type { Matcher, MatcherUpdate } from '../types/index.js';
 import type { MatcherIdentifier } from '../types/matcher.js';
 import {
-  decideResolution, helperLimit, identifierError, requirePositiveId,
+  decideResolution, helperLimit, identifierError,
+  refuseExpectedUpdatedAtOutsideUpdate, requirePositiveId,
 } from './agent-layer-helpers.js';
 
 export interface MatchersListParams extends ListParams {
@@ -54,6 +55,9 @@ export class MatchersResource extends BaseResource<Matcher> {
   async update(id: number, data: MatcherUpdate, opts: MutationOptions & { dryRun?: false }): Promise<Matcher>;
   async update(id: number, data: MatcherUpdate, opts: MutationOptions | undefined): Promise<Matcher | DryRunResult<Matcher>>;
   async update(id: number, data: MatcherUpdate, opts?: MutationOptions): Promise<Matcher | DryRunResult<Matcher>> {
+    // `matchers` declares staleCheck "unavailable" (a matcher carries no updated_at), so the
+    // guard is refused rather than a read the vendor has no endpoint for.
+    refuseExpectedUpdatedAtOutsideUpdate('matchers.update', opts);
     return this.updateOne<Matcher>(id, data, undefined, opts);
   }
 
@@ -65,6 +69,7 @@ export class MatchersResource extends BaseResource<Matcher> {
   async delete(id: number, opts: MutationOptions & { dryRun?: false }): Promise<void>;
   async delete(id: number, opts: MutationOptions | undefined): Promise<void | DryRunResult<void>>;
   async delete(id: number, opts?: MutationOptions): Promise<void | DryRunResult<void>> {
+    refuseExpectedUpdatedAtOutsideUpdate('matchers.delete', opts);
     return this.deleteOne(id, opts);
   }
 

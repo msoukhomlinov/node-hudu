@@ -198,3 +198,61 @@ plan still has all helper rows `planned`, so no helper record is emitted yet); c
 `PASS — 0 failures; rows=223 scoped=223 registryRecords=158 warnings=66`; `npx tsc --noEmit` EXIT 0;
 `npx vitest run test/registry.test.ts` EXIT 0 `Tests 8 passed (8)`. `MCP_TOOL_MANIFEST.md`
 regenerated against the new registry.
+
+## 9. Addendum — QA findings 1-3 (inputSchema opacity, stale-manifest gate, tier statements)
+
+**FINDING 1 — opaque generated inputSchema (fixed).** Root cause was shared with the drops bug:
+the registry read only the LAST method declaration. For an overloaded helper the implementation
+signature takes a bag (`opts?: HelperOptions`) or a narrowed type, and several shapes were not
+resolvable at all: intersections (`HelperOptions & { company_id?: number }`), interfaces with
+`extends` (`UsersSearchOptions extends HelperOptions`), named aliases that ARE unions
+(`Identifier = number | string | {...}`), free-form bags (`S3ExportCreate = Record<string, unknown>`),
+literal-typed members (`{ expand: true }`), and `src/pagination.ts` (`ListParams`), which was not
+parsed at all. Multi-parameter methods were also flattened, which merged `from`/`to`.
+
+Generator changes:
+- every method declaration is indexed (`decls`), not only the last; `paramInfo()` per position takes
+  the declaration whose parameter resolves to the MOST fields, preferring the later declaration on a
+  tie (the implementation advertises the wide type, an overload the narrowed literal);
+- `resolveProps()` now handles top-level intersections (inline literal parts parsed directly),
+  `interface X extends Base` (inherited fields merged), named aliases whose body is a union
+  (first resolvable member), and `Record<K,V>` free-form bags;
+- `jsonType()` now recurses into named alias bodies, keeps union members in `variants` with their
+  fields, and maps `true`/`false` literal types to `{type:"boolean", enum:[...]}`;
+- multi-parameter inputSchemas keep the parameter names and nest each object parameter's fields
+  (single-parameter methods stay flattened, e.g. `companies.create`);
+- inline type literals no longer print a bogus `typeName`;
+- the build prints `records with an opaque inputSchema (type name, no fields): N` plus the names.
+
+Result: **opaque inputSchemas 30 → 0**; no helper record contains a bare opaque `opts`.
+Samples: `articles.search` → `query` + `opts{limit,expand,company_id}`; `assets.search` /
+`asset_passwords.search` → `opts{limit,expand,resolutionDetails,company_id}`; `users.search` →
+`opts{limit,expand,resolutionDetails,archived,security_level}`; `cards.resolve` / `matchers.resolve` →
+`identifier` union with the object variant's fields + `opts{limit,expand,resolutionDetails,allowClientScan}`;
+`relations.findByEndpoints` → `from{type,id}`, `to{type,id}`, `opts{...}`.
+
+**FINDING 2 — the stale manifest was ungated (fixed).** `check-capabilities.mjs` gains the
+`manifest-planhash` rule (it fails when `MCP_TOOL_MANIFEST.md` is absent, carries no planHash, pins
+a different planHash, or states a record count that disagrees with the registry). New `--manifest
+<path>` flag for direct testing. Verified with two drifted copies in /tmp: wrong hash → EXIT 1
+(`manifest-planhash=1`), wrong count (158 claimed vs 223 actual) → EXIT 1. The projection was
+re-run so the manifest matches the registry.
+
+**FINDING 3 — tier statements (fixed).** Every projected tool now states its tier and its
+helper-tier backing: helper-tier tools carry `helperTierBacking`, primitive read tools carry
+`helperTierAlternatives` (the registry's helper-tier ops for the same resource) and are listed under
+a `WARNING — read tools still backed by a plain primitive` section (the Phase-2 worklist);
+`listAll`/`listPages` are still never projected. Console now prints the same warning count.
+
+Commands after the fixes (planHash `2f6e6b2f9089a4eb014abd9eb5b63841e262966bb2c6843d741cc032a5b5fd7c`,
+plan 225 rows / 223 emitted):
+- `node scripts/generate-capabilities.mjs` EXIT 0 — `records emitted=223`, `opaque inputSchema: 0`, `dropsUnresolved=true: 0`
+- `node scripts/project-mcp-tools.mjs` EXIT 0 — `records=223`, `tools projected=201; excluded=22`, `WARNING: 57 read tool(s) still backed by a plain primitive`
+- `node scripts/check-capabilities.mjs` EXIT 0 — `PASS — 0 failures; rows=225 scoped=225 registryRecords=223 warnings=66`
+- `node scripts/check-capabilities.mjs --ship` EXIT 1 — `FAIL — 2 failure(s) in 1 distinct rule(s): ship-status=2` (the two `operations.*` rows, expected)
+- `npx tsc --noEmit` EXIT 0 (no output); `npx vitest run test/registry.test.ts` EXIT 0 — `Tests 8 passed (8)`
+- fixture still fails as designed: `--plan test/fixtures/capabilities.plan.drifted.json` EXIT 1, 4 distinct rules
+
+**Caveat:** two agents are still editing `src/resources/*.ts`. Any registry change makes the manifest
+stale again, and the new `manifest-planhash` rule now catches it — run `npm run mcp:project` after
+those edits land (the projection is deliberately not part of `capabilities:build`).

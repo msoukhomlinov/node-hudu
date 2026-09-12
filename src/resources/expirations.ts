@@ -14,7 +14,8 @@ import type {
 import type { Expiration, ExpirationUpdate } from '../types/index.js';
 import type { ExpirationIdentifier, ExpirationSummary } from '../types/expiration.js';
 import {
-  decideResolution, helperLimit, identifierError, requirePositiveId,
+  decideResolution, helperLimit, identifierError,
+  refuseExpectedUpdatedAtOutsideUpdate, requirePositiveId,
 } from './agent-layer-helpers.js';
 
 export interface ExpirationsListParams extends ListParams {
@@ -92,7 +93,8 @@ export class ExpirationsResource extends BaseResource<Expiration> {
   async delete(id: number, opts: MutationOptions | undefined): Promise<void | DryRunResult<void>>;
   async delete(id: number, opts?: MutationOptions): Promise<void | DryRunResult<void>> {
     // staleCheck is "unavailable" for a delete: no prior revision to compare, no
-    // conditional delete in the vendor API.
+    // conditional delete in the vendor API, so `expectedUpdatedAt` is refused here.
+    refuseExpectedUpdatedAtOutsideUpdate('expirations.delete', opts);
     return this.deleteOne(id, opts);
   }
 

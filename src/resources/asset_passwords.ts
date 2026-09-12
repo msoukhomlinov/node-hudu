@@ -14,6 +14,31 @@ import type { AssetPasswordIdentifier, AssetPasswordSummary } from '../types/ass
 import type { DryRunResult, HelperOptions, MutationOptions, Resolution, ResolutionCandidate } from '../types/common.js';
 import { HuduConfigError, ResolutionError } from '../errors.js';
 
+/**
+ * Options of `asset_passwords.search`. A search returns a LIST, so it offers
+ * neither `resolutionDetails` (a `Resolution<T>` wrapper is meaningless for a list)
+ * nor a guard: only `limit`, `expand` and the optional `company_id` narrowing are
+ * accepted, and all three are honoured.
+ */
+export interface AssetPasswordSearchOptions {
+  /** Maximum rows returned; default 25, hard maximum 100. */
+  limit?: number;
+  /** Return the full records, including the secrets, instead of the summaries. */
+  expand?: boolean;
+  /** Narrow the vendor `search` filter to one company. */
+  company_id?: number;
+}
+
+/**
+ * Options of the writers that have no prior revision and no stale guard: `create`,
+ * `delete`, `archive` and `unarchive`. `{ dryRun: true }` describes the call
+ * without issuing it. `expectedUpdatedAt` is deliberately NOT accepted here — it is
+ * an update guard, and a declared-but-ignored option would mislead a caller.
+ */
+export interface WriteOptions {
+  dryRun?: boolean;
+}
+
 /** Helper `limit` bounds (policy §9): default 25, hard maximum 100. */
 const DEFAULT_HELPER_LIMIT = 25;
 const MAX_HELPER_LIMIT = 100;
@@ -110,15 +135,15 @@ export class AssetPasswordsResource extends BaseResource<AssetPassword> {
 
   async create(data: AssetPasswordCreate): Promise<AssetPassword>;
   /** Dry-run: describe the create without issuing it. */
-  async create(data: AssetPasswordCreate, opts: MutationOptions & { dryRun: true }): Promise<DryRunResult<AssetPassword>>;
-  async create(data: AssetPasswordCreate, opts?: MutationOptions): Promise<AssetPassword | DryRunResult<AssetPassword>>;
+  async create(data: AssetPasswordCreate, opts: { dryRun: true }): Promise<DryRunResult<AssetPassword>>;
+  async create(data: AssetPasswordCreate, opts?: WriteOptions): Promise<AssetPassword | DryRunResult<AssetPassword>>;
   /**
    * POST /asset_passwords. `{ dryRun: true }` describes the create without issuing
-   * it — the dry-run result carries no payload copy, so no secret is echoed. The
-   * `expectedUpdatedAt` guard is an UPDATE guard: a create has no prior revision to
-   * compare against, so the option is accepted and ignored here.
+   * it — the dry-run result carries no payload copy, so no secret is echoed. A create
+   * has no prior revision, so there is no `expectedUpdatedAt` guard and the option is
+   * not part of this signature.
    */
-  async create(data: AssetPasswordCreate, opts?: MutationOptions): Promise<AssetPassword | DryRunResult<AssetPassword>> {
+  async create(data: AssetPasswordCreate, opts?: WriteOptions): Promise<AssetPassword | DryRunResult<AssetPassword>> {
     return this.createOne<AssetPassword>({ asset_password: data }, undefined, opts);
   }
 
@@ -134,25 +159,25 @@ export class AssetPasswordsResource extends BaseResource<AssetPassword> {
 
   async delete(id: number): Promise<void>;
   /** Dry-run: describe the delete without issuing it. */
-  async delete(id: number, opts: MutationOptions & { dryRun: true }): Promise<DryRunResult<void>>;
-  async delete(id: number, opts?: MutationOptions): Promise<void | DryRunResult<void>>;
-  async delete(id: number, opts?: MutationOptions): Promise<void | DryRunResult<void>> {
+  async delete(id: number, opts: { dryRun: true }): Promise<DryRunResult<void>>;
+  async delete(id: number, opts?: WriteOptions): Promise<void | DryRunResult<void>>;
+  async delete(id: number, opts?: WriteOptions): Promise<void | DryRunResult<void>> {
     return this.deleteOne(id, opts);
   }
 
   async archive(id: number): Promise<void>;
   /** Dry-run: describe the archive without issuing it. */
-  async archive(id: number, opts: MutationOptions & { dryRun: true }): Promise<DryRunResult<void>>;
-  async archive(id: number, opts?: MutationOptions): Promise<void | DryRunResult<void>>;
-  async archive(id: number, opts?: MutationOptions): Promise<void | DryRunResult<void>> {
+  async archive(id: number, opts: { dryRun: true }): Promise<DryRunResult<void>>;
+  async archive(id: number, opts?: WriteOptions): Promise<void | DryRunResult<void>>;
+  async archive(id: number, opts?: WriteOptions): Promise<void | DryRunResult<void>> {
     return this.setArchived(id, true, opts);
   }
 
   async unarchive(id: number): Promise<void>;
   /** Dry-run: describe the unarchive without issuing it. */
-  async unarchive(id: number, opts: MutationOptions & { dryRun: true }): Promise<DryRunResult<void>>;
-  async unarchive(id: number, opts?: MutationOptions): Promise<void | DryRunResult<void>>;
-  async unarchive(id: number, opts?: MutationOptions): Promise<void | DryRunResult<void>> {
+  async unarchive(id: number, opts: { dryRun: true }): Promise<DryRunResult<void>>;
+  async unarchive(id: number, opts?: WriteOptions): Promise<void | DryRunResult<void>>;
+  async unarchive(id: number, opts?: WriteOptions): Promise<void | DryRunResult<void>> {
     return this.setArchived(id, false, opts);
   }
 
@@ -170,6 +195,9 @@ export class AssetPasswordsResource extends BaseResource<AssetPassword> {
    * (or a numeric bare value) is a direct fetch: a miss throws `NOT_FOUND`, never
    * `null`. The returned summary omits `password` and `otp_secret`; use `get` (or
    * `expand: true`) when the secret is genuinely needed.
+   *
+   * `limit` bounds the page size of a server-filtered scan; a direct `{ id }` fetch
+   * has nothing to scan, so `limit` has no effect on that path.
    */
   async resolve(identifier: number | string | AssetPasswordIdentifier): Promise<AssetPasswordSummary | null>;
   /** `expand: true` returns the full record, including the secret. */
@@ -218,9 +246,9 @@ export class AssetPasswordsResource extends BaseResource<AssetPassword> {
    */
   async search(query: string): Promise<AssetPasswordSummary[]>;
   /** `expand: true` returns the full records, including the secrets. */
-  async search(query: string, opts: HelperOptions & { expand: true }): Promise<AssetPassword[]>;
-  async search(query: string, opts?: HelperOptions & { company_id?: number }): Promise<AssetPasswordSummary[] | AssetPassword[]>;
-  async search(query: string, opts?: HelperOptions & { company_id?: number }): Promise<AssetPasswordSummary[] | AssetPassword[]> {
+  async search(query: string, opts: { expand: true; limit?: number; company_id?: number }): Promise<AssetPassword[]>;
+  async search(query: string, opts?: AssetPasswordSearchOptions): Promise<AssetPasswordSummary[] | AssetPassword[]>;
+  async search(query: string, opts?: AssetPasswordSearchOptions): Promise<AssetPasswordSummary[] | AssetPassword[]> {
     const size = helperLimit(opts?.limit);
     if (typeof query !== 'string' || query.trim().length === 0) {
       throw new HuduConfigError('asset_passwords.search requires a non-empty query');

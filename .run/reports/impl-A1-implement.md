@@ -154,3 +154,55 @@ and a stop on a short page.
 `npm run build`, `npm pack`, `node scripts/*.mjs`. Project-wide red from other implementers' in-flight
 files is not attributable to me: only my five test files were run, plus the four pre-existing
 test files that cover my resources (all green).
+
+## 7. QA findings, round 1 — resolved (accepted-but-ignored options)
+
+Commands after the fix: `npx tsc --noEmit` exit **0**; `npx eslint` (my 15 files) exit **0**;
+`npx vitest run test/resources/{companies,articles,assets,asset_layouts,asset_passwords}.test.ts`
+exit **0** — **265 tests passed** (5 files; `asset_layouts` grew to 30 tests because another agent is
+editing that file concurrently — it passed, so nothing was excluded).
+
+1. `articles.getContext` — **removed** the ignored `limit`. The article, its company and its folder are
+   three single-record fetches; there is no sub-list to bound, so `limit` was a lie in the contract.
+   Signature is now `getContext(id, opts?: { expand?: boolean })`. **Coordinator action**: correct the
+   plan row's `metadata.usage` (currently "Every part is a bounded fetch"), e.g. "… in one call; each
+   part is a single-record fetch, so there is no sub-list to bound and no `limit`".
+2. `search` — **removed** `resolutionDetails` from `companies.search`, `articles.search`, `assets.search`
+   and `asset_passwords.search`. All four accepted it implicitly through the `HelperOptions` superset and
+   ignored it (a `Resolution<T>` wrapper is meaningless for a list). Each search now takes its own
+   options type: `CompanySearchOptions`, `ArticleSearchOptions`, `AssetSearchOptions`,
+   `AssetPasswordSearchOptions` (`limit`, `expand`, plus `company_id` where the vendor filter exists) —
+   all of those are honoured. No plan row promised `resolutionDetails` on a search row (checked).
+3. Sweep of accepted-but-ignored options — full list:
+
+   **Removed (were accepted and ignored)**
+   * `articles.getContext` → `limit` (item 1).
+   * all four `search` helpers → `resolutionDetails` (item 2).
+   * `expectedUpdatedAt` on every writer that has no guard: `create` / `delete` / `archive` /
+     `unarchive` on companies, articles and asset_passwords; `asset_layouts.create`; and all assets
+     writers (`create`, `update`, `delete`, `archive`, `unarchive`, `moveLayout`). They now accept
+     `{ dryRun?: boolean }` only (`WriteOptions` / `AssetWriteOptions` / `LayoutWriteOptions`), so a
+     caller cannot pass a guard that silently does nothing. This matches the coordinator's ruling that
+     `staleCheck` is `updated_at` on `<res>.update` only.
+   * `companies.search` is included above even though the QA list named only articles/assets/
+     asset_passwords: it had the identical defect.
+
+   **Kept (declared and honoured)**
+   * `resolve`, `findBySlug`, `findByDomain`, `findBySerial`: `limit` (server-filter scan page size),
+     `expand`, `resolutionDetails` — all three change behaviour.
+   * `companies.getContext` / `assets.getContext`: `limit` bounds every sub-list, `expand` returns the
+     full records.
+   * `update` on companies / articles / asset_layouts / asset_passwords: `dryRun` and
+     `expectedUpdatedAt` (the read-then-compare guard) both take effect.
+
+   **Inherent, documented in JSDoc rather than removed (coordinator may want a plan usage note)**
+   * `limit` on `resolve`: a direct `{ id }` fetch has nothing to scan, so `limit` only affects the
+     server-filtered branch. Named in the `resolve` JSDoc of all five resources.
+   * `asset_layouts.resolve`: `limit` is validated against the helper bounds but cannot be applied —
+     `GET /asset_layouts` accepts `page` and not `page_size`. Named in that JSDoc.
+   * Base class note (not mine to change): `BaseResource.deleteOne` / `setArchived` still declare
+     `MutationOptions`, which carries `expectedUpdatedAt`; the public resource signatures no longer
+     expose it on those paths.
+
+Constraints respected: no return shape changed, no existing parameter position changed, no primitive
+touched, no new helper name added (only new option *types* were declared, in the resource modules).

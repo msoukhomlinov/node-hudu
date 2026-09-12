@@ -24,6 +24,28 @@ import { AssetPasswordsResource, toAssetPasswordSummary } from './asset_password
 import { AssetsResource, toAssetSummary } from './assets.js';
 import { WebsitesResource } from './websites.js';
 
+/**
+ * Options of `companies.search`. A search returns a LIST, so it offers neither
+ * `resolutionDetails` (a `Resolution<T>` wrapper is meaningless for a list) nor a
+ * guard: only `limit` and `expand` are accepted, and both are honoured.
+ */
+export interface CompanySearchOptions {
+  /** Maximum rows returned; default 25, hard maximum 100. */
+  limit?: number;
+  /** Return the full records instead of the compact summaries. */
+  expand?: boolean;
+}
+
+/**
+ * Options of the writers that have no prior revision and no stale guard: `create`,
+ * `delete`, `archive` and `unarchive`. `{ dryRun: true }` describes the call
+ * without issuing it. `expectedUpdatedAt` is deliberately NOT accepted here — it is
+ * an update guard, and a declared-but-ignored option would mislead a caller.
+ */
+export interface WriteOptions {
+  dryRun?: boolean;
+}
+
 /** Helper `limit` bounds (policy §9): default 25, hard maximum 100. */
 const DEFAULT_HELPER_LIMIT = 25;
 const MAX_HELPER_LIMIT = 100;
@@ -144,14 +166,14 @@ export class CompaniesResource extends BaseResource<Company> {
 
   async create(data: CompanyCreate): Promise<Company>;
   /** Dry-run: describe the create without issuing it. */
-  async create(data: CompanyCreate, opts: MutationOptions & { dryRun: true }): Promise<DryRunResult<Company>>;
-  async create(data: CompanyCreate, opts?: MutationOptions): Promise<Company | DryRunResult<Company>>;
+  async create(data: CompanyCreate, opts: { dryRun: true }): Promise<DryRunResult<Company>>;
+  async create(data: CompanyCreate, opts?: WriteOptions): Promise<Company | DryRunResult<Company>>;
   /**
    * POST /companies. `{ dryRun: true }` describes the create without issuing it.
-   * The `expectedUpdatedAt` guard is an UPDATE guard: a create has no prior
-   * revision to compare against, so the option is accepted and ignored here.
+   * A create has no prior revision, so there is no `expectedUpdatedAt` guard and
+   * the option is not part of this signature.
    */
-  async create(data: CompanyCreate, opts?: MutationOptions): Promise<Company | DryRunResult<Company>> {
+  async create(data: CompanyCreate, opts?: WriteOptions): Promise<Company | DryRunResult<Company>> {
     return this.createOne<Company>(data, undefined, opts);
   }
 
@@ -172,25 +194,25 @@ export class CompaniesResource extends BaseResource<Company> {
 
   async delete(id: number): Promise<void>;
   /** Dry-run: describe the delete without issuing it. */
-  async delete(id: number, opts: MutationOptions & { dryRun: true }): Promise<DryRunResult<void>>;
-  async delete(id: number, opts?: MutationOptions): Promise<void | DryRunResult<void>>;
-  async delete(id: number, opts?: MutationOptions): Promise<void | DryRunResult<void>> {
+  async delete(id: number, opts: { dryRun: true }): Promise<DryRunResult<void>>;
+  async delete(id: number, opts?: WriteOptions): Promise<void | DryRunResult<void>>;
+  async delete(id: number, opts?: WriteOptions): Promise<void | DryRunResult<void>> {
     return this.deleteOne(id, opts);
   }
 
   async archive(id: number): Promise<void>;
   /** Dry-run: describe the archive without issuing it. */
-  async archive(id: number, opts: MutationOptions & { dryRun: true }): Promise<DryRunResult<void>>;
-  async archive(id: number, opts?: MutationOptions): Promise<void | DryRunResult<void>>;
-  async archive(id: number, opts?: MutationOptions): Promise<void | DryRunResult<void>> {
+  async archive(id: number, opts: { dryRun: true }): Promise<DryRunResult<void>>;
+  async archive(id: number, opts?: WriteOptions): Promise<void | DryRunResult<void>>;
+  async archive(id: number, opts?: WriteOptions): Promise<void | DryRunResult<void>> {
     return this.setArchived(id, true, opts);
   }
 
   async unarchive(id: number): Promise<void>;
   /** Dry-run: describe the unarchive without issuing it. */
-  async unarchive(id: number, opts: MutationOptions & { dryRun: true }): Promise<DryRunResult<void>>;
-  async unarchive(id: number, opts?: MutationOptions): Promise<void | DryRunResult<void>>;
-  async unarchive(id: number, opts?: MutationOptions): Promise<void | DryRunResult<void>> {
+  async unarchive(id: number, opts: { dryRun: true }): Promise<DryRunResult<void>>;
+  async unarchive(id: number, opts?: WriteOptions): Promise<void | DryRunResult<void>>;
+  async unarchive(id: number, opts?: WriteOptions): Promise<void | DryRunResult<void>> {
     return this.setArchived(id, false, opts);
   }
 
@@ -218,6 +240,9 @@ export class CompaniesResource extends BaseResource<Company> {
    * found nothing; a scan stopped by the resolution cap throws
    * `RESOLUTION_TRUNCATED`, and several matches throw `RESOLUTION_AMBIGUOUS`
    * with the candidate ids in `resourceIds`.
+   *
+   * `limit` bounds the page size of a server-filtered scan; a direct `{ id }` fetch
+   * has nothing to scan, so `limit` has no effect on that path.
    */
   async resolve(identifier: number | string | CompanyIdentifier): Promise<CompanySummary | null>;
   /** `expand: true` returns the full record. */
@@ -280,9 +305,9 @@ export class CompaniesResource extends BaseResource<Company> {
    */
   async search(query: string): Promise<CompanySummary[]>;
   /** `expand: true` returns the full records. */
-  async search(query: string, opts: HelperOptions & { expand: true }): Promise<Company[]>;
-  async search(query: string, opts?: HelperOptions): Promise<CompanySummary[] | Company[]>;
-  async search(query: string, opts?: HelperOptions): Promise<CompanySummary[] | Company[]> {
+  async search(query: string, opts: { expand: true; limit?: number }): Promise<Company[]>;
+  async search(query: string, opts?: CompanySearchOptions): Promise<CompanySummary[] | Company[]>;
+  async search(query: string, opts?: CompanySearchOptions): Promise<CompanySummary[] | Company[]> {
     const size = helperLimit(opts?.limit);
     if (typeof query !== 'string' || query.trim().length === 0) {
       throw new HuduConfigError('companies.search requires a non-empty query');

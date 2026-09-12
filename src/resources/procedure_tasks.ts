@@ -8,7 +8,8 @@ import type { DryRunResult, Identifier, MutationOptions, Resolution, ResolutionO
 import type { ProcedureTask, ProcedureTaskCreate, ProcedureTaskUpdate } from '../types/index.js';
 import type { ProcedureTaskSummary } from '../types/procedure_task.js';
 import {
-  decideResolution, helperLimit, identifierError, requirePositiveId,
+  decideResolution, helperLimit, identifierError,
+  refuseExpectedUpdatedAtOutsideUpdate, requirePositiveId,
 } from './agent-layer-helpers.js';
 
 export interface ProcedureTasksListParams extends ListParams {
@@ -64,6 +65,8 @@ export class ProcedureTasksResource extends BaseResource<ProcedureTask> {
   async create(data: ProcedureTaskCreate, opts: MutationOptions & { dryRun?: false }): Promise<ProcedureTask>;
   async create(data: ProcedureTaskCreate, opts: MutationOptions | undefined): Promise<ProcedureTask | DryRunResult<ProcedureTask>>;
   async create(data: ProcedureTaskCreate, opts?: MutationOptions): Promise<ProcedureTask | DryRunResult<ProcedureTask>> {
+    // staleCheck is "unavailable" for a create: `expectedUpdatedAt` is refused, not ignored.
+    refuseExpectedUpdatedAtOutsideUpdate('procedure_tasks.create', opts);
     return this.createOne<ProcedureTask>(data, undefined, opts);
   }
 
@@ -87,7 +90,8 @@ export class ProcedureTasksResource extends BaseResource<ProcedureTask> {
   async delete(id: number, opts: MutationOptions | undefined): Promise<void | DryRunResult<void>>;
   async delete(id: number, opts?: MutationOptions): Promise<void | DryRunResult<void>> {
     // staleCheck is "unavailable" for a delete: there is no prior revision to compare and
-    // the vendor declares no conditional delete, so `expectedUpdatedAt` is not consulted.
+    // the vendor declares no conditional delete, so `expectedUpdatedAt` is refused here.
+    refuseExpectedUpdatedAtOutsideUpdate('procedure_tasks.delete', opts);
     // The spec's 200 response body is not guaranteed to be present; return void
     // so an empty body (undefined) is never mis-typed as `{ message }` (R4).
     return this.deleteOne(id, opts);

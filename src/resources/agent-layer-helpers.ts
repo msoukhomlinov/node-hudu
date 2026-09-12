@@ -9,7 +9,9 @@
  * re-implement the same limit/policy/ambiguity decisions.
  */
 import { HuduConfigError, NotFoundError, ResolutionError } from '../errors.js';
-import type { Identifier, Resolution, ResolutionCandidate, ResolutionCost } from '../types/common.js';
+import type {
+  Identifier, MutationOptions, Resolution, ResolutionCandidate, ResolutionCost,
+} from '../types/common.js';
 
 /** Default `limit` of a helper that returns or examines a bounded list (policy §9). */
 export const DEFAULT_HELPER_LIMIT = 25;
@@ -155,5 +157,23 @@ export function refuseClientScan(operation: string, resource: string, identifier
       resourceIds: numericIds(identifier),
       suggestedAction: `Resolve by { id } or a vendor filter, or call with allowClientScan: true for a bounded scan of ${resource}.`,
     },
+  );
+}
+
+/**
+ * Refuse `expectedUpdatedAt` on a path whose `staleCheck` is `"unavailable"` (create,
+ * delete, archive/unarchive and the special writers) instead of silently pretending a
+ * guard ran: the opt-in guard reads an EXISTING revision and compares its `updated_at`,
+ * so it exists only on `update`, where `BaseResource.updateOne` throws `STALE_OBJECT` on
+ * a mismatch. One shared home for what would otherwise be a copy per resource.
+ */
+export function refuseExpectedUpdatedAtOutsideUpdate(
+  operation: string,
+  opts: MutationOptions | undefined,
+): void {
+  if (opts?.expectedUpdatedAt === undefined) return;
+  throw new HuduConfigError(
+    `${operation}: expectedUpdatedAt compares an existing revision, so it applies to update (PUT) only — ` +
+      'this path records staleCheck "unavailable" and would never run the guard.',
   );
 }

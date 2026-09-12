@@ -15,7 +15,8 @@ import type {
 import type { ActivityLog } from '../types/index.js';
 import type { ActivityLogIdentifier, ActivityLogSummary } from '../types/activity_log.js';
 import {
-  decideResolution, helperLimit, identifierError, refuseClientScan,
+  MAX_HELPER_LIMIT, decideResolution, helperLimit, identifierError, refuseClientScan,
+  refuseExpectedUpdatedAtOutsideUpdate,
 } from './agent-layer-helpers.js';
 
 export interface ActivityLogsListParams extends ListParams {
@@ -104,6 +105,7 @@ export class ActivityLogsResource extends BaseResource<ActivityLog> {
     opts?: MutationOptions,
   ): Promise<void | DryRunResult<void>> {
     const operation = 'activity_logs.deleteAll';
+    refuseExpectedUpdatedAtOutsideUpdate(operation, opts);
     const datetime = typeof params?.datetime === 'string' ? params.datetime.trim() : '';
     const bound = `every activity log from ${datetime} on` +
       (params?.delete_unassigned_logs === true ? ' (including unassigned logs)' : '');
@@ -117,17 +119,23 @@ export class ActivityLogsResource extends BaseResource<ActivityLog> {
       );
     }
     if (opts?.dryRun === true) {
+      // The affected set is server-computed, so a literal count would understate it: one
+      // bounded page (page_size 100) read with the matching read-side filter supplies a
+      // FLOOR instead. The probe is a GET; no mutating request is issued.
+      const floor = await this.countFloor({ start_date: datetime });
       return this.buildDryRunResult<void>({
         operation,
         method: 'DELETE',
         path: '/activity_logs',
         checks: [{ name: 'bulk-bound', ok: true, detail: bound }],
-        affected: 1,
+        affected: floor,
         scope: 'bulk',
         reversible: false,
+        exact: false,
         warnings: [
           `bulk delete by a server-side bound: ${bound}`,
-          'the affected count is computed by the server and cannot be promised by dry-run',
+          `affected ${floor} is a FLOOR from ONE bounded page (page_size ${MAX_HELPER_LIMIT}) read via start_date; ` +
+            'the server decides the final target set',
         ],
       });
     }
@@ -209,6 +217,15 @@ export class ActivityLogsResource extends BaseResource<ActivityLog> {
     const logs = await this.collectBounded(filter, limit);
     const summaries = logs.map(toActivityLogSummary);
     return opts?.expand === true ? logs : summaries;
+  }
+
+  /**
+   * One bounded page read (page_size 100) used as an `affected` FLOOR for a bulk dry-run.
+   * It is a read only: the dry-run still issues no mutating request.
+   */
+  private async countFloor(filter: ListParams): Promise<number> {
+    const page = await this.pageFetcher(filter)(1, MAX_HELPER_LIMIT);
+    return page.items.length;
   }
 
   /** Collect at most `limit` rows through one bounded scan. */
