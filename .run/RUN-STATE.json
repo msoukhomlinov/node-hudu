@@ -80,7 +80,7 @@
   ],
   "metrics": {
     "spawns": 2,
-    "commits": 3,
+    "commits": 5,
     "gateRuns": 0,
     "qaFindings": 0,
     "qaFixed": 0

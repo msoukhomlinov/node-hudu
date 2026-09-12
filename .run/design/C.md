@@ -25,7 +25,7 @@ Cross-cutting invariants: `SCOPING.md` decisions 1-14; the signature/overload pa
 The `helperRationale`, `usage`, `preferredWhen`, `related`, `compact`, `resolution`, `errors` and
 `tests` for every one of these rows are already authored in `capabilities.plan.json` — read the row, do not re-derive it.
 
-## Compact shapes (add to `src/types/common.ts`; primitives are unchanged)
+## Compact shapes (declare in the resource's own type file `src/types/<resource>.ts`; primitives are unchanged)
 
 | Shape | keeps | drops (must appear in the registry `outputSchema.drops`) |
 |---|---|---|

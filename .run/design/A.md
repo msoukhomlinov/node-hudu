@@ -75,7 +75,7 @@ async getContext(id: number, opts?: { limit?: number; expand?: boolean }): Promi
 | `PasswordFolderSummary` | id, name, company_id, slug, security, updated_at | allowed_groups, description, created_at |
 | `GroupSummary` | id, name, slug, default, member_count, updated_at | members, url, created_at |
 
-Composite contexts: `CompanyContext { company; assets; articles; websites; assetPasswords }`,
+Composite contexts (declare next to their resource type): `CompanyContext { company; assets; articles; websites; assetPasswords }`,
 `ArticleContext { article; company; folder }`,
 `AssetContext { asset; layout; expirations; relations }` — every sub-list bounded by `limit`.
 
