@@ -38,13 +38,27 @@ export class MatchersResource extends BaseResource<Matcher> {
     super(http, { resourcePath: 'matchers', singleKey: undefined, listKey: 'matchers', createType: 'raw', paginated: true });
   }
 
+  /**
+   * `GET /matchers` requires `integration_id`, and the vendor answers **500** (not 400) when it is
+   * absent — live-verified on Hudu 2.45.1. The helper tier already refused a missing integration, but
+   * the primitives forwarded whatever they were given, so a JS or agent caller that omitted it got an
+   * opaque server error. Refusing before any IO makes the precondition explicit here too.
+   */
+  private requireIntegrationId(params: MatchersListParams | undefined, method: string): MatchersListParams {
+    const integrationId = params?.integration_id;
+    if (typeof integrationId !== 'number' || !Number.isInteger(integrationId) || integrationId < 1) {
+      throw identifierError(method, `a positive integer integration_id (GET /matchers answers 500 without it), got "${String(integrationId)}"`);
+    }
+    return params as MatchersListParams;
+  }
+
   /** Stream matchers across pages. integration_id is required (spec). */
   list(params: MatchersListParams): AsyncIterable<Matcher> {
-    return this.items(params);
+    return this.items(this.requireIntegrationId(params, 'matchers.list'));
   }
   /** Get every matchers. MCP-preferred read. integration_id is required (spec). */
   async listAll(params: MatchersListParams): Promise<Matcher[]> {
-    return this.all(params);
+    return this.all(this.requireIntegrationId(params, 'matchers.listAll'));
   }
 
   /** PUT /matchers/{id}. */
@@ -75,7 +89,7 @@ export class MatchersResource extends BaseResource<Matcher> {
 
   /** Iterate matcher pages. integration_id is required (spec). */
   listPages(params: MatchersListParams): AsyncIterable<Page<Matcher>> {
-    return this.pageIter(params);
+    return this.pageIter(this.requireIntegrationId(params, 'matchers.listPages'));
   }
 
   // ---------------------------------------------------------------------------

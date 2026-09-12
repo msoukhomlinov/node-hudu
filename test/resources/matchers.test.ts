@@ -345,3 +345,35 @@ describe('MatchersResource — executed audit impact equals the dry-run impact',
     expect(spy.calls.map((call) => call.init.method)).toEqual(['PUT', 'DELETE']);
   });
 });
+
+describe('MatchersResource — integration_id is refused before any request', () => {
+  // Live-verified on Hudu 2.45.1: GET /matchers without integration_id answers 500 Internal Server Error,
+  // so the primitives must name the precondition instead of forwarding it (the helper tier already did).
+  afterEach(() => clearFetch());
+
+  it('refuses listAll without an integration_id, issuing no request', async () => {
+    const spy: FetchSpy = stubFetch(() => json({ matchers: [] }));
+    const client = makeClient();
+    await expect(client.matchers.listAll({} as never)).rejects.toBeInstanceOf(HuduConfigError);
+    expect(spy.calls).toHaveLength(0);
+  });
+
+  it('refuses list, listPages and every invalid integration_id shape', async () => {
+    const spy: FetchSpy = stubFetch(() => json({ matchers: [] }));
+    const client = makeClient();
+    for (const bad of [undefined, 0, -1, 2.5, NaN]) {
+      await expect(client.matchers.listAll({ integration_id: bad } as never)).rejects.toBeInstanceOf(HuduConfigError);
+      expect(() => client.matchers.list({ integration_id: bad } as never)).toThrow(HuduConfigError);
+      // listPages refuses synchronously (the guard runs before the first page is fetched).
+      expect(() => client.matchers.listPages({ integration_id: bad } as never)).toThrow(HuduConfigError);
+    }
+    expect(spy.calls).toHaveLength(0);
+  });
+
+  it('still issues the request for a valid integration_id', async () => {
+    const spy: FetchSpy = stubFetch(() => json({ matchers: [] }));
+    await expect(makeClient().matchers.listAll({ integration_id: 7 })).resolves.toEqual([]);
+    expect(spy.calls).toHaveLength(1);
+    expect(spy.calls[0].url).toContain('integration_id=7');
+  });
+});
