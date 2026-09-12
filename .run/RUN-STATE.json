@@ -38,14 +38,6 @@
   },
   "children": [
     {
-      "name": "core-plumbing",
-      "id": "sub-e37b6897",
-      "step": "A.implement",
-      "startedAt": "2026-09-12T23:19:15.857305+10:00",
-      "budget": "80 grounding calls",
-      "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-e37b6897"
-    },
-    {
       "name": "impl-A1",
       "id": "sub-84cdf421",
       "step": "A.implement",
@@ -100,6 +92,15 @@
       "startedAt": "2026-09-12T23:43:39.892358+10:00",
       "budget": "70 grounding calls",
       "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-157bed59"
+    },
+    {
+      "name": "core-plumbing",
+      "id": "sub-e37b6897",
+      "step": "A-D.implement",
+      "startedAt": "2026-09-12T23:19:15.857305+10:00",
+      "budget": "80 grounding calls (used ~60)",
+      "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-e37b6897",
+      "state": "done"
     }
   ],
   "gates": {
@@ -108,7 +109,8 @@
     "B.design": "pass (every judgement column answered on every row; helperRationale + preferredWhen + resolution + compact recorded)",
     "C.design": "pass (every judgement column answered on every row; helperRationale + preferredWhen + resolution + compact recorded)",
     "D.design": "pass (every judgement column answered on every row; helperRationale + preferredWhen + resolution + compact recorded)",
-    "capabilities_tooling": "pass \u2014 4 scripts + negative fixture committed; check default PASS (0 failures), --group A fails on the 25 not-yet-implemented helper rows (the intended batch signal), --ship fails as designed; registry 158 records; src/capabilities.ts 100% covered"
+    "capabilities_tooling": "pass \u2014 4 scripts + negative fixture committed; check default PASS (0 failures), --group A fails on the 25 not-yet-implemented helper rows (the intended batch signal), --ship fails as designed; registry 158 records; src/capabilities.ts 100% covered",
+    "core_plumbing": "pass (verified by the coordinator, not just reported): npx tsc --noEmit exit 0; test/core-agent-layer.test.ts 40/40; child-reported full suite 427 tests green, coverage 98.23/83.07/97.42/98.29 vs 97/83/94/97"
   },
   "blockers": [
     {
@@ -125,11 +127,16 @@
       "what": "codingModel left as inherit (no user answer to the model question at preflight)",
       "why": "handover \u00a74 step 1 makes the model the user's choice; 'inherit the coordinator's model' is an explicitly valid answer and the user was asleep. Coordinator is on openrouter/deepseek/deepseek-v4.1-flash (high thinking).",
       "reversal": "edit .run/RUN-STATE.json codingModel to a selector from await rlm.find_models('<provider>') and SCOPING.md Section H, then re-dispatch the affected step"
+    },
+    {
+      "what": "accepted three plumbing deviations: (1) DryRunResult<T> carries an unused phantom type member __recordType?: T (TS rejects an unused type parameter), (2) AuditEvent carries one extra optional redacted `query` field (otherwise the 'audit payload has no credential-shaped value' row cannot be tested), (3) updateOne keeps `query` as its 3rd argument so mutation options are the 4th and a misplaced {dryRun:true} throws HuduConfigError instead of silently writing",
+      "why": "each is a documented, additive trade-off; none changes an existing signature or return shape",
+      "reversal": "edit src/types/common.ts / src/http.ts / src/resources/base.ts and re-run test/core-agent-layer.test.ts"
     }
   ],
   "metrics": {
     "spawns": 9,
-    "commits": 7,
+    "commits": 10,
     "gateRuns": 6,
     "qaFindings": 0,
     "qaFixed": 0
