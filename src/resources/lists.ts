@@ -11,9 +11,22 @@ import type { HttpClient } from '../http.js';
 import { BaseResource } from './base.js';
 import type { ListParams, Page } from '../pagination.js';
 import { HuduConfigError, ResolutionError } from '../errors.js';
-import type { DryRunResult, HelperOptions, MutationOptions, Resolution } from '../types/common.js';
+import type { DryRunResult, MutationOptions, Resolution } from '../types/common.js';
 import type { List, ListCreate, ListUpdate } from '../types/index.js';
 import type { ListIdentifier } from '../types/list.js';
+
+/**
+ * Options for the lists helper tier.
+ *
+ * `resolutionDetails: true` returns the `Resolution` wrapper. There is deliberately no
+ * `limit` (both helpers return ONE list, so the scan's page size comes from the client's
+ * bounded-scan config) and no `expand` (the plan records no compact shape for lists —
+ * the full record is what the default already returns, so an `expand` switch would be an
+ * option that changes nothing).
+ */
+export interface ListsHelperOptions {
+  resolutionDetails?: boolean;
+}
 
 export interface ListsListParams extends ListParams {
   query?: string;
@@ -122,18 +135,17 @@ export class ListsResource extends BaseResource<List> {
    * nothing is left unread; `null` therefore means "no list has that name".
    */
   async resolve(identifier: number | string | ListIdentifier): Promise<List | null>;
-  async resolve(identifier: number | string | ListIdentifier, opts: { expand: true }): Promise<List | null>;
   async resolve(
     identifier: number | string | ListIdentifier,
     opts: { resolutionDetails: true },
   ): Promise<Resolution<List>>;
   async resolve(
     identifier: number | string | ListIdentifier,
-    opts?: HelperOptions,
+    opts?: ListsHelperOptions,
   ): Promise<List | null | Resolution<List>>;
   async resolve(
     identifier: number | string | ListIdentifier,
-    opts: HelperOptions = {},
+    opts: ListsHelperOptions = {},
   ): Promise<List | null | Resolution<List>> {
     const operation = 'lists.resolve';
     const ref = readListIdentifier(identifier);
@@ -164,10 +176,10 @@ export class ListsResource extends BaseResource<List> {
    */
   async findByName(name: string): Promise<List | null>;
   async findByName(name: string, opts: { resolutionDetails: true }): Promise<Resolution<List>>;
-  async findByName(name: string, opts?: { resolutionDetails?: boolean }): Promise<List | null | Resolution<List>>;
+  async findByName(name: string, opts?: ListsHelperOptions): Promise<List | null | Resolution<List>>;
   async findByName(
     name: string,
-    opts: { resolutionDetails?: boolean } = {},
+    opts: ListsHelperOptions = {},
   ): Promise<List | null | Resolution<List>> {
     const operation = 'lists.findByName';
     const resolution = await this.scanByName(name, operation);

@@ -9,9 +9,18 @@ import type { HttpClient } from '../http.js';
 import { BaseResource } from './base.js';
 import type { ListParams, Page } from '../pagination.js';
 import { HuduConfigError, ResolutionError } from '../errors.js';
-import type { DryRunResult, HelperOptions, MutationOptions, Resolution } from '../types/common.js';
+import type { DryRunResult, MutationOptions, Resolution } from '../types/common.js';
 import type { LabelType, LabelTypeCreate, LabelTypeUpdate } from '../types/index.js';
 import type { LabelTypeIdentifier, LabelTypeSummary } from '../types/label_type.js';
+
+/**
+ * Options for `resolve`: the compact/full switch and the `Resolution` wrapper. No
+ * `limit` — resolve returns ONE label type; no other option is accepted and ignored.
+ */
+export interface LabelTypesResolveOptions {
+  expand?: boolean;
+  resolutionDetails?: boolean;
+}
 
 export interface LabelTypesListParams extends ListParams {
   name?: string;
@@ -162,11 +171,11 @@ export class LabelTypesResource extends BaseResource<LabelType> {
   ): Promise<Resolution<LabelTypeSummary>>;
   async resolve(
     identifier: number | string | LabelTypeIdentifier,
-    opts?: HelperOptions,
+    opts?: LabelTypesResolveOptions,
   ): Promise<LabelType | LabelTypeSummary | null | Resolution<LabelTypeSummary>>;
   async resolve(
     identifier: number | string | LabelTypeIdentifier,
-    opts: HelperOptions = {},
+    opts: LabelTypesResolveOptions = {},
   ): Promise<LabelType | LabelTypeSummary | null | Resolution<LabelTypeSummary>> {
     const operation = 'label_types.resolve';
     const ref = readLabelTypeIdentifier(identifier);

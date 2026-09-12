@@ -9,9 +9,27 @@ import type { HttpClient } from '../http.js';
 import { BaseResource } from './base.js';
 import type { ListParams, Page } from '../pagination.js';
 import { HuduConfigError, ResolutionError } from '../errors.js';
-import type { DryRunResult, HelperOptions, MutationOptions, Resolution } from '../types/common.js';
+import type { DryRunResult, MutationOptions, Resolution } from '../types/common.js';
 import type { Label, LabelCreate, LabelUpdate } from '../types/index.js';
 import type { LabelIdentifier, LabelSummary } from '../types/label.js';
+
+/**
+ * Options for `resolve`: the compact/full switch and the `Resolution` wrapper. No
+ * `limit` — resolve returns ONE label; no other option is accepted and ignored.
+ */
+export interface LabelsResolveOptions {
+  expand?: boolean;
+  resolutionDetails?: boolean;
+}
+
+/**
+ * Options for `findByLabelable`: the row cap (default 25, hard maximum 100) and the
+ * compact/full switch. It returns an ARRAY, so no `Resolution` wrapper is offered.
+ */
+export interface LabelsFindByLabelableOptions {
+  limit?: number;
+  expand?: boolean;
+}
 
 export interface LabelsListParams extends ListParams {
   label_type_id?: number;
@@ -167,11 +185,11 @@ export class LabelsResource extends BaseResource<Label> {
   ): Promise<Resolution<LabelSummary>>;
   async resolve(
     identifier: number | string | LabelIdentifier,
-    opts?: HelperOptions,
+    opts?: LabelsResolveOptions,
   ): Promise<Label | LabelSummary | null | Resolution<LabelSummary>>;
   async resolve(
     identifier: number | string | LabelIdentifier,
-    opts: HelperOptions = {},
+    opts: LabelsResolveOptions = {},
   ): Promise<Label | LabelSummary | null | Resolution<LabelSummary>> {
     const operation = 'labels.resolve';
     const ref = readLabelIdentifier(identifier);
@@ -217,22 +235,22 @@ export class LabelsResource extends BaseResource<Label> {
   async findByLabelable(
     labelableType: string,
     labelableId: number,
-    opts?: { limit?: number; expand?: false },
+    opts?: LabelsFindByLabelableOptions & { expand?: false },
   ): Promise<LabelSummary[]>;
   async findByLabelable(
     labelableType: string,
     labelableId: number,
-    opts: { expand: true } & HelperOptions,
+    opts: LabelsFindByLabelableOptions & { expand: true },
   ): Promise<Label[]>;
   async findByLabelable(
     labelableType: string,
     labelableId: number,
-    opts: HelperOptions | undefined,
+    opts: LabelsFindByLabelableOptions | undefined,
   ): Promise<Label[] | LabelSummary[]>;
   async findByLabelable(
     labelableType: string,
     labelableId: number,
-    opts: HelperOptions = {},
+    opts: LabelsFindByLabelableOptions = {},
   ): Promise<Label[] | LabelSummary[]> {
     const limit = helperLimit(opts.limit);
     // One page of exactly `limit` rows: the helper never pulls more than the caller asked for.

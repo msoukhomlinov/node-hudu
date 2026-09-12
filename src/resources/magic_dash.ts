@@ -33,6 +33,19 @@ export interface FindMagicDashOptions {
   expand?: boolean;
 }
 
+/**
+ * Impact of an EXECUTED bulk delete whose target set the server computes: `affected: 1` is a
+ * labelled LOWER BOUND (`exact: false` means "at least one record, the server decides the real
+ * set"), and `scope: 'bulk'` states the shape. It costs no request, so the executed call keeps
+ * its one-request observable behaviour.
+ */
+const EXECUTED_BULK_DELETE_IMPACT: OperationImpact = {
+  affected: 1,
+  scope: 'bulk',
+  reversible: false,
+  exact: false,
+};
+
 /** Compact projection of one Magic Dash item (policy §9). */
 export function toMagicDashSummary(record: MagicDash): MagicDashSummary {
   return {
@@ -110,30 +123,31 @@ export class MagicDashResource extends BaseResource<MagicDash> {
         },
       );
     }
-    // ONE impact statement in both channels (policy §7.3): the dry-run result and the audit
-    // event of the EXECUTED delete must not disagree about the blast radius. The affected set is
-    // server-computed, so both paths take the same bounded pre-read floor (one GET, page_size 100).
-    const impact = await this.deleteImpact(title, company);
     if (opts?.dryRun === true) {
+      // The affected set is server-computed, so the dry-run (a description, not a mutation, and
+      // therefore free to spend a request) measures a FLOOR with one bounded page read.
+      const described = await this.deleteImpact(title, company);
       return this.buildDryRunResult<void>({
         operation,
         method: 'DELETE',
         path: '/magic_dash',
         checks: [{ name: 'bulk-bound', ok: true, detail: `title "${title}" in company "${company}"` }],
-        ...impact,
+        ...described,
         warnings: [
           `bulk delete by a server-side bound: every Magic Dash item titled "${title}" in "${company}"`,
-          `affected ${impact.affected} is a FLOOR from ONE bounded page (page_size ${MAX_HELPER_LIMIT}) filtered by ` +
+          `affected ${described.affected} is a FLOOR from ONE bounded page (page_size ${MAX_HELPER_LIMIT}) filtered by ` +
             'title; the server decides the final target set',
         ],
       });
     }
+    // The EXECUTED call keeps its observable shape: ONE form-urlencoded DELETE, no pre-read. It
+    // reports the dry-run's scope and reversibility with a labelled lower bound for the count.
     await this.http.request<unknown>({
       method: 'DELETE',
       path: '/magic_dash',
       formUrlEncoded: data,
       operation,
-      impact,
+      impact: EXECUTED_BULK_DELETE_IMPACT,
     });
   }
 

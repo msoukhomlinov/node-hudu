@@ -83,15 +83,14 @@ describe('MagicDashResource — agent execution layer', () => {
   afterEach(() => clearFetch());
 
   it('calls the magic_dash.delete endpoint and normalises the result', async () => {
-    // The live path takes the same bounded floor pre-read as the dry-run (so the audit impact
-    // matches), then the form-urlencoded DELETE.
-    const spy = stubFetch((_raw, init) => (init.method === 'GET' ? json([item()]) : empty(204)));
+    // The EXECUTED call keeps the primitive's one-request shape: no pre-read is spent on it.
+    const spy = routed({ '/api/v1/magic_dash': () => empty(204) });
     await expect(makeClient().magicDash.delete({ title: 'Microsoft 365', company_name: 'AcmeCorp' })).resolves.toBeUndefined();
-    expect(spy.calls.map((call) => call.init.method)).toEqual(['GET', 'DELETE']);
-    const deletion = spy.calls[1];
-    expect(deletion?.url).toBe('https://hudu.example.com/api/v1/magic_dash');
-    expect(String(deletion?.init.body)).toContain('Microsoft+365');
-    expect(String(deletion?.init.body)).toContain('AcmeCorp');
+    expect(spy.calls).toHaveLength(1);
+    expect(spy.calls[0]?.init.method).toBe('DELETE');
+    expect(spy.calls[0]?.url).toBe('https://hudu.example.com/api/v1/magic_dash');
+    expect(String(spy.calls[0]?.init.body)).toContain('Microsoft+365');
+    expect(String(spy.calls[0]?.init.body)).toContain('AcmeCorp');
   });
 
   it('dry-run issues no mutating request and returns simulated: true', async () => {
@@ -109,11 +108,12 @@ describe('MagicDashResource — agent execution layer', () => {
 
   it('surfaces a correlation id on the success path and the error path', async () => {
     const audit = auditSpy();
-    const spy = stubFetch((_raw, init) => (init.method === 'GET' ? json([item()]) : empty(204)));
+    const spy = routed({ '/api/v1/magic_dash': () => empty(204) });
     const client = makeClient({ onAudit: audit.onAudit });
     await client.magicDash.delete({ title: 't', company_name: 'c' });
-    const delegation = audit.events.find((event) => event.effect === 'destructive');
-    expect(delegation?.correlationId).toMatch(UUID);
+    expect(audit.events).toHaveLength(1);
+    expect(audit.events[0]?.correlationId).toMatch(UUID);
+    expect(audit.events[0]?.effect).toBe('destructive');
     spy.setHandler(() => json({ message: 'no key' }, 401));
     const err = await rejection(client.magicDash.delete({ title: 't', company_name: 'c' }));
     expect(err.code).toBe('UNAUTHORIZED');
@@ -456,17 +456,23 @@ describe('MagicDashResource — resolution edge cases', () => {
     expect(spy.calls).toHaveLength(0);
   });
 
-  it('reports the SAME impact in the dry-run and in the executed audit event', async () => {
+  it('reports the SAME impact SHAPE in the dry-run and in the executed audit event', async () => {
     const audit = auditSpy();
+    // Dry-run: floor measured from one bounded page. Executed: the same labels, no pre-read.
     const spy = stubFetch((_raw, init) => (init.method === 'GET' ? json([item(), item({ id: 8 })]) : empty(204)));
     const client = makeClient({ onAudit: audit.onAudit });
     const bound = { title: 'Microsoft 365', company_name: 'Acme' };
     const describedDelete = await client.magicDash.delete(bound, { dryRun: true });
+    spy.setHandler(() => empty(204));
     await client.magicDash.delete(bound);
     const executedDelete = audit.events.find((event) => event.effect === 'destructive' && !event.dryRun);
-    expect(executedDelete?.impact).toEqual(describedDelete.impact);
-    expect(executedDelete?.impact).toEqual({ affected: 2, scope: 'bulk', reversible: false, exact: false });
-    expect(spy.calls.map((call) => call.init.method)).toEqual(['GET', 'GET', 'DELETE']);
+    expect(describedDelete.impact).toEqual({ affected: 2, scope: 'bulk', reversible: false, exact: false });
+    // For a server-computed set the counts differ by design; the SHAPE and the labels must not.
+    expect(executedDelete?.impact).toEqual({ affected: 1, scope: 'bulk', reversible: false, exact: false });
+    expect(executedDelete?.impact?.scope).toBe(describedDelete.impact.scope);
+    expect(executedDelete?.impact?.reversible).toBe(describedDelete.impact.reversible);
+    expect(executedDelete?.impact?.exact).toBe(false);
+    expect(spy.calls.map((call) => call.init.method)).toEqual(['GET', 'DELETE']);
   });
 
   it('reports the SAME single-record impact in the dry-run and the executed audit event', async () => {

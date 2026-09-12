@@ -77,16 +77,15 @@ describe('ActivityLogsResource — agent execution layer', () => {
   afterEach(() => clearFetch());
 
   it('calls the activity_logs.deleteAll endpoint and normalises the result', async () => {
-    // The live path takes the same bounded floor pre-read as the dry-run (so the audit impact
-    // matches), then the DELETE: exactly ONE GET and ONE DELETE.
-    const spy = stubFetch((_raw, init) => (init.method === 'GET' ? json([log()]) : empty(204)));
+    // The EXECUTED call keeps the primitive's one-request shape: no pre-read is spent on it.
+    const spy = routed({ '/api/v1/activity_logs': () => empty(204) });
     await expect(
       makeClient().activityLogs.deleteAll({ datetime: '2024-01-01T00:00:00Z', delete_unassigned_logs: true }),
     ).resolves.toBeUndefined();
-    expect(spy.calls.map((call) => call.init.method)).toEqual(['GET', 'DELETE']);
-    const deletion = spy.calls[1];
-    expect(deletion?.url).toContain('datetime=2024-01-01T00%3A00%3A00Z');
-    expect(deletion?.url).toContain('delete_unassigned_logs=true');
+    expect(spy.calls).toHaveLength(1);
+    expect(spy.calls[0]?.init.method).toBe('DELETE');
+    expect(spy.calls[0]?.url).toContain('datetime=2024-01-01T00%3A00%3A00Z');
+    expect(spy.calls[0]?.url).toContain('delete_unassigned_logs=true');
   });
 
   it('dry-run issues no mutating request and returns simulated: true', async () => {
@@ -107,11 +106,12 @@ describe('ActivityLogsResource — agent execution layer', () => {
 
   it('surfaces a correlation id on the success path and the error path', async () => {
     const audit = auditSpy();
-    const spy = stubFetch((_raw, init) => (init.method === 'GET' ? json([log()]) : empty(204)));
+    const spy = routed({ '/api/v1/activity_logs': () => empty(204) });
     const client = makeClient({ onAudit: audit.onAudit });
     await client.activityLogs.deleteAll({ datetime: '2024-01-01T00:00:00Z' });
-    const deletion = audit.events.find((event) => event.effect === 'destructive');
-    expect(deletion?.correlationId).toMatch(UUID);
+    expect(audit.events).toHaveLength(1);
+    expect(audit.events[0]?.correlationId).toMatch(UUID);
+    expect(audit.events[0]?.effect).toBe('destructive');
     spy.setHandler(() => json({ message: 'no key' }, 401));
     const err = await rejection(client.activityLogs.deleteAll({ datetime: '2024-01-01T00:00:00Z' }));
     expect(err.code).toBe('UNAUTHORIZED');
@@ -172,18 +172,26 @@ describe('ActivityLogsResource — agent execution layer', () => {
     expect(result.warnings.join(' ')).toContain('the server decides the final target set');
   });
 
-  it('reports the SAME impact in the dry-run and in the executed audit event', async () => {
+  it('reports the SAME impact SHAPE in the dry-run and in the executed audit event', async () => {
     const audit = auditSpy();
+    // Dry-run: floor measured from one bounded page. Executed: the same labels, no pre-read.
     const spy = stubFetch((_raw, init) => (init.method === 'GET' ? json([log(), log({ id: 10 })]) : empty(204)));
     const client = makeClient({ onAudit: audit.onAudit });
     const params = { datetime: '2024-01-01T00:00:00Z' };
     const described = await client.activityLogs.deleteAll(params, { dryRun: true });
+    spy.setHandler(() => empty(204));
     await client.activityLogs.deleteAll(params);
     const executed = audit.events.find((event) => event.effect === 'destructive');
+    expect(described.impact).toEqual({ affected: 2, scope: 'bulk', reversible: false, exact: false });
     expect(executed?.dryRun).toBe(false);
-    expect(executed?.impact).toEqual(described.impact);
-    expect(executed?.impact).toEqual({ affected: 2, scope: 'bulk', reversible: false, exact: false });
-    expect(spy.calls.map((call) => call.init.method)).toEqual(['GET', 'GET', 'DELETE']);
+    // For a server-computed set the counts differ by design; the SHAPE and the labels must not.
+    expect(executed?.impact).toEqual({ affected: 1, scope: 'bulk', reversible: false, exact: false });
+    expect(executed?.impact?.scope).toBe(described.impact.scope);
+    expect(executed?.impact?.reversible).toBe(described.impact.reversible);
+    expect(executed?.impact?.exact).toBe(false);
+    expect(described.impact.exact).toBe(false);
+    // The executed call is still ONE request: the mutating one.
+    expect(spy.calls.map((call) => call.init.method)).toEqual(['GET', 'DELETE']);
   });
 
   it('refuses expectedUpdatedAt on the bulk delete (staleCheck is unavailable)', async () => {

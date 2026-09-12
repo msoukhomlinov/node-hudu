@@ -38,6 +38,19 @@ export interface FindByResourceOptions {
   expand?: boolean;
 }
 
+/**
+ * Impact of an EXECUTED bulk delete whose target set the server computes: `affected: 1` is a
+ * labelled LOWER BOUND (`exact: false` means "at least one record, the server decides the real
+ * set"), and `scope: 'bulk'` states the shape. It is derived without an extra request so the
+ * executed call keeps its one-request observable behaviour.
+ */
+const EXECUTED_BULK_DELETE_IMPACT: OperationImpact = {
+  affected: 1,
+  scope: 'bulk',
+  reversible: false,
+  exact: false,
+};
+
 /** Compact projection of one activity log (policy §9). */
 export function toActivityLogSummary(record: ActivityLog): ActivityLogSummary {
   return {
@@ -118,30 +131,34 @@ export class ActivityLogsResource extends BaseResource<ActivityLog> {
         },
       );
     }
-    // ONE impact statement in both channels (policy §7.3): the dry-run result and the audit
-    // event of the EXECUTED delete must not disagree about the blast radius. The affected set is
-    // server-computed, so both paths take the same bounded pre-read floor (one GET, page_size 100).
-    const impact = await this.deleteAllImpact(datetime);
     if (opts?.dryRun === true) {
+      // The affected set is server-computed, so a literal count would understate it: the dry-run
+      // (which may spend a request, because it is a description, not a mutation) measures a FLOOR
+      // with one bounded page read (page_size 100) of the read-side filter.
+      const described = await this.deleteAllImpact(datetime);
       return this.buildDryRunResult<void>({
         operation,
         method: 'DELETE',
         path: '/activity_logs',
         checks: [{ name: 'bulk-bound', ok: true, detail: bound }],
-        ...impact,
+        ...described,
         warnings: [
           `bulk delete by a server-side bound: ${bound}`,
-          `affected ${impact.affected} is a FLOOR from ONE bounded page (page_size ${MAX_HELPER_LIMIT}) read via ` +
+          `affected ${described.affected} is a FLOOR from ONE bounded page (page_size ${MAX_HELPER_LIMIT}) read via ` +
             'start_date; the server decides the final target set',
         ],
       });
     }
+    // The EXECUTED call keeps its observable shape: ONE request, the mutating one. It therefore
+    // reports the same SHAPE and reversibility as the dry-run but a labelled lower bound for the
+    // count (`affected: 1, exact: false` = "at least one record; the server computes the real
+    // set"), instead of buying a pre-read that would change every existing caller's request count.
     await this.http.request<unknown>({
       method: 'DELETE',
       path: '/activity_logs',
       query: { datetime: params.datetime, delete_unassigned_logs: params.delete_unassigned_logs },
       operation,
-      impact,
+      impact: EXECUTED_BULK_DELETE_IMPACT,
     });
   }
 

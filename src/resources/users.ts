@@ -9,7 +9,7 @@ import type { HttpClient } from '../http.js';
 import { BaseResource } from './base.js';
 import type { ListParams, Page } from '../pagination.js';
 import { HuduConfigError, ResolutionError } from '../errors.js';
-import type { HelperOptions, Resolution } from '../types/common.js';
+import type { Resolution } from '../types/common.js';
 import type { User } from '../types/index.js';
 import type { UserIdentifier, UserSummary } from '../types/user.js';
 
@@ -23,10 +23,27 @@ export interface UsersListParams extends ListParams {
   security_level?: string;
 }
 
-/** Options for `search` (policy §9): a bounded row cap plus the vendor narrowing filters. */
-export interface UsersSearchOptions extends HelperOptions {
+/**
+ * Options for the single-record users helpers (`resolve`, `findByEmail`): the
+ * compact/full switch and the `Resolution` wrapper. There is deliberately no `limit`:
+ * both return ONE record, and the scan's page size comes from the client's bounded-scan
+ * config.
+ */
+export interface UsersLookupOptions {
+  expand?: boolean;
+  resolutionDetails?: boolean;
+}
+
+/**
+ * Options for `search` (policy §9): a bounded row cap plus the vendor narrowing filters.
+ * `search` returns an ARRAY, so no `Resolution` wrapper is offered — a `Resolution<T>`
+ * around a list has no single value to report.
+ */
+export interface UsersSearchOptions {
+  limit?: number;
   archived?: boolean;
   security_level?: string;
+  expand?: boolean;
 }
 
 /** Helper-tier row cap: default 25, hard maximum 100 (policy §9). */
@@ -138,11 +155,11 @@ export class UsersResource extends BaseResource<User> {
   ): Promise<Resolution<UserSummary>>;
   async resolve(
     identifier: number | string | UserIdentifier,
-    opts?: HelperOptions,
+    opts?: UsersLookupOptions,
   ): Promise<User | UserSummary | null | Resolution<UserSummary>>;
   async resolve(
     identifier: number | string | UserIdentifier,
-    opts: HelperOptions = {},
+    opts: UsersLookupOptions = {},
   ): Promise<User | UserSummary | null | Resolution<UserSummary>> {
     const operation = 'users.resolve';
     const ref = readUserIdentifier(identifier);
@@ -198,16 +215,16 @@ export class UsersResource extends BaseResource<User> {
    * Find one user by their exact email address (vendor `email` filter + exact compare).
    * `null` only after a complete scan; RESOLUTION_AMBIGUOUS when the filter is not unique.
    */
-  async findByEmail(email: string, opts?: { limit?: number; expand?: false }): Promise<UserSummary | null>;
+  async findByEmail(email: string, opts?: { expand?: false }): Promise<UserSummary | null>;
   async findByEmail(email: string, opts: { expand: true }): Promise<User | null>;
   async findByEmail(email: string, opts: { resolutionDetails: true }): Promise<Resolution<UserSummary>>;
   async findByEmail(
     email: string,
-    opts?: HelperOptions,
+    opts?: UsersLookupOptions,
   ): Promise<User | UserSummary | null | Resolution<UserSummary>>;
   async findByEmail(
     email: string,
-    opts: HelperOptions = {},
+    opts: UsersLookupOptions = {},
   ): Promise<User | UserSummary | null | Resolution<UserSummary>> {
     const operation = 'users.findByEmail';
     const found = await this.scanUnique<User>(

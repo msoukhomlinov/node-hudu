@@ -239,3 +239,39 @@ file proves it (`procedure_tasks`, `expirations`, `matchers`). Reads never claim
 | `npx tsc --noEmit` | **0** | 0 errors project-wide |
 | `npx eslint <my 16 src/type + 8 test files>` | **0** | no findings |
 | `npx vitest run <my 8 test files>` | **0** | 8 files, **203 tests passed** (194 → 203: +9 impact-parity/undo tests) |
+
+
+---
+
+# QA fix (round 4) — regression repair: the executed bulk delete keeps its one-request shape
+
+Round 3 gave the LIVE paths of `activity_logs.deleteAll` and `magic_dash.delete` the same bounded
+pre-read as the dry-run. That changed an existing primitive's observable behaviour (GET-then-DELETE)
+and broke two pre-existing 0.2.1 tests in `test/resources/special.test.ts` (the request-shape pins).
+Repair, exactly as instructed:
+
+1. The LIVE path issues NO pre-read again: ONE request, the mutating one. The pre-read stays in the
+   DRY-RUN path only (still `page_size 100`, still reporting `affected: <floor>` with `exact: false`).
+2. The executed impact for both is now `{ affected: 1, scope: 'bulk', reversible: false, exact: false }`
+   — `exact: false` labels `affected` as a LOWER BOUND ("at least one record; the server computes the
+   real set") and `scope: 'bulk'` states the shape. It is NOT `scope: 'single'` and NOT exact. Both
+   resources declare it once as an `EXECUTED_BULK_DELETE_IMPACT` constant, derived with no request.
+3. Parity tests updated for these two operations only: they assert the dry-run and the executed audit
+   event share `scope` and `reversible`, that BOTH are `exact: false`, and that the executed call is a
+   single request. Every other operation (where both sides are exact) keeps the deep-equal assertion.
+4. `test/resources/special.test.ts` was NOT edited and passes again unchanged: 40 tests.
+5. The dry-run's bounded pre-read and its `affected: <floor>` are unchanged.
+
+## Commands after round 4
+
+| command | exit | result |
+|---|---|---|
+| `npx tsc --noEmit` | **0** | 0 errors project-wide |
+| `npx eslint <my 16 src/type + 8 test files>` | **0** | no findings |
+| `npx vitest run test/resources/{activity_logs,magic_dash,special}.test.ts test/resources/procedures.test.ts` | **0** | 4 files, **151 tests passed** (special.test.ts included as the regression proof) |
+| `npx vitest run <my 8 test files>` | **0** | 8 files, **203 tests passed** |
+
+Live-path impacts after round 4:
+
+* `activity_logs.deleteAll` executed → `{ affected: 1, scope: 'bulk', reversible: false, exact: false }`
+* `magic_dash.delete` executed → `{ affected: 1, scope: 'bulk', reversible: false, exact: false }`
