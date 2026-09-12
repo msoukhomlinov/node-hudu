@@ -6,29 +6,29 @@
   "codingModel": null,
   "qaModel": "openrouter/deepseek/deepseek-v4.1-flash",
   "qaThinking": "xhigh",
-  "step": "A-D.tests",
+  "step": "A-D.qa",
   "steps": {
     "preflight": "done",
     "plan_derive": "done",
     "A.design": "done",
     "A.implement": "done",
-    "A.tests": "in_progress",
-    "A.qa": "pending",
+    "A.tests": "done",
+    "A.qa": "in_progress",
     "A.fix": "pending",
     "B.design": "done",
     "B.implement": "done",
-    "B.tests": "in_progress",
-    "B.qa": "pending",
+    "B.tests": "done",
+    "B.qa": "in_progress",
     "B.fix": "pending",
     "C.design": "done",
     "C.implement": "done",
-    "C.tests": "in_progress",
-    "C.qa": "pending",
+    "C.tests": "done",
+    "C.qa": "in_progress",
     "C.fix": "pending",
     "D.design": "done",
     "D.implement": "done",
-    "D.tests": "in_progress",
-    "D.qa": "pending",
+    "D.tests": "done",
+    "D.qa": "in_progress",
     "D.fix": "pending",
     "operations": "pending",
     "mcp_project": "pending",
@@ -121,7 +121,11 @@
     "A.implement": "pass \u2014 tsc --noEmit 0; capabilities:check --group A 0 failures; rows implemented; registry 223 records, dropsUnresolved 0",
     "B.implement": "pass \u2014 tsc --noEmit 0; capabilities:check --group B 0 failures; rows implemented; registry 223 records, dropsUnresolved 0",
     "C.implement": "pass \u2014 tsc --noEmit 0; capabilities:check --group C 0 failures; rows implemented; registry 223 records, dropsUnresolved 0",
-    "D.implement": "pass \u2014 tsc --noEmit 0; capabilities:check --group D 0 failures; rows implemented; registry 223 records, dropsUnresolved 0"
+    "D.implement": "pass \u2014 tsc --noEmit 0; capabilities:check --group D 0 failures; rows implemented; registry 223 records, dropsUnresolved 0",
+    "A.tests": "pass \u2014 npm test 1446/1446, lint 0, coverage 99.63/99.88/91.95/99.24 vs 97/94/83/97; all rows tested; --ship PASS",
+    "B.tests": "pass \u2014 npm test 1446/1446, lint 0, coverage 99.63/99.88/91.95/99.24 vs 97/94/83/97; all rows tested; --ship PASS",
+    "C.tests": "pass \u2014 npm test 1446/1446, lint 0, coverage 99.63/99.88/91.95/99.24 vs 97/94/83/97; all rows tested; --ship PASS",
+    "D.tests": "pass \u2014 npm test 1446/1446, lint 0, coverage 99.63/99.88/91.95/99.24 vs 97/94/83/97; all rows tested; --ship PASS"
   },
   "blockers": [
     {
@@ -131,14 +135,6 @@
       "since": "2026-09-12T23:34:01.267867+10:00",
       "needsUser": false,
       "action": "the mcp_project stage re-projects and curates after src/operations/ exists"
-    },
-    {
-      "id": "T3",
-      "step": "A-D.tests",
-      "what": "4 impl-B1 tests still assert the old silent no-op for delete(id,{expectedUpdatedAt}); the base now throws HuduConfigError",
-      "since": "2026-09-13T00:15:37.495905+10:00",
-      "needsUser": false,
-      "action": "dispatched to impl-B1 with the exact 4 files and the required assertion; re-run npm test at the next wake"
     }
   ],
   "autonomousDecisions": [
@@ -151,11 +147,16 @@
       "what": "accepted three plumbing deviations: (1) DryRunResult<T> carries an unused phantom type member __recordType?: T (TS rejects an unused type parameter), (2) AuditEvent carries one extra optional redacted `query` field (otherwise the 'audit payload has no credential-shaped value' row cannot be tested), (3) updateOne keeps `query` as its 3rd argument so mutation options are the 4th and a misplaced {dryRun:true} throws HuduConfigError instead of silently writing",
       "why": "each is a documented, additive trade-off; none changes an existing signature or return shape",
       "reversal": "edit src/types/common.ts / src/http.ts / src/resources/base.ts and re-run test/core-agent-layer.test.ts"
+    },
+    {
+      "what": "run the three QA lenses ONCE over the whole A-D implementation instead of three lenses per group (12 spawns)",
+      "why": "the four batches landed in one commit range within ~25 minutes, so they are no longer separable in time and per-group QA would re-read the same diff 12 times; the qa_final stage still runs all five lenses over the whole branch",
+      "reversal": "spawn the per-group lenses from .run/RUN-STATE.json gate entries and .run/design/<G>.md scoped diffs"
     }
   ],
   "metrics": {
     "spawns": 9,
-    "commits": 15,
+    "commits": 17,
     "gateRuns": 6,
     "qaFindings": 0,
     "qaFixed": 0
