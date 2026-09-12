@@ -44,6 +44,8 @@ import type {
   SearchAcrossResourcesOptions,
   SearchHit,
   SearchHitExpanded,
+  SearchHitExpandedUnion,
+  SearchHitUnion,
   SearchableRecord,
   SearchableResource,
   SearchableRow,
@@ -312,20 +314,20 @@ async function resolveOutcome(
     }
     return { resource, hits: candidates, truncated: false, scanned: resolution.scanned };
   } catch (error) {
+    if (error instanceof ResolutionError && error.code === 'RESOLUTION_TRUNCATED') {
+      // A cap stopped the scan before the data ran out: undecided, and never reported as not-found.
+      return { resource, hits: [], truncated: true, scanned: 0 };
+    }
     if (error instanceof ResolutionError) {
-      if (error.code === 'RESOLUTION_AMBIGUOUS') {
-        const ids = error.resourceIds ?? [];
-        return {
-          resource,
-          hits: ids.map((id) => ({ resource, id, label: `#${id}`, item: null })),
-          truncated: false,
-          scanned: 0,
-        };
-      }
-      if (error.code === 'RESOLUTION_TRUNCATED') {
-        return { resource, hits: [], truncated: true, scanned: 0 };
-      }
-      throw error;
+      // The resource matched several records and could not choose. Those ids ARE the matches, so
+      // they become candidates instead of failing the whole cross-resource call.
+      const ids = error.resourceIds ?? [];
+      return {
+        resource,
+        hits: ids.map((id) => ({ resource, id, label: `#${id}`, item: null })),
+        truncated: false,
+        scanned: 0,
+      };
     }
     if (error instanceof NotFoundError) {
       return { resource, hits: [], truncated: false, scanned: definite ? 1 : 0 };
@@ -355,18 +357,18 @@ export class Operations {
     return this.client.config.concurrency;
   }
 
-  /** Search every requested resource: the precise discriminated union of hits. */
-  async searchAcrossResources(query: string): Promise<SearchHit[]>;
+  /** Search every requested resource: the discriminated union, so `hit.resource` narrows `hit.item`. */
+  async searchAcrossResources(query: string): Promise<SearchHitUnion[]>;
   /** `expand: true` returns the full typed records instead of the compact summaries. */
   async searchAcrossResources(
     query: string,
     opts: SearchAcrossResourcesOptions & { expand: true },
-  ): Promise<SearchHitExpanded[]>;
+  ): Promise<SearchHitExpandedUnion[]>;
   /** The option bag held in a variable: the caller narrows the result. */
   async searchAcrossResources(
     query: string,
     opts: SearchAcrossResourcesOptions & { expand?: false },
-  ): Promise<SearchHit[]>;
+  ): Promise<SearchHitUnion[]>;
   async searchAcrossResources(
     query: string,
     opts?: SearchAcrossResourcesOptions,
