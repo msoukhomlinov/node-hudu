@@ -61,7 +61,7 @@ async getContext(id: number, opts?: { limit?: number; expand?: boolean }): Promi
 - At the scan cap: throw `RESOLUTION_TRUNCATED`. Several inexact matches: throw `RESOLUTION_AMBIGUOUS` with candidate ids in `resourceIds`.
 - Every helper that pages uses `BaseResource.boundedScan` (500 records / 4 pages by default, from client config).
 
-## 2. Compact shapes (add to `src/types/common.ts`; primitives are unchanged)
+## 2. Compact shapes (declare in the resource's own type file `src/types/<resource>.ts`; primitives are unchanged)
 
 | Shape | keeps | drops (must be recorded in the registry `outputSchema.drops`) |
 |-------|-------|-------------------------------------------------------------|
