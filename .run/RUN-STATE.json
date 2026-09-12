@@ -6,7 +6,7 @@
   "codingModel": null,
   "qaModel": "openrouter/deepseek/deepseek-v4.1-flash",
   "qaThinking": "xhigh",
-  "step": "A-D.qa",
+  "step": "mcp_project",
   "steps": {
     "preflight": "done",
     "plan_derive": "done",
@@ -31,7 +31,7 @@
     "D.qa": "done",
     "D.fix": "in_progress",
     "operations": "in_progress",
-    "mcp_project": "pending",
+    "mcp_project": "in_progress",
     "release": "pending",
     "qa_final": "pending",
     "finalise": "pending"
@@ -116,6 +116,14 @@
       "startedAt": "2026-09-13T00:26:26.849556+10:00",
       "budget": "60 grounding calls",
       "log": "/Users/maxs/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-617dfdba"
+    },
+    {
+      "name": "mcp-toolsmith",
+      "id": "sub-e1cba848",
+      "step": "mcp_project",
+      "startedAt": "2026-09-13T01:24:57.256748+10:00",
+      "budget": "60 grounding calls",
+      "log": "/Users/maxs/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-e1cba848"
     }
   ],
   "gates": {
@@ -193,7 +201,7 @@
     }
   ],
   "metrics": {
-    "spawns": 14,
+    "spawns": 15,
     "commits": 23,
     "gateRuns": 6,
     "qaFindings": 33,

@@ -319,3 +319,21 @@ pinned to the same hash, 225 rows / 223 records):
 `npx tsc --noEmit` EXIT 0; `npx vitest run test/registry.test.ts` EXIT 0 (`Tests 8 passed (8)`);
 fixture EXIT 1 (3 rules by design); `--ship` EXIT 1 (`ship-status=2` — the two `operations.*` rows,
 expected and deliberately not "fixed").
+
+## 11. Addendum — MCP tier now comes from the registry `kind`
+
+`scripts/project-mcp-tools.mjs` decided the tool tier from a method-name regex, which mislabelled
+`operations.searchAcrossResources`, `operations.resolveAny` and the composite `procedures.getWithTasks`.
+The tier is now read from the registry record's `kind` field (`rec.kind === 'helper'`), with the name
+regex kept only as a fallback for a record without `kind`; helper-tier alternatives for a primitive
+read tool are also selected by `kind`. A self-check line prints the classification
+(`helper-tier tools=62, primitive-read=56, primitive-write=85; mislabelled=0`).
+
+Verified after the fix:
+- `node scripts/project-mcp-tools.mjs` EXIT 0 — `read tools missing helper-tier backing: 0`,
+  `mislabelled=0`, `tools projected=203; excluded=22`, `registry records=225`.
+- `node scripts/check-capabilities.mjs` EXIT 0 — `PASS — 0 failures; rows=225 scoped=225 registryRecords=225 warnings=67`.
+- The manifest's helper-tier list contains `hudu_operations_searchAcrossResources`,
+  `hudu_operations_resolveAny` and `hudu_procedures_getWithTasks`; both `operations.*` helpers show
+  `tier="helper", helperTierBacked=true`.
+- Manifest pin equals the plan hash at run time and `registry records: 225` equals the registry.
