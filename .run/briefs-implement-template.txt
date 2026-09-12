@@ -1,0 +1,31 @@
+You are the GROUP @GROUP@ implementer for the node-hudu "agent execution layer" retrofit (api-node-squad 3.0.1). Repo: /Users/maxs/gitrepos/node-hudu (branch feat/agent-execution-layer). Work there.
+
+READ FIRST, in this order (bounded — do not read the whole repo):
+1. /Users/maxs/gitrepos/node-hudu/.run/design/@GROUP@.md   <- YOUR WORK ORDER: helper list, compact shapes with the exact fields they drop, traps, and the signature pattern.
+2. /Users/maxs/gitrepos/node-hudu/SCOPING.md               <- decisions 1-14 are binding. Decision 6 says where your compact shapes are declared.
+3. /Users/maxs/gitrepos/node-hudu/src/types/common.ts      <- DryRunResult<T>, Resolution<T>, Identifier, HelperOptions, MutationOptions, AuditEvent, the compact summaries the core layer already declares. READ THIS BEFORE WRITING ANY SIGNATURE.
+4. /Users/maxs/gitrepos/node-hudu/src/resources/base.ts    <- boundedScan, buildDryRunResult, assertNotStale, the dry-run overloads of createOne/updateOne/deleteOne/setArchived. Your helpers MUST use these, not re-implement them.
+5. The rows for your resources in /Users/maxs/gitrepos/node-hudu/capabilities.plan.json: `node -e "const p=require('./capabilities.plan.json');const g='@GROUP@';for(const r of p.operations.filter(r=>r.group===g&&r.helper))console.log(r.helper, '|', r.helperBasis, '|', r.compact, '|', JSON.stringify(r.resolution), '|', JSON.stringify(r.errors));"`. The plan row is the authoritative description of YOUR operation: purpose, usage, preferredWhen, related, compact, resolution, errors and the exact test titles you must produce.
+6. Only if you need them: ~/.prime/agent/skills/api-node-squad/references/agent-execution-layer.md §5 (helper floor), §6 (resolution + bounded scan), §9 (compact shapes). Normative.
+
+YOU OWN: src/resources/<each of YOUR resources>.ts, src/types/<each of YOUR resources>.ts, test/resources/<each of YOUR resources>.test.ts.
+DO NOT TOUCH (other agents own these, and they are being written concurrently): src/types/common.ts; src/http.ts; src/errors.ts; src/config.ts; src/logger.ts; src/resources/base.ts; src/index.ts; scripts/**; capabilities.plan.json; capabilities.json; capabilities.schema.json; MCP_TOOL_MANIFEST.md; test/core-agent-layer.test.ts; test/public-surface.test.ts; test/registry.test.ts; package.json; tsup.config.ts; vitest.config.ts; examples/**; .run/**; README/CHANGELOG/docs.
+
+WHAT TO IMPLEMENT FOR EACH OF YOUR RESOURCES (nothing more):
+a. The helper methods listed for it in the plan (`helper` rows), with the overload pattern from your design doc: default -> compact shape; `{ expand: true }` -> the full record; `{ resolutionDetails: true }` -> Resolution<T>. Additive only: NEVER change an existing primitive's signature, return type or behaviour.
+b. The compact shape(s) your design doc names, declared as a NEW exported interface (see SCOPING decision 6 for WHERE). Keep every field the doc lists, drop exactly the fields it lists, and never drop id/name/the field a caller resolves by.
+c. Tests: test/resources/<resource>.test.ts (create it if it does not exist; append if it does). EVERY test row in the plan for your rows must exist as a vitest `it('<exact title>')` — the titles are asserted by capabilities:check, so copy them verbatim from the plan row. Use the existing test style: read test/helpers.ts and reuse its fetch stub (`stubFetch`, `json`, `empty`, `clearFetch`). Never hit the network. Cover for every helper: unique match, complete-scan miss (null), truncated scan (throws RESOLUTION_TRUNCATED), ambiguity where the plan row names it, the bounded cap (assert the number of HTTP calls, and that page/page_size never reach a NON-PAGINATED endpoint), compact-vs-expand field loss, and for mutating paths the plan rows that apply. Cover the primitive rows' declared test titles too (dry-run issues no mutating request and returns simulated: true; correlation id on success and error; recipient redaction where the plan says redaction: credentials; the expectedUpdatedAt guard -> STALE_OBJECT where staleCheck is updated_at).
+d. Keep `npx tsc --noEmit`, `npm run lint` and `npm test` green. Coverage thresholds are 97/94/83/97 and must not be lowered; add tests, never weaken one.
+
+HARD RULES
+- `resolve` never lies: `{ id }` miss throws NOT_FOUND (never null); null ONLY after a complete scan; a cap that stopped the search throws RESOLUTION_TRUNCATED; an inexact filter with several matches throws RESOLUTION_AMBIGUOUS with candidate ids in resourceIds; an identifier kind the vendor cannot support throws a structured validation error naming the accepted kinds instead of guessing.
+- No unbounded scan and no unbounded Promise.all: every scan goes through boundedScan and every list helper honours `limit` (default 25, hard max 100 — throw HuduConfigError above it).
+- Dry-run never writes.
+- Never edit a generated file, never lower a threshold, never `.skip` a test, never `--no-verify`.
+- Do not git commit or push; the coordinator commits.
+
+BUDGET: at most 70 grounding calls (reads/greps/test runs). At call 70, STOP and write your report.
+SKELETON FIRST: write the method signatures + compact interface stubs so `npx tsc --noEmit` stays green, then fill in behaviour resource by resource, then the tests. Do not batch all tests to the end.
+PARTIAL REPLY: if the budget is spent or a resource is unfinished, deliver the partial and mark each gap UNVERIFIED. Silence is the only unacceptable outcome.
+
+WHEN DONE: write /Users/maxs/gitrepos/node-hudu/.run/reports/@GROUP@-implement.md with: files changed (path + line counts), the exact commands run with exit codes (`npx tsc --noEmit`, `npm run lint`, `npm test`, `npm run capabilities:build`, `npm run capabilities:check -- --group @GROUP@`), which plan test titles you implemented and which are still missing, and every gap marked UNVERIFIED. Then reply to your parent (max 25 lines) with: await agent_message.send("...", receiver_role='parent').

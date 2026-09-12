@@ -231,7 +231,7 @@
         "idempotent",
         "requiresApproval"
       ],
-      "dryRun": true,
+      "dryRun": false,
       "metadata": {
         "purpose": "Delete a specific company.",
         "usage": "Mutating path for companies; supports { dryRun: true }, which validates without issuing the write.",
@@ -319,21 +319,11 @@
         {
           "id": "companies.list.success",
           "file": "test/resources/companies.test.ts",
-          "title": "returns the unwrapped companies list"
-        },
-        {
-          "id": "companies.list.pagination",
-          "file": "test/resources/companies.test.ts",
-          "title": "sends page/page_size and stops on a short page"
-        },
-        {
-          "id": "companies.list.correlation",
-          "file": "test/resources/companies.test.ts",
-          "title": "surfaces a correlation id on the success path and the error path"
+          "title": "FIXTURE DRIFT: no test carries this title"
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /companies/{id}",
@@ -359,7 +349,6 @@
       "compact": null,
       "resolution": null,
       "staleCheck": null,
-      "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
         "NOT_FOUND",
@@ -9936,21 +9925,6 @@
           "id": "magic_dash.deleteById.correlation",
           "file": "test/resources/magic_dash.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "magic_dash.deleteById.dry-run",
-          "file": "test/resources/magic_dash.test.ts",
-          "title": "dry-run issues no DELETE request and returns simulated: true"
-        },
-        {
-          "id": "magic_dash.deleteById.bound",
-          "file": "test/resources/magic_dash.test.ts",
-          "title": "refuses to run unconfirmed and reports the impact bound"
-        },
-        {
-          "id": "magic_dash.deleteById.dry-run-bound",
-          "file": "test/resources/magic_dash.test.ts",
-          "title": "dry-run reports the affected count and issues no request"
         }
       ],
       "group": "C",
@@ -12965,5 +12939,27 @@
       "group": "D",
       "status": "planned"
     }
-  ]
+  ],
+  "_fixture": {
+    "purpose": "Negative fixture for scripts/check-capabilities.mjs (policy \u00a74.2 \"the checker is itself gated\").",
+    "derivedFrom": "capabilities.plan.json",
+    "sourcePlanHash": "b484cff113baf950e08119c33107f1bace80c6b1df26c117d03a65d6ae046e9b",
+    "drifts": [
+      {
+        "jsonPath": "operations[2]",
+        "rule": "missing-key",
+        "change": "removed the redaction key from companies.get"
+      },
+      {
+        "jsonPath": "operations[0]",
+        "rule": "mutation-dryRun",
+        "change": "companies.delete dryRun set to false"
+      },
+      {
+        "jsonPath": "operations[1]",
+        "rule": "test-title",
+        "change": "companies.list marked tested with a title that exists in no test file"
+      }
+    ]
+  }
 }

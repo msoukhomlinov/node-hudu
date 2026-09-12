@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/msoukhomlinov/node-hudu/capabilities.schema.json",
+  "title": "node-hudu capability registry (generated)",
+  "type": "object",
+  "required": [
+    "generatedAt",
+    "planHash",
+    "operations"
+  ],
+  "properties": {
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "planHash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "sha256 of the exact bytes of capabilities.plan.json"
+    },
+    "spec": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      }
+    },
+    "operationCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "operations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "kind",
+          "resource",
+          "purpose",
+          "inputSchema",
+          "outputSchema",
+          "examples",
+          "effect",
+          "flags",
+          "dryRun",
+          "permissions",
+          "pagination",
+          "resolution",
+          "retry",
+          "errors",
+          "related",
+          "preferredWhen",
+          "usage",
+          "compact"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+\\.[A-Za-z0-9_]+$"
+          },
+          "kind": {
+            "enum": [
+              "primitive",
+              "helper"
+            ]
+          },
+          "resource": {
+            "type": "string"
+          },
+          "purpose": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "inputSchema": {
+            "type": "object"
+          },
+          "outputSchema": {
+            "type": "object"
+          },
+          "examples": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "effect": {
+            "enum": [
+              "read",
+              "write",
+              "destructive",
+              null
+            ]
+          },
+          "flags": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "sensitive",
+                "idempotent",
+                "requiresApproval"
+              ]
+            }
+          },
+          "dryRun": {
+            "type": "boolean"
+          },
+          "permissions": {
+            "type": "string",
+            "minLength": 1,
+            "description": "scope names, or the literal \"unknown\""
+          },
+          "pagination": {
+            "type": "object"
+          },
+          "resolution": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "retry": {
+            "type": "object"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "related": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "preferredWhen": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "usage": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "compact": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

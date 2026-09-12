@@ -47,6 +47,16 @@
         "default": "./dist/errors.cjs"
       }
     },
+    "./capabilities": {
+      "import": {
+        "types": "./dist/capabilities.d.ts",
+        "default": "./dist/capabilities.js"
+      },
+      "require": {
+        "types": "./dist/capabilities.d.cts",
+        "default": "./dist/capabilities.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "files": [
