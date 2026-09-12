@@ -143,6 +143,30 @@
       "since": "2026-09-12T23:34:01.267867+10:00",
       "needsUser": false,
       "action": "the mcp_project stage re-projects and curates after src/operations/ exists"
+    },
+    {
+      "id": "Q1",
+      "step": "A-D.fix",
+      "what": "qa-safety CRITICAL: exports.create / s3_exports.create dry-run claimed impact.reversible true with no cancel or delete path",
+      "since": "2026-09-13T00:35:35.010738+10:00",
+      "needsUser": false,
+      "action": "dispatched to impl-D1: reversible false + warning + tests; also asked it to re-check every other dry-run in its five files"
+    },
+    {
+      "id": "Q2",
+      "step": "A-D.fix",
+      "what": "qa-safety HIGH x2: bulk deletes hardcode impact.affected 1; the impact statement never reaches executed-result metadata",
+      "since": "2026-09-13T00:35:35.010756+10:00",
+      "needsUser": false,
+      "action": "base gains an optional impact.exact flag and an AuditEvent.impact channel (core-plumbing); activity_logs.deleteAll and magic_dash.delete move to a bounded pre-read floor with exact:false (impl-C)"
+    },
+    {
+      "id": "Q3",
+      "step": "A-D.fix",
+      "what": "qa-safety LOW (ACCEPTED, not fixed): the guard-refusal helper is duplicated in 17 resource files",
+      "since": "2026-09-13T00:35:35.010760+10:00",
+      "needsUser": false,
+      "action": "accepted as documented debt: the instances are behaviourally identical and tested; consolidation lands in agent-layer-helpers.ts for the six group-C files now, and the remaining eleven are recorded in MORNING-REPORT with the exact recipe rather than a 17-file refactor at release time"
     }
   ],
   "autonomousDecisions": [
@@ -166,7 +190,7 @@
     "spawns": 14,
     "commits": 17,
     "gateRuns": 6,
-    "qaFindings": 0,
+    "qaFindings": 5,
     "qaFixed": 0
   }
 }
