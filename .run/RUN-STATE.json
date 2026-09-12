@@ -242,5 +242,49 @@
     "gateRuns": 6,
     "qaFindings": 64,
     "qaFixed": 26
+  },
+  "livePhase": {
+    "sandbox": "https://hudu-sandbox.example.com",
+    "vendor": "Hudu 2.45.1",
+    "harness": "scripts/live-smoke.mjs (40 checks)",
+    "fixed": [
+      {
+        "commit": "5c79bf9",
+        "what": "groups/users/websites envelope keys (listAll/list/get/search crashed live)"
+      },
+      {
+        "commit": "ad7be82",
+        "what": "redact() missed camelCase apiKey"
+      },
+      {
+        "commit": "d1efc7f",
+        "what": "assets built /companies/undefined/assets -> vendor 500; now CONFIG_ERROR with 0 requests"
+      }
+    ],
+    "open": [
+      {
+        "id": "L1",
+        "sev": "HIGH",
+        "what": "companies.create() returns the vendor envelope {company:{...}} while typed Company; 25 resources use createType 'raw'",
+        "owner": "envelope-sweep"
+      },
+      {
+        "id": "L2",
+        "sev": "?",
+        "what": "live findings from the four lenses still landing"
+      }
+    ],
+    "deadChildren": [
+      {
+        "sub": "sub-7a217473",
+        "model": "omlx/DeepSeek-V4-Flash-0731-REAP37-native-MLX",
+        "cause": "507 memory cap, empty responses"
+      },
+      {
+        "sub": "sub-f062ca87",
+        "model": "omlx/Qwen3.8-Flash-Next-oQ4e-mtp",
+        "cause": "507 memory cap"
+      }
+    ]
   }
 }
