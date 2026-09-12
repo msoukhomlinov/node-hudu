@@ -3,3 +3,5 @@
 2026-09-12T23:19:15.857305+10:00 A.design done — plan now 183 rows (158 primitives + 25 group-A helper rows); spawned core-plumbing (sub-e37b6897)
 2026-09-12T23:26:45.325046+10:00 B/C/D.design done — plan now 223 rows (158 primitives + 65 helper rows: A=25 B=14 C=13 D=13); design docs .run/design/A-D.md
 2026-09-12T23:27:58.878133+10:00 release-proof prep — baseline public surface captured (69 value exports, 35 classes, 11 error codes) + test/public-surface.test.ts added (6 tests); full suite 379 tests green
+2026-09-12T23:34:01.267867+10:00 tooling-scripts DONE — 4 scripts + negative fixture; registry 158 records; checker PASSES by default, fails --group A (25 planned helpers, correct batch signal) and --ship (correct); generator pagination bug found by test/registry.test.ts and fixed
+2026-09-12T23:34:01.267867+10:00 coverage: src/capabilities.ts is 100% covered by test/registry.test.ts (no vitest.config.ts change needed); totals are temporarily low because core-plumbing's new code is mid-flight

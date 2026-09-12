@@ -38,20 +38,21 @@
   },
   "children": [
     {
-      "name": "tooling-scripts",
-      "id": "sub-f393c463",
-      "step": "preflight",
-      "startedAt": "2026-09-12T23:12:54.635479+10:00",
-      "budget": "60 grounding calls",
-      "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-f393c463"
-    },
-    {
       "name": "core-plumbing",
       "id": "sub-e37b6897",
       "step": "A.implement",
       "startedAt": "2026-09-12T23:19:15.857305+10:00",
       "budget": "80 grounding calls",
       "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-e37b6897"
+    },
+    {
+      "name": "tooling-scripts",
+      "id": "sub-f393c463",
+      "step": "preflight",
+      "startedAt": "2026-09-12T23:12:54.635479+10:00",
+      "budget": "done (2 dispatches)",
+      "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-f393c463",
+      "state": "done"
     }
   ],
   "gates": {
@@ -59,16 +60,17 @@
     "A.design": "pass (52 primitive rows + 25 helper rows have every judgement column answered; helperRationale on every helper; preferredWhen where siblings overlap; plan:derive preserves them, 183 rows)",
     "B.design": "pass (every judgement column answered on every row; helperRationale + preferredWhen + resolution + compact recorded)",
     "C.design": "pass (every judgement column answered on every row; helperRationale + preferredWhen + resolution + compact recorded)",
-    "D.design": "pass (every judgement column answered on every row; helperRationale + preferredWhen + resolution + compact recorded)"
+    "D.design": "pass (every judgement column answered on every row; helperRationale + preferredWhen + resolution + compact recorded)",
+    "capabilities_tooling": "pass \u2014 4 scripts + negative fixture committed; check default PASS (0 failures), --group A fails on the 25 not-yet-implemented helper rows (the intended batch signal), --ship fails as designed; registry 158 records; src/capabilities.ts 100% covered"
   },
   "blockers": [
     {
-      "id": "T1",
-      "step": "A.implement",
-      "what": "tools/scripts (plan:derive excluded) do not exist yet; the tooling-scripts child is still working",
-      "since": "2026-09-12T23:19:15.857305+10:00",
+      "id": "M1",
+      "step": "A-D.implement",
+      "what": "helper records and cross-resource operations are not implemented yet, so MCP_TOOL_MANIFEST.md currently backs 56 read tools on primitives (list/get) instead of the helper tier",
+      "since": "2026-09-12T23:34:01.267867+10:00",
       "needsUser": false,
-      "action": "continue; re-check the child's jsonl age at the next wake"
+      "action": "the mcp_project stage re-projects and curates after src/operations/ exists"
     }
   ],
   "autonomousDecisions": [
@@ -80,8 +82,8 @@
   ],
   "metrics": {
     "spawns": 2,
-    "commits": 5,
-    "gateRuns": 0,
+    "commits": 7,
+    "gateRuns": 6,
     "qaFindings": 0,
     "qaFixed": 0
   }
