@@ -32,7 +32,7 @@
     "D.fix": "in_progress",
     "operations": "in_progress",
     "mcp_project": "in_progress",
-    "release": "pending",
+    "release": "in_progress",
     "qa_final": "pending",
     "finalise": "pending"
   },
@@ -202,7 +202,7 @@
   ],
   "metrics": {
     "spawns": 15,
-    "commits": 23,
+    "commits": 25,
     "gateRuns": 6,
     "qaFindings": 33,
     "qaFixed": 26
