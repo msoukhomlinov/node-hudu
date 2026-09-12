@@ -10,7 +10,7 @@ import { BaseResource } from './base.js';
 import { PolicyDeniedError } from '../errors.js';
 import type { ListParams, Page } from '../pagination.js';
 import type {
-  DryRunResult, Identifier, MutationOptions, Resolution, ResolutionOptions,
+  DryRunResult, Identifier, MutationOptions, OperationImpact, Resolution, ResolutionOptions,
 } from '../types/common.js';
 import type { ActivityLog } from '../types/index.js';
 import type { ActivityLogIdentifier, ActivityLogSummary } from '../types/activity_log.js';
@@ -118,24 +118,21 @@ export class ActivityLogsResource extends BaseResource<ActivityLog> {
         },
       );
     }
+    // ONE impact statement in both channels (policy §7.3): the dry-run result and the audit
+    // event of the EXECUTED delete must not disagree about the blast radius. The affected set is
+    // server-computed, so both paths take the same bounded pre-read floor (one GET, page_size 100).
+    const impact = await this.deleteAllImpact(datetime);
     if (opts?.dryRun === true) {
-      // The affected set is server-computed, so a literal count would understate it: one
-      // bounded page (page_size 100) read with the matching read-side filter supplies a
-      // FLOOR instead. The probe is a GET; no mutating request is issued.
-      const floor = await this.countFloor({ start_date: datetime });
       return this.buildDryRunResult<void>({
         operation,
         method: 'DELETE',
         path: '/activity_logs',
         checks: [{ name: 'bulk-bound', ok: true, detail: bound }],
-        affected: floor,
-        scope: 'bulk',
-        reversible: false,
-        exact: false,
+        ...impact,
         warnings: [
           `bulk delete by a server-side bound: ${bound}`,
-          `affected ${floor} is a FLOOR from ONE bounded page (page_size ${MAX_HELPER_LIMIT}) read via start_date; ` +
-            'the server decides the final target set',
+          `affected ${impact.affected} is a FLOOR from ONE bounded page (page_size ${MAX_HELPER_LIMIT}) read via ` +
+            'start_date; the server decides the final target set',
         ],
       });
     }
@@ -144,7 +141,18 @@ export class ActivityLogsResource extends BaseResource<ActivityLog> {
       path: '/activity_logs',
       query: { datetime: params.datetime, delete_unassigned_logs: params.delete_unassigned_logs },
       operation,
+      impact,
     });
+  }
+
+  /**
+   * The impact of a bulk delete, for BOTH channels: `exact: false` marks `affected` as a floor
+   * measured by one bounded page read (page_size 100) with the read-side filter, because the
+   * real target set is computed by the server.
+   */
+  private async deleteAllImpact(datetime: string): Promise<OperationImpact> {
+    const floor = await this.countFloor({ start_date: datetime });
+    return { affected: floor, scope: 'bulk', reversible: false, exact: false };
   }
 
   // ---------------------------------------------------------------------------

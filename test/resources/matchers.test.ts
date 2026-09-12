@@ -320,3 +320,28 @@ describe('MatchersResource — expectedUpdatedAt is refused on every path', () =
     expect(spy.calls).toHaveLength(0);
   });
 });
+
+describe('MatchersResource — executed audit impact equals the dry-run impact', () => {
+  afterEach(() => clearFetch());
+
+  it('reports the SAME impact for update and delete', async () => {
+    const audit = auditSpy();
+    const spy = routed({
+      '/api/v1/matchers/55': () => json(matcher()),
+    });
+    spy.setHandler((_raw, init) => (init.method === 'DELETE' ? empty(204) : json(matcher())));
+    const client = makeClient({ onAudit: audit.onAudit });
+    const describedUpdate = await client.matchers.update(55, { name: 'x' }, { dryRun: true });
+    await client.matchers.update(55, { name: 'x' });
+    const describedDelete = await client.matchers.delete(55, { dryRun: true });
+    await client.matchers.delete(55);
+    const executed = audit.events.filter((event) => !event.dryRun && event.effect !== 'read');
+    expect(executed.map((event) => event.impact)).toEqual([
+      { affected: 1, scope: 'single', reversible: true },
+      { affected: 1, scope: 'single', reversible: false },
+    ]);
+    expect(executed[0]?.impact).toEqual(describedUpdate.impact);
+    expect(executed[1]?.impact).toEqual(describedDelete.impact);
+    expect(spy.calls.map((call) => call.init.method)).toEqual(['PUT', 'DELETE']);
+  });
+});

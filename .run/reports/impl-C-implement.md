@@ -190,3 +190,52 @@ message update — the new tests assert `err.code === 'CONFIG_ERROR'` and
 | `npx vitest run <same 8> --coverage --coverage.include='src/resources/<my 9>.ts'` | **0** | 98.74 stmts / 87.35 branch / 100 funcs / 99.19 lines |
 
 All 152 plan test titles are still present verbatim.
+
+
+---
+
+# QA fixes (round 3) — executed audit impact must equal the dry-run impact
+
+## Hand-rolled mutating methods fixed (each now builds ONE `OperationImpact` and passes it to
+## BOTH `buildDryRunResult` and the live `http.request({ …, impact })`, exactly the base.ts pattern)
+
+| operation | impact | channel parity test |
+|---|---|---|
+| `procedures.duplicate` | `{affected: 1, scope: 'single', reversible: true}` | yes |
+| `procedures.createFromTemplate` | `{affected: 1, scope: 'single', reversible: true}` | yes |
+| `procedures.kickoff` | `{affected: 1, scope: 'single', reversible: true}` + undo warning | yes |
+| `activity_logs.deleteAll` | `{affected: <pre-read floor>, scope: 'bulk', reversible: false, exact: false}` | yes |
+| `magic_dash.delete` | `{affected: <pre-read floor>, scope: 'bulk', reversible: false, exact: false}` | yes |
+| `magic_dash.deleteById` | `{affected: 1, scope: 'single', reversible: false}` | yes |
+| `magic_dash.updatePositions` | `{affected: positions.length, scope: 'bulk', reversible: true, exact: true}` | yes |
+
+The two bulk deletes now take the SAME bounded pre-read floor on the LIVE path (one GET, page_size 100)
+that the dry-run takes, so the audit event of the executed delete reports the same blast radius instead of
+the transport's per-verb `{affected: 1, scope: 'single'}` guess. Cost: one extra READ per bulk delete.
+
+Base-routed mutations (`procedures.create/update/delete`, `procedure_tasks.*`, `expirations.update/delete`,
+`matchers.update/delete`, `magic_dash.create`) already inherit base.ts's threaded impact; one parity test per
+file proves it (`procedure_tasks`, `expirations`, `matchers`). Reads never claim an impact (`api_info.get` test).
+
+## Reversible claims and their compensating undo path
+
+* `procedures.duplicate`, `procedures.createFromTemplate`: the 201 response returns the new process with its id →
+  undo = `procedures.delete(newId)`.
+* `procedures.kickoff`: undo = `procedures.delete(runId)`; the vendor documents
+  `DELETE /procedures/{id}` as "Delete a Process or Run — Remove a process or run by its ID", so a RUN is removable.
+  The kickoff response is `{message}` only, so the run id must be discovered first; the dry-run now carries that
+  caveat as an explicit warning ("discover the new run id with procedures.list before relying on the undo path").
+* `procedures.update`, `procedure_tasks.update`, `expirations.update`, `matchers.update`: undo = re-write the previous
+  field values (re-writable fields + the opt-in `expectedUpdatedAt` guard).
+* `magic_dash.create`: undone by `magic_dash.deleteById(newId)` (the create response returns the item).
+* `magic_dash.updatePositions`: undo = the same call with the previous positions (now named in a warning).
+* Every delete (`procedures.delete`, `procedure_tasks.delete`, `expirations.delete`, `matchers.delete`,
+  `magic_dash.delete`, `magic_dash.deleteById`, `activity_logs.deleteAll`) claims `reversible: false`.
+
+## Commands after round 3
+
+| command | exit | result |
+|---|---|---|
+| `npx tsc --noEmit` | **0** | 0 errors project-wide |
+| `npx eslint <my 16 src/type + 8 test files>` | **0** | no findings |
+| `npx vitest run <my 8 test files>` | **0** | 8 files, **203 tests passed** (194 → 203: +9 impact-parity/undo tests) |

@@ -5,7 +5,7 @@ import type { HttpClient } from '../http.js';
 import { BaseResource } from './base.js';
 import type { ListParams, Page } from '../pagination.js';
 import type {
-  DryRunResult, Identifier, MutationOptions, Resolution, ResolutionOptions,
+  DryRunResult, Identifier, MutationOptions, OperationImpact, Resolution, ResolutionOptions,
 } from '../types/common.js';
 import type { Procedure, ProcedureCreate, ProcedureTask, ProcedureUpdate } from '../types/index.js';
 import type {
@@ -141,6 +141,9 @@ export class ProceduresResource extends BaseResource<Procedure> {
   ): Promise<Procedure | DryRunResult<Procedure>> {
     const operation = 'procedures.duplicate';
     refuseExpectedUpdatedAtOutsideUpdate(operation, options);
+    // ONE impact statement in both channels: the dry-run result and the audit event of the
+    // executed call (policy §7.3). Undo: procedures.delete on the returned copy's id.
+    const impact: OperationImpact = { affected: 1, scope: 'single', reversible: true };
     if (options?.dryRun === true) {
       return this.buildDryRunResult<Procedure>({
         operation,
@@ -148,9 +151,7 @@ export class ProceduresResource extends BaseResource<Procedure> {
         path: `/procedures/${id}/duplicate`,
         ids: numericIds(id),
         checks: [this.targetCheck(id), this.companyBoundCheck(opts.company_id)],
-        affected: 1,
-        scope: 'single',
-        reversible: true,
+        ...impact,
       });
     }
     const body = await this.http.request<unknown>({
@@ -159,6 +160,7 @@ export class ProceduresResource extends BaseResource<Procedure> {
       query: opts,
       operation,
       resourceIds: numericIds(id),
+      impact,
     });
     return this.unwrapSingle<Procedure>(body);
   }
@@ -186,6 +188,8 @@ export class ProceduresResource extends BaseResource<Procedure> {
   ): Promise<Procedure | DryRunResult<Procedure>> {
     const operation = 'procedures.createFromTemplate';
     refuseExpectedUpdatedAtOutsideUpdate(operation, options);
+    // Undo: procedures.delete on the id of the process the 201 response returns.
+    const impact: OperationImpact = { affected: 1, scope: 'single', reversible: true };
     if (options?.dryRun === true) {
       return this.buildDryRunResult<Procedure>({
         operation,
@@ -193,9 +197,7 @@ export class ProceduresResource extends BaseResource<Procedure> {
         path: `/procedures/${id}/create_from_template`,
         ids: numericIds(id),
         checks: [this.targetCheck(id)],
-        affected: 1,
-        scope: 'single',
-        reversible: true,
+        ...impact,
       });
     }
     const body = await this.http.request<unknown>({
@@ -204,6 +206,7 @@ export class ProceduresResource extends BaseResource<Procedure> {
       query: opts,
       operation,
       resourceIds: numericIds(id),
+      impact,
     });
     return this.unwrapSingle<Procedure>(body);
   }
@@ -228,6 +231,11 @@ export class ProceduresResource extends BaseResource<Procedure> {
   ): Promise<{ message: string } | DryRunResult<{ message: string }>> {
     const operation = 'procedures.kickoff';
     refuseExpectedUpdatedAtOutsideUpdate(operation, options);
+    // Undo: `DELETE /procedures/{id}` is documented as "Delete a Process or Run ... remove a
+    // process or run by its ID", so the created RUN is removable. The kickoff response carries
+    // only { message }, so the run id must be discovered first (procedures.list of the runs of
+    // this process) — the warning below says so, because that step is not obvious.
+    const impact: OperationImpact = { affected: 1, scope: 'single', reversible: true };
     if (options?.dryRun === true) {
       // kickoff returns { message } — NOT a Procedure — so the dry-run pins that type.
       return this.buildDryRunResult<{ message: string }>({
@@ -236,9 +244,12 @@ export class ProceduresResource extends BaseResource<Procedure> {
         path: `/procedures/${id}/kickoff`,
         ids: numericIds(id),
         checks: [this.targetCheck(id)],
-        affected: 1,
-        scope: 'single',
-        reversible: true,
+        ...impact,
+        warnings: [
+          'server-computed fields are not guaranteed by dry-run',
+          'a run IS removable (DELETE /procedures/{id} covers a run), but kickoff answers { message } only: ' +
+            'discover the new run id with procedures.list before relying on the undo path',
+        ],
       });
     }
     return this.http.request<{ message: string }>({
@@ -247,6 +258,7 @@ export class ProceduresResource extends BaseResource<Procedure> {
       query: opts,
       operation,
       resourceIds: numericIds(id),
+      impact,
     });
   }
 

@@ -80,3 +80,16 @@ describe('ApiInfoResource — agent execution layer', () => {
     for (const call of spy.calls) expect(call.url).toBe('https://hudu.example.com/api/v1/api_info');
   });
 });
+
+describe('ApiInfoResource — reads never claim an impact', () => {
+  afterEach(() => clearFetch());
+
+  it('leaves AuditEvent.impact absent for a read', async () => {
+    const audit = auditSpy();
+    stubFetch(() => json(apiInfo));
+    const client = makeClient({ onAudit: audit.onAudit });
+    await client.apiInfo.get();
+    expect(audit.events[0]?.effect).toBe('read');
+    expect(audit.events[0]?.impact).toBeUndefined();
+  });
+});

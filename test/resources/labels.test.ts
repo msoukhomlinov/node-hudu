@@ -8,6 +8,7 @@ import { HuduClient } from '../../src/client.js';
 import { HuduError, HuduConfigError, NotFoundError, ResolutionError, StaleObjectError } from '../../src/errors.js';
 import type { AuditEvent } from '../../src/types/common.js';
 import type { Label } from '../../src/types/label.js';
+import type { LabelsResolveOptions, LabelsFindByLabelableOptions } from '../../src/resources/labels.js';
 import { clearFetch, empty, json, stubFetch } from '../helpers.js';
 import type { SpyCall } from '../helpers.js';
 
@@ -218,6 +219,20 @@ describe('labels.findByLabelable (helper tier)', () => {
     const found = await makeClient().labels.findByLabelable('Asset', 5, { expand: true });
     expect(found).toEqual([LABEL, SECOND, UNRELATED]);
     expect(found[0]).toHaveProperty('created_at');
+  });
+});
+
+describe('helper options are exactly the options the helpers honour', () => {
+  it('labels.resolve offers expand and resolutionDetails only', () => {
+    // Exact-key compile-time guard: this literal stops compiling if an option is added
+    // (an accepted-but-ignored `limit`) or removed.
+    const keys: Record<keyof LabelsResolveOptions, true> = { expand: true, resolutionDetails: true };
+    expect(Object.keys(keys).sort()).toEqual(['expand', 'resolutionDetails']);
+  });
+
+  it('labels.findByLabelable offers limit and expand only — no Resolution wrapper', () => {
+    const keys: Record<keyof LabelsFindByLabelableOptions, true> = { limit: true, expand: true };
+    expect(Object.keys(keys).sort()).toEqual(['expand', 'limit']);
   });
 });
 

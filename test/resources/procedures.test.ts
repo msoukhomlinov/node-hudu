@@ -652,3 +652,54 @@ describe('ProceduresResource — expectedUpdatedAt is refused outside update', (
     expect(spy.calls).toHaveLength(0);
   });
 });
+
+describe('ProceduresResource — executed audit impact equals the dry-run impact', () => {
+  afterEach(() => clearFetch());
+
+  it('reports the SAME impact for duplicate, createFromTemplate and kickoff', async () => {
+    const audit = auditSpy();
+    const spy = routed({
+      [`${PATH}/5/duplicate`]: () => json({ procedure }, 201),
+      [`${PATH}/9/create_from_template`]: () => json({ procedure }, 201),
+      [`${PATH}/5/kickoff`]: () => json({ message: 'Run started' }),
+    });
+    const client = clientWith({ onAudit: audit.onAudit });
+
+    const describedDuplicate = await client.procedures.duplicate(5, { company_id: 2 }, { dryRun: true });
+    await client.procedures.duplicate(5, { company_id: 2 });
+    const describedTemplate = await client.procedures.createFromTemplate(9, { company_id: 3 }, { dryRun: true });
+    await client.procedures.createFromTemplate(9, { company_id: 3 });
+    const describedKickoff = await client.procedures.kickoff(5, { asset_id: 2 }, { dryRun: true });
+    await client.procedures.kickoff(5, { asset_id: 2 });
+
+    const executed = audit.events.filter((event) => !event.dryRun && event.effect !== 'read');
+    expect(executed.map((event) => event.impact)).toEqual([
+      { affected: 1, scope: 'single', reversible: true },
+      { affected: 1, scope: 'single', reversible: true },
+      { affected: 1, scope: 'single', reversible: true },
+    ]);
+    expect(executed[0]?.impact).toEqual(describedDuplicate.impact);
+    expect(executed[1]?.impact).toEqual(describedTemplate.impact);
+    expect(executed[2]?.impact).toEqual(describedKickoff.impact);
+    expect(spy.calls.map((call) => call.init.method)).toEqual(['POST', 'POST', 'POST']);
+  });
+
+  it('names the compensating undo path for every reversible claim', async () => {
+    routed({
+      [`${PATH}/5/duplicate`]: () => json({ procedure }, 201),
+      [`${PATH}/9/create_from_template`]: () => json({ procedure }, 201),
+      [`${PATH}/5/kickoff`]: () => json({ message: 'Run started' }),
+    });
+    const client = clientWith();
+    const duplicate = await client.procedures.duplicate(5, { company_id: 2 }, { dryRun: true });
+    const template = await client.procedures.createFromTemplate(9, { company_id: 3 }, { dryRun: true });
+    const kickoff = await client.procedures.kickoff(5, { asset_id: 2 }, { dryRun: true });
+    // duplicate/createFromTemplate answer with the new process, so DELETE /procedures/{id} undoes them.
+    expect(duplicate.impact.reversible).toBe(true);
+    expect(template.impact.reversible).toBe(true);
+    // kickoff answers { message } only: the run id must be discovered first, and the dry-run says so.
+    expect(kickoff.impact.reversible).toBe(true);
+    expect(kickoff.warnings.join(' ')).toContain('DELETE /procedures/{id} covers a run');
+    expect(kickoff.warnings.join(' ')).toContain('discover the new run id with procedures.list');
+  });
+});

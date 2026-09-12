@@ -372,3 +372,38 @@ describe('ProcedureTasksResource — expectedUpdatedAt is refused outside update
     expect(spy.calls).toHaveLength(0);
   });
 });
+
+describe('ProcedureTasksResource — executed audit impact equals the dry-run impact', () => {
+  afterEach(() => clearFetch());
+
+  it('reports the SAME impact for create, update and delete', async () => {
+    const audit = auditSpy();
+    const spy = routed({
+      [PATH]: () => json({ procedure_task: task() }, 201),
+      [`${PATH}/5`]: () => json({ procedure_task: task() }),
+    });
+    spy.setHandler((raw, init) => {
+      const url = new URL(raw);
+      if (url.pathname === PATH && init.method === 'POST') return json({ procedure_task: task() }, 201);
+      if (init.method === 'PUT') return json({ procedure_task: task() });
+      if (init.method === 'DELETE') return empty(204);
+      return json({ procedure_task: task() });
+    });
+    const client = makeClient({ onAudit: audit.onAudit });
+    const describedCreate = await client.procedureTasks.create({ name: 'x' }, { dryRun: true });
+    await client.procedureTasks.create({ name: 'x' });
+    const describedUpdate = await client.procedureTasks.update(5, { completed: true }, { dryRun: true });
+    await client.procedureTasks.update(5, { completed: true });
+    const describedDelete = await client.procedureTasks.delete(5, { dryRun: true });
+    await client.procedureTasks.delete(5);
+    const executed = audit.events.filter((event) => !event.dryRun && event.effect !== 'read');
+    expect(executed.map((event) => event.impact)).toEqual([
+      { affected: 1, scope: 'single', reversible: true },
+      { affected: 1, scope: 'single', reversible: true },
+      { affected: 1, scope: 'single', reversible: false },
+    ]);
+    expect(executed[0]?.impact).toEqual(describedCreate.impact);
+    expect(executed[1]?.impact).toEqual(describedUpdate.impact);
+    expect(executed[2]?.impact).toEqual(describedDelete.impact);
+  });
+});

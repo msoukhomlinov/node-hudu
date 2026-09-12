@@ -11,7 +11,7 @@ import { BaseResource } from './base.js';
 import { PolicyDeniedError } from '../errors.js';
 import type { ListParams, Page } from '../pagination.js';
 import type {
-  DryRunResult, Identifier, MutationOptions, Resolution, ResolutionOptions,
+  DryRunResult, Identifier, MutationOptions, OperationImpact, Resolution, ResolutionOptions,
 } from '../types/common.js';
 import type { MagicDash, MagicDashCreate } from '../types/index.js';
 import type { MagicDashIdentifier, MagicDashSummary } from '../types/magic_dash.js';
@@ -110,23 +110,21 @@ export class MagicDashResource extends BaseResource<MagicDash> {
         },
       );
     }
+    // ONE impact statement in both channels (policy §7.3): the dry-run result and the audit
+    // event of the EXECUTED delete must not disagree about the blast radius. The affected set is
+    // server-computed, so both paths take the same bounded pre-read floor (one GET, page_size 100).
+    const impact = await this.deleteImpact(title, company);
     if (opts?.dryRun === true) {
-      // The affected set is server-computed, so a literal count would understate it: one
-      // bounded page (page_size 100) with the same title filter supplies a FLOOR instead.
-      const floor = await this.countTitleFloor(title, company);
       return this.buildDryRunResult<void>({
         operation,
         method: 'DELETE',
         path: '/magic_dash',
         checks: [{ name: 'bulk-bound', ok: true, detail: `title "${title}" in company "${company}"` }],
-        affected: floor,
-        scope: 'bulk',
-        reversible: false,
-        exact: false,
+        ...impact,
         warnings: [
           `bulk delete by a server-side bound: every Magic Dash item titled "${title}" in "${company}"`,
-          `affected ${floor} is a FLOOR from ONE bounded page (page_size ${MAX_HELPER_LIMIT}) filtered by title; ` +
-            'the server decides the final target set',
+          `affected ${impact.affected} is a FLOOR from ONE bounded page (page_size ${MAX_HELPER_LIMIT}) filtered by ` +
+            'title; the server decides the final target set',
         ],
       });
     }
@@ -135,7 +133,18 @@ export class MagicDashResource extends BaseResource<MagicDash> {
       path: '/magic_dash',
       formUrlEncoded: data,
       operation,
+      impact,
     });
+  }
+
+  /**
+   * The impact of the by-title bulk delete, for BOTH channels: `affected` is a floor measured by
+   * one bounded page read (page_size 100) whose items must match BOTH bounds; the server computes
+   * the real set, so `exact` is false. No undo exists for a deleted item.
+   */
+  private async deleteImpact(title: string, company: string): Promise<OperationImpact> {
+    const floor = await this.countTitleFloor(title, company);
+    return { affected: floor, scope: 'bulk', reversible: false, exact: false };
   }
 
   /** DELETE /magic_dash/{id} — bounded to the one item named by its id. */
@@ -147,6 +156,8 @@ export class MagicDashResource extends BaseResource<MagicDash> {
     const operation = 'magic_dash.deleteById';
     refuseExpectedUpdatedAtOutsideUpdate(operation, opts);
     const itemId = requirePositiveId(id, operation);
+    // ONE impact statement in both channels; a single-record delete has no undo.
+    const impact: OperationImpact = { affected: 1, scope: 'single', reversible: false };
     if (opts?.dryRun === true) {
       return this.buildDryRunResult<void>({
         operation,
@@ -154,9 +165,7 @@ export class MagicDashResource extends BaseResource<MagicDash> {
         path: `/magic_dash/${itemId}`,
         ids: [itemId],
         checks: [this.targetCheck(itemId)],
-        affected: 1,
-        scope: 'single',
-        reversible: false,
+        ...impact,
       });
     }
     await this.http.request<unknown>({
@@ -164,6 +173,7 @@ export class MagicDashResource extends BaseResource<MagicDash> {
       path: `/magic_dash/${itemId}`,
       operation,
       resourceIds: [itemId],
+      impact,
     });
   }
 
@@ -201,6 +211,9 @@ export class MagicDashResource extends BaseResource<MagicDash> {
       );
     }
     const ids = positions.map((entry) => entry.id);
+    // ONE impact statement in both channels. The caller supplied the bound, so the count IS the
+    // affected set (`exact: true`), and the undo path is the same call with the previous positions.
+    const impact: OperationImpact = { affected: positions.length, scope: 'bulk', reversible: true, exact: true };
     if (opts?.dryRun === true) {
       return this.buildDryRunResult<{ success: boolean }>({
         operation,
@@ -211,14 +224,11 @@ export class MagicDashResource extends BaseResource<MagicDash> {
           { name: 'explicit-targets', ok: true, detail: `${positions.length} position(s) named` },
           this.payloadCheck(data),
         ],
-        affected: positions.length,
-        scope: 'bulk',
-        reversible: true,
-        // The caller supplied the bound, so the count IS the affected set.
-        exact: true,
+        ...impact,
         warnings: [
           `multi-record fan-out: ${positions.length} Magic Dash item(s) are repositioned in one call`,
           'the affected count is the number of positions supplied',
+          'undo: call magic_dash.updatePositions again with the previous positions',
         ],
       });
     }
@@ -228,6 +238,7 @@ export class MagicDashResource extends BaseResource<MagicDash> {
       body: { company_id: data.company_id, positions: data.positions },
       operation,
       resourceIds: ids,
+      impact,
     });
   }
 

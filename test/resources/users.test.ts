@@ -8,6 +8,7 @@ import { HuduClient } from '../../src/client.js';
 import { HuduError, HuduConfigError, NotFoundError, ResolutionError } from '../../src/errors.js';
 import type { AuditEvent } from '../../src/types/common.js';
 import type { User } from '../../src/types/user.js';
+import type { UsersLookupOptions, UsersSearchOptions } from '../../src/resources/users.js';
 import { clearFetch, json, stubFetch } from '../helpers.js';
 import type { SpyCall } from '../helpers.js';
 
@@ -330,6 +331,25 @@ describe('users.search (helper tier)', () => {
     const full = await makeClient().users.search('a', { expand: true });
     expect(full).toEqual([ALICE, BOB]);
     expect(full[0]).toHaveProperty('otp_required_for_login');
+  });
+});
+
+describe('helper options are exactly the options the helpers honour', () => {
+  it('users.resolve / users.findByEmail offer expand and resolutionDetails only', () => {
+    // Exact-key compile-time guard: this literal stops compiling if an option is added
+    // (an accepted-but-ignored `limit` — neither helper can honour a row cap) or removed.
+    const keys: Record<keyof UsersLookupOptions, true> = { expand: true, resolutionDetails: true };
+    expect(Object.keys(keys).sort()).toEqual(['expand', 'resolutionDetails']);
+  });
+
+  it('users.search offers limit, archived, security_level and expand only — no Resolution wrapper', () => {
+    const keys: Record<keyof UsersSearchOptions, true> = {
+      limit: true,
+      archived: true,
+      security_level: true,
+      expand: true,
+    };
+    expect(Object.keys(keys).sort()).toEqual(['archived', 'expand', 'limit', 'security_level']);
   });
 });
 

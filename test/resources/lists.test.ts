@@ -8,6 +8,7 @@ import { HuduClient } from '../../src/client.js';
 import { HuduError, HuduConfigError, NotFoundError, ResolutionError, StaleObjectError } from '../../src/errors.js';
 import type { AuditEvent } from '../../src/types/common.js';
 import type { List } from '../../src/types/list.js';
+import type { ListsHelperOptions } from '../../src/resources/lists.js';
 import { clearFetch, empty, json, stubFetch } from '../helpers.js';
 import type { SpyCall } from '../helpers.js';
 
@@ -161,6 +162,16 @@ describe('lists.findByName (helper tier)', () => {
   it('returns null after a complete scan', async () => {
     stubFetch(() => json([ALPHA]));
     await expect(makeClient().lists.findByName('Gamma')).resolves.toBeNull();
+  });
+});
+
+
+describe('helper options are exactly the options the helpers honour', () => {
+  it('lists.resolve / lists.findByName offer resolutionDetails only', () => {
+    // Exact-key compile-time guard: this literal stops compiling if an option is added
+    // (an accepted-but-ignored `limit`/`expand`/`resolutionDetails`) or removed.
+    const keys: Record<keyof ListsHelperOptions, true> = { resolutionDetails: true };
+    expect(Object.keys(keys).sort()).toEqual(['resolutionDetails']);
   });
 });
 

@@ -375,3 +375,33 @@ describe('ExpirationsResource — expectedUpdatedAt is refused outside update', 
     expect(spy.calls).toHaveLength(0);
   });
 });
+
+describe('ExpirationsResource — executed audit impact equals the dry-run impact', () => {
+  afterEach(() => clearFetch());
+
+  it('reports the SAME impact for update and delete', async () => {
+    const audit = auditSpy();
+    const spy = routed({
+      '/api/v1/expirations': expirationPages([expiration()]),
+      '/api/v1/expirations/1': () => json(expiration()),
+    });
+    spy.setHandler((raw, init) => {
+      const url = new URL(raw);
+      if (url.pathname === '/api/v1/expirations') return expirationPages([expiration()])(url);
+      if (init.method === 'DELETE') return empty(204);
+      return json(expiration());
+    });
+    const client = makeClient({ onAudit: audit.onAudit });
+    const describedUpdate = await client.expirations.update(1, { date: '2028-02-01' }, { dryRun: true });
+    await client.expirations.update(1, { date: '2028-02-01' });
+    const describedDelete = await client.expirations.delete(1, { dryRun: true });
+    await client.expirations.delete(1);
+    const executed = audit.events.filter((event) => !event.dryRun && event.effect !== 'read');
+    expect(executed.map((event) => event.impact)).toEqual([
+      { affected: 1, scope: 'single', reversible: true },
+      { affected: 1, scope: 'single', reversible: false },
+    ]);
+    expect(executed[0]?.impact).toEqual(describedUpdate.impact);
+    expect(executed[1]?.impact).toEqual(describedDelete.impact);
+  });
+});

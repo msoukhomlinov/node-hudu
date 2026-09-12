@@ -8,6 +8,7 @@ import { HuduClient } from '../../src/client.js';
 import { HuduError, HuduConfigError, NotFoundError, ResolutionError, StaleObjectError } from '../../src/errors.js';
 import type { AuditEvent } from '../../src/types/common.js';
 import type { LabelType } from '../../src/types/label_type.js';
+import type { LabelTypesResolveOptions } from '../../src/resources/label_types.js';
 import { clearFetch, empty, json, stubFetch } from '../helpers.js';
 import type { SpyCall } from '../helpers.js';
 
@@ -209,6 +210,16 @@ describe('label_types.resolve (helper tier)', () => {
     expect(err).toBeInstanceOf(HuduConfigError);
     expect(err.message).toContain('label_types.resolve accepts');
     expect(spy.calls).toHaveLength(0);
+  });
+});
+
+
+describe('helper options are exactly the options the helpers honour', () => {
+  it('label_types.resolve offers expand and resolutionDetails only', () => {
+    // Exact-key compile-time guard: this literal stops compiling if an option is added
+    // (an accepted-but-ignored `limit`/`expand`/`resolutionDetails`) or removed.
+    const keys: Record<keyof LabelTypesResolveOptions, true> = { expand: true, resolutionDetails: true };
+    expect(Object.keys(keys).sort()).toEqual(['expand', 'resolutionDetails']);
   });
 });
 
