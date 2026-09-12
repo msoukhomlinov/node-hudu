@@ -3,6 +3,7 @@
   "version": "0.3.0",
   "description": "Fully-typed TypeScript SDK for the Hudu IT documentation API. Built for building MCP servers and integrations.",
   "type": "module",
+  "sideEffects": false,
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -98,6 +99,8 @@
     "lint": "eslint src test",
     "lint:fix": "eslint src test --fix",
     "clean": "rimraf dist coverage",
+    "verify:pack": "node scripts/verify-pack.mjs",
+    "prepack": "npm run build",
     "prepublishOnly": "npm run clean && npm run build"
   },
   "keywords": [

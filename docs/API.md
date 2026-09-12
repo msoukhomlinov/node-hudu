@@ -850,7 +850,7 @@ level, with the API's actual requirements documented per field in the type comme
 
 ## Appendix — capability registry (generated)
 
-Generated from `capabilities.json` (planHash `65c7cab6af926eec`). One row per operation; the same data is importable as
+Generated from `capabilities.json` (planHash `da4bf1f2de978259`, 225 operations). One row per operation; the same data is importable as
 `node-hudu/capabilities` (`getCapability(name)`) and is what the MCP tool manifest is projected from.
 
 | Operation | Kind | Effect | Flags | dryRun | Compact | Bound |
@@ -1023,7 +1023,7 @@ Generated from `capabilities.json` (planHash `65c7cab6af926eec`). One row per op
 | `procedures.get` | primitive | read | - | no | - | none (not paginated) |
 | `procedures.getWithTasks` | helper | read | - | no | ProcedureWithTasks | none (not paginated) |
 | `procedures.kickoff` | primitive | write | - | yes | - | none (not paginated) |
-| `procedures.list` | primitive | read | - | no | - | 25 per page, max 100 |
+| `procedures.list` | primitive | read | - | no | - | 25 per page, max 1000 |
 | `procedures.resolve` | helper | read | - | no | ProcedureSummary | none (not paginated) |
 | `procedures.update` | primitive | write | idempotent | yes | - | none (not paginated) |
 | `public_photos.create` | primitive | write | - | yes | - | none (not paginated) |

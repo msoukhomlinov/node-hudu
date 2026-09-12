@@ -124,7 +124,7 @@ const hudu = new HuduClient({ baseUrl, apiKey });
 
 // Resolve by anything: an id fetches directly, a name/slug/domain is looked up.
 const company = await hudu.companies.resolve('acme.com');          // CompanySummary | null
-const full = await hudu.companies.resolve({ name: 'Acme' }, { expand: true }); // Company
+const full = await hudu.companies.resolve({ name: 'Acme' }, { expand: true }); // Company | null
 
 // Vendor filters, bounded, compact by default.
 await hudu.assets.findBySerial('SN-1234');
