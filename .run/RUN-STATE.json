@@ -13,23 +13,23 @@
     "A.design": "done",
     "A.implement": "done",
     "A.tests": "done",
-    "A.qa": "in_progress",
-    "A.fix": "pending",
+    "A.qa": "done",
+    "A.fix": "in_progress",
     "B.design": "done",
     "B.implement": "done",
     "B.tests": "done",
-    "B.qa": "in_progress",
-    "B.fix": "pending",
+    "B.qa": "done",
+    "B.fix": "in_progress",
     "C.design": "done",
     "C.implement": "done",
     "C.tests": "done",
-    "C.qa": "in_progress",
-    "C.fix": "pending",
+    "C.qa": "done",
+    "C.fix": "in_progress",
     "D.design": "done",
     "D.implement": "done",
     "D.tests": "done",
-    "D.qa": "in_progress",
-    "D.fix": "pending",
+    "D.qa": "done",
+    "D.fix": "in_progress",
     "operations": "in_progress",
     "mcp_project": "pending",
     "release": "pending",
@@ -133,7 +133,8 @@
     "A.tests": "pass \u2014 npm test 1446/1446, lint 0, coverage 99.63/99.88/91.95/99.24 vs 97/94/83/97; all rows tested; --ship PASS",
     "B.tests": "pass \u2014 npm test 1446/1446, lint 0, coverage 99.63/99.88/91.95/99.24 vs 97/94/83/97; all rows tested; --ship PASS",
     "C.tests": "pass \u2014 npm test 1446/1446, lint 0, coverage 99.63/99.88/91.95/99.24 vs 97/94/83/97; all rows tested; --ship PASS",
-    "D.tests": "pass \u2014 npm test 1446/1446, lint 0, coverage 99.63/99.88/91.95/99.24 vs 97/94/83/97; all rows tested; --ship PASS"
+    "D.tests": "pass \u2014 npm test 1446/1446, lint 0, coverage 99.63/99.88/91.95/99.24 vs 97/94/83/97; all rows tested; --ship PASS",
+    "qa_lenses": "all four reported: qa-safety (cross-model claude-sonnet) 5 findings, qa-agent-layer 14, qa-registry 15, qa-contract 9"
   },
   "blockers": [
     {
@@ -184,13 +185,18 @@
       "what": "run the three QA lenses ONCE over the whole A-D implementation instead of three lenses per group (12 spawns)",
       "why": "the four batches landed in one commit range within ~25 minutes, so they are no longer separable in time and per-group QA would re-read the same diff 12 times; the qa_final stage still runs all five lenses over the whole branch",
       "reversal": "spawn the per-group lenses from .run/RUN-STATE.json gate entries and .run/design/<G>.md scoped diffs"
+    },
+    {
+      "what": "accepted the qa-safety LOW (the guard-refusal helper is duplicated in 17 resource files) as documented debt instead of a 17-file refactor at release time; the shared home now exists and 6 group-C files use it",
+      "why": "no correctness bug, all instances behaviourally identical and tested, and the variants emit different messages that tests assert, so a full consolidation would change messages and touch 5 idle owners' files minutes before release",
+      "reversal": "add refuseExpectedUpdatedAtOutsideUpdate to src/resources/agent-layer-helpers.ts and replace the remaining 11 local definitions, then re-run the affected resource tests"
     }
   ],
   "metrics": {
     "spawns": 14,
-    "commits": 17,
+    "commits": 23,
     "gateRuns": 6,
     "qaFindings": 33,
-    "qaFixed": 0
+    "qaFixed": 26
   }
 }
