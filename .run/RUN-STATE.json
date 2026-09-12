@@ -164,6 +164,14 @@
       "startedAt": "2026-09-13T01:55:46.928056+10:00",
       "budget": "35 grounding calls",
       "log": "/Users/maxs/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-0254b8aa"
+    },
+    {
+      "name": "qa-final-packaging",
+      "id": "sub-9a0e6f35",
+      "step": "qa_final",
+      "startedAt": "2026-09-13T02:03:26.561242+10:00",
+      "budget": "45 grounding calls",
+      "log": "/Users/maxs/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-9a0e6f35"
     }
   ],
   "gates": {
@@ -241,7 +249,7 @@
     }
   ],
   "metrics": {
-    "spawns": 20,
+    "spawns": 21,
     "commits": 28,
     "gateRuns": 6,
     "qaFindings": 33,
