@@ -191,7 +191,8 @@
     "C.tests": "pass \u2014 npm test 1446/1446, lint 0, coverage 99.63/99.88/91.95/99.24 vs 97/94/83/97; all rows tested; --ship PASS",
     "D.tests": "pass \u2014 npm test 1446/1446, lint 0, coverage 99.63/99.88/91.95/99.24 vs 97/94/83/97; all rows tested; --ship PASS",
     "qa_lenses": "all four reported: qa-safety (cross-model claude-sonnet) 5 findings, qa-agent-layer 14, qa-registry 15, qa-contract 9",
-    "qa_final_agent_layer": "report at ca011f1: 0 CRITICAL, 0 HIGH, 1 MEDIUM, 5 LOW, 2 NIT; all three of its earlier HIGH findings proven CLOSED (manifest/registry agreement, opaque inputSchema 0, WebsiteSummary projection). Its MEDIUM (a committed pre-curation manifest + untracked overrides) was already fixed on the current head ec9b7e1. Triage: 2 rows corrected in the plan (flags.findByFlagable, activity_logs.findByResource declared a resolution code they cannot raise), users.search resolutionDetails dispatched to impl-D2, 3 LOWs accepted with rationale, NIT about the CHANGELOG date verified WRONG (the run crossed midnight; local date is 2026-09-13)"
+    "qa_final_agent_layer": "report at ca011f1: 0 CRITICAL, 0 HIGH, 1 MEDIUM, 5 LOW, 2 NIT; all three of its earlier HIGH findings proven CLOSED (manifest/registry agreement, opaque inputSchema 0, WebsiteSummary projection). Its MEDIUM (a committed pre-curation manifest + untracked overrides) was already fixed on the current head ec9b7e1. Triage: 2 rows corrected in the plan (flags.findByFlagable, activity_logs.findByResource declared a resolution code they cannot raise), users.search resolutionDetails dispatched to impl-D2, 3 LOWs accepted with rationale, NIT about the CHANGELOG date verified WRONG (the run crossed midnight; local date is 2026-09-13)",
+    "qa_final_packaging": "report: 1 CRITICAL + 2 HIGH fixed (verify:pack gate, prepack build, sideEffects, docs/API.md regeneration, README nullability); HIGH 3 (tree not frozen) handled by Finalise; sourcemap size and unshipped maintainer scripts accepted with rationale"
   },
   "blockers": [
     {
@@ -261,9 +262,9 @@
   ],
   "metrics": {
     "spawns": 21,
-    "commits": 28,
+    "commits": 38,
     "gateRuns": 6,
-    "qaFindings": 50,
+    "qaFindings": 64,
     "qaFixed": 26
   }
 }
