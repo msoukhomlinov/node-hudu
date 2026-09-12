@@ -6,7 +6,7 @@
   "codingModel": null,
   "qaModel": "openrouter/deepseek/deepseek-v4.1-flash",
   "qaThinking": "xhigh",
-  "step": "A.implement",
+  "step": "A-D.implement",
   "steps": {
     "preflight": "done",
     "plan_derive": "done",
@@ -16,17 +16,17 @@
     "A.qa": "pending",
     "A.fix": "pending",
     "B.design": "done",
-    "B.implement": "pending",
+    "B.implement": "running",
     "B.tests": "pending",
     "B.qa": "pending",
     "B.fix": "pending",
     "C.design": "done",
-    "C.implement": "pending",
+    "C.implement": "running",
     "C.tests": "pending",
     "C.qa": "pending",
     "C.fix": "pending",
     "D.design": "done",
-    "D.implement": "pending",
+    "D.implement": "running",
     "D.tests": "pending",
     "D.qa": "pending",
     "D.fix": "pending",
@@ -46,13 +46,60 @@
       "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-e37b6897"
     },
     {
-      "name": "tooling-scripts",
-      "id": "sub-f393c463",
-      "step": "preflight",
-      "startedAt": "2026-09-12T23:12:54.635479+10:00",
-      "budget": "done (2 dispatches)",
-      "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-f393c463",
-      "state": "done"
+      "name": "impl-A1",
+      "id": "sub-84cdf421",
+      "step": "A.implement",
+      "startedAt": "2026-09-12T23:43:39.892358+10:00",
+      "budget": "70 grounding calls",
+      "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-84cdf421"
+    },
+    {
+      "name": "impl-A2",
+      "id": "sub-3c687e04",
+      "step": "A.implement",
+      "startedAt": "2026-09-12T23:43:39.892358+10:00",
+      "budget": "70 grounding calls",
+      "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-3c687e04"
+    },
+    {
+      "name": "impl-B1",
+      "id": "sub-7eddcd6c",
+      "step": "B.implement",
+      "startedAt": "2026-09-12T23:43:39.892358+10:00",
+      "budget": "70 grounding calls",
+      "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-7eddcd6c"
+    },
+    {
+      "name": "impl-B2",
+      "id": "sub-a9cf21cc",
+      "step": "B.implement",
+      "startedAt": "2026-09-12T23:43:39.892358+10:00",
+      "budget": "70 grounding calls",
+      "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-a9cf21cc"
+    },
+    {
+      "name": "impl-C",
+      "id": "sub-f1cead72",
+      "step": "C.implement",
+      "startedAt": "2026-09-12T23:43:39.892358+10:00",
+      "budget": "70 grounding calls",
+      "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-f1cead72"
+    },
+    {
+      "name": "impl-D1",
+      "id": "sub-df457ec9",
+      "step": "D.implement",
+      "startedAt": "2026-09-12T23:43:39.892358+10:00",
+      "budget": "70 grounding calls",
+      "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-df457ec9"
+    },
+    {
+      "name": "impl-D2",
+      "id": "sub-157bed59",
+      "step": "D.implement",
+      "startedAt": "2026-09-12T23:43:39.892358+10:00",
+      "budget": "70 grounding calls",
+      "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-157bed59"
     }
   ],
   "gates": {
@@ -81,7 +128,7 @@
     }
   ],
   "metrics": {
-    "spawns": 2,
+    "spawns": 9,
     "commits": 7,
     "gateRuns": 6,
     "qaFindings": 0,
