@@ -20,7 +20,7 @@ import type {
   Resolution,
   ResolutionCandidate,
 } from '../types/common.js';
-import { ResolutionError, ValidationFailedError } from '../errors.js';
+import { HuduConfigError, ResolutionError, ValidationFailedError } from '../errors.js';
 
 export interface IpAddressesListParams extends ListParams {
   network_id?: number;
@@ -103,10 +103,15 @@ export class IpAddressesResource extends BaseResource<IpAddress> {
   async update(id: number, data: IpAddressUpdate, opts: MutationOptions | undefined): Promise<IpAddress | DryRunResult<IpAddress>>;
   async update(id: number, data: IpAddressUpdate, opts?: MutationOptions): Promise<IpAddress | DryRunResult<IpAddress>> {
     // registry staleCheck for this row is "unavailable": the vendor's IpAddress record
-    // declares no `updated_at`, so `{ expectedUpdatedAt }` is accepted but NOT forwarded
-    // (comparing against a revision that does not exist would fabricate a STALE_OBJECT).
-    const forwarded: MutationOptions | undefined = opts === undefined ? undefined : { dryRun: opts.dryRun };
-    return this.updateOne<IpAddress>(id, data, undefined, forwarded);
+    // declares no `updated_at`, so the guard cannot be honoured and is REFUSED rather
+    // than silently ignored (the same contract createOne/deleteOne/updateOne use).
+    if (opts?.expectedUpdatedAt !== undefined) {
+      throw new HuduConfigError(
+        'ip_addresses.update cannot honour { expectedUpdatedAt }: the vendor record declares ' +
+          'no updated_at field. Omit the guard, or use { dryRun: true } to preview the change.',
+      );
+    }
+    return this.updateOne<IpAddress>(id, data, undefined, opts);
   }
   async delete(id: number): Promise<void>;
   /** Dry-run: describe the delete without issuing it. */

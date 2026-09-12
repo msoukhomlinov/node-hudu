@@ -135,3 +135,36 @@ ip_addresses.update and every create/delete row).
 Test counts now: networks 35, vlans 33, vlan_zones 30, ip_addresses 34, rack_storages 31 = 163.
 Line counts now: src/resources 311/312/289/314/278, src/types 68/60/53/59/54,
 test/resources 442/376/334/371/350.
+
+
+---
+
+## Revision 3 — base `expectedUpdatedAt` contract change (2026-09-13)
+
+`BaseResource.createOne/deleteOne/setArchived` now throw `HuduConfigError`
+(`CONFIG_ERROR`, category `validation`, **no request**) when `{ expectedUpdatedAt }` is passed, because
+those paths can never honour the guard. Only `updateOne` accepts it.
+
+My tests now assert the new contract, not the old silent no-op:
+
+- `test/resources/networks.test.ts`, `vlans.test.ts`, `vlan_zones.test.ts`, `rack_storages.test.ts`:
+  the four delete tests were RENAMED to
+  "refuses expectedUpdatedAt on delete with CONFIG_ERROR and issues no request" and now assert
+  `HuduConfigError` + `code === 'CONFIG_ERROR'` + `category === 'validation'` + **zero HTTP calls**.
+  `HuduConfigError` was added to each file's errors import.
+- `src/resources/ip_addresses.ts` (same defect, same treatment): `update` and `delete` both refuse
+  `{ expectedUpdatedAt }` with `HuduConfigError` + zero requests, because the vendor record declares no
+  `updated_at` (registry `staleCheck: "unavailable"`). The previous "accept and ignore" behaviour is
+  gone, so no guard is ever silently dropped. Two tests in `ip_addresses.test.ts` assert it.
+- The guard itself is unchanged on the four `update` rows whose registry value is `updated_at`
+  (`STALE_OBJECT` on mismatch, PUT issued on match) — those tests still pass.
+
+### Recorded exit codes (revision 3)
+
+| command | exit | result |
+|---|---|---|
+| `npx vitest run test/resources/{networks,vlans,vlan_zones,ip_addresses,rack_storages}.test.ts` | 0 | 5 files, **164 tests passed** (35/33/30/35/31) |
+| `npx eslint <my 10 src files + 5 test files>` | 0 | clean |
+| `npx tsc --noEmit` | 0 | project-wide green |
+
+No `npm test` / `capabilities:build` / `capabilities:check` / scripts were run.

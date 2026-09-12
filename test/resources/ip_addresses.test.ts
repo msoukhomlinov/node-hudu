@@ -8,7 +8,7 @@
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import { HuduClient } from '../../src/client.js';
-import { HuduError, NotFoundError, ResolutionError, ValidationFailedError } from '../../src/errors.js';
+import { HuduConfigError, HuduError, NotFoundError, ResolutionError, ValidationFailedError } from '../../src/errors.js';
 import type { AuditEvent } from '../../src/types/common.js';
 import type { IpAddressIdentifier, IpAddressSummary } from '../../src/types/ip_address.js';
 import { stubFetch, json, empty, clearFetch } from '../helpers.js';
@@ -127,15 +127,27 @@ describe('ip_addresses primitives', () => {
     expect(res.warnings.length).toBeGreaterThan(0);
   });
 
-  it('ignores expectedUpdatedAt because the record declares no revision field', async () => {
-    // staleCheck is "unavailable" for ip_addresses.update: no read, just the PUT.
+  it('refuses expectedUpdatedAt on update with CONFIG_ERROR and issues no request', async () => {
+    // staleCheck is "unavailable" for ip_addresses.update (no updated_at on the record),
+    // so the guard is refused instead of silently ignored.
     const spy = stubFetch(() => json({ ...IP, status: 'reserved' }));
-    expect(await makeClient().ipAddresses.update(7, { status: 'reserved' }, { expectedUpdatedAt: 'any' })).toEqual({
-      ...IP,
-      status: 'reserved',
-    });
-    expect(spy.calls).toHaveLength(1);
-    expect(spy.calls[0]?.init.method).toBe('PUT');
+    const err = await rejection(
+      makeClient().ipAddresses.update(7, { status: 'reserved' }, { expectedUpdatedAt: 'any' }),
+    );
+    expect(err).toBeInstanceOf(HuduConfigError);
+    expect(err.code).toBe('CONFIG_ERROR');
+    expect(err.category).toBe('validation');
+    expect(spy.calls).toHaveLength(0);
+  });
+
+  it('refuses expectedUpdatedAt on delete with CONFIG_ERROR and issues no request', async () => {
+    const spy = stubFetch(() => empty(204));
+    const err = await rejection(
+      makeClient().ipAddresses.delete(7, { expectedUpdatedAt: '2026-01-01T00:00:00Z' }),
+    );
+    expect(err).toBeInstanceOf(HuduConfigError);
+    expect(err.code).toBe('CONFIG_ERROR');
+    expect(spy.calls).toHaveLength(0);
   });
 
   it('unwraps the PUT response by singleKey', async () => {

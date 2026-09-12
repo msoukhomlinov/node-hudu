@@ -8,7 +8,7 @@
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import { HuduClient } from '../../src/client.js';
-import { HuduError, NotFoundError, ResolutionError, StaleObjectError, ValidationFailedError } from '../../src/errors.js';
+import { HuduConfigError, HuduError, NotFoundError, ResolutionError, StaleObjectError, ValidationFailedError } from '../../src/errors.js';
 import type { AuditEvent } from '../../src/types/common.js';
 import type { RackStorageIdentifier, RackStorageSummary } from '../../src/types/rack_storage.js';
 import { stubFetch, json, empty, clearFetch } from '../helpers.js';
@@ -176,12 +176,15 @@ describe('rack_storages primitives', () => {
     expect(spy.calls[0]?.init.method).toBe('GET');
   });
 
-  it('does not read before a delete (the stale guard lives on update only)', async () => {
-    // registry staleCheck for rack_storages.delete is "unavailable": no read-then-compare.
+  it('refuses expectedUpdatedAt on delete with CONFIG_ERROR and issues no request', async () => {
+    // registry staleCheck for rack_storages.delete is "unavailable"; the shared delete path cannot honour the guard,
+    // so it refuses instead of silently ignoring it.
     const spy = stubFetch(() => empty(204));
-    expect(await makeClient().rackStorages.delete(7, { expectedUpdatedAt: RACK.updated_at })).toBeUndefined();
-    expect(spy.calls).toHaveLength(1);
-    expect(spy.calls[0]?.init.method).toBe('DELETE');
+    const err = await rejection(makeClient().rackStorages.delete(7, { expectedUpdatedAt: '2026-01-01T00:00:00Z' }));
+    expect(err).toBeInstanceOf(HuduConfigError);
+    expect(err.code).toBe('CONFIG_ERROR');
+    expect(err.category).toBe('validation');
+    expect(spy.calls).toHaveLength(0);
   });
 
   it('issues the write when the expectedUpdatedAt revision still matches', async () => {
