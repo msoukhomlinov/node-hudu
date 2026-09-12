@@ -314,6 +314,55 @@ function exampleFor(row, method, resource) {
   }).filter((a) => a !== undefined);
   return `await hudu.${resource}.${method.name}(${args.join(', ')})`;
 }
+// Split a union type on TOP-LEVEL '|' only — nested <>, (), [], {} are respected, so
+// `Resolution<A | B>` stays one member. The mandated helper pattern is an overload set whose
+// IMPLEMENTATION signature returns the union of the public returns (TS 2394 forbids a narrower
+// implementation return type), so the compact shape's `drops` must be derived from the union's
+// full-record member, not from the raw union text.
+function splitTopLevel(typeText, sep = '|') {
+  const parts = [];
+  let depth = 0;
+  let current = '';
+  for (const ch of typeText) {
+    if ('<([{'.includes(ch)) depth += 1;
+    else if ('>)]}'.includes(ch)) depth -= 1;
+    if (ch === sep && depth === 0) { parts.push(current); current = ''; continue; }
+    current += ch;
+  }
+  parts.push(current);
+  return parts.map((x) => x.trim()).filter(Boolean);
+}
+function unwrapArrayMember(member) {
+  const t = member.trim();
+  if (t.endsWith('[]')) return t.slice(0, -2).trim();
+  const arr = /^Array<(.+)>$/.exec(t);
+  if (arr) return arr[1].trim();
+  return t;
+}
+function isResolutionMember(member) { return /^Resolution<.+>$/.test(member.trim()); }
+
+// Pick the full-record member of a union return type for a compact-shape helper:
+//   1. skip null/undefined and the Resolution<...> (resolutionDetails) member,
+//   2. resolve the remaining members,
+//   3. prefer the tightest STRICT superset of the compact shape's fields (the full record),
+//   4. if only the compact shape itself resolves, keep it — `drops: []` is then the correct,
+//      honest answer (the compact shape keeps every field, e.g. `type ExportSummary = Export`).
+function pickFullMember(returnType, compactProps, compactName) {
+  const candidates = [];
+  for (const member of splitTopLevel(returnType)) {
+    const m = unwrapArrayMember(member);
+    if (m === 'null' || m === 'undefined' || m === 'void') continue;
+    if (isResolutionMember(m)) continue;
+    const props = resolveProps(m);
+    if (!props) continue;
+    candidates.push({ name: m, props: props.map((x) => x.name) });
+  }
+  if (!compactProps) return candidates.length === 1 ? candidates[0] : null;
+  const supersets = candidates.filter((c) => c.name !== compactName && compactProps.every((n) => c.props.includes(n)));
+  if (supersets.length) return supersets.reduce((a, b) => (a.props.length <= b.props.length ? a : b));
+  return candidates.length === 1 ? candidates[0] : null;
+}
+
 function outputSchema(row, method) {
   const rt = method ? method.returnType : 'unknown';
   if (!method) return { type: rt, unresolved: true };
@@ -325,20 +374,20 @@ function outputSchema(row, method) {
   if (row.compact) {
     const compactName = String(row.compact);
     const compactProps = resolveProps(compactName) ? resolveProps(compactName).map((p) => p.name) : null;
-    const fullProps = resolveProps(rt) ? resolveProps(rt).map((p) => p.name) : null;
-    let drops = [];
-    let dropsUnresolved = false;
-    if (compactProps && fullProps) {
-      drops = fullProps.filter((n) => !compactProps.includes(n));
-    } else {
-      dropsUnresolved = true;
-    }
+    const full = pickFullMember(rt, compactProps, compactName);
+    const fullProps = full ? full.props : null;
+    // drops is (fields of the full record type) minus (fields of the compact shape). An empty
+    // drops array is the correct answer when the compact shape keeps every field; dropsUnresolved
+    // stays true only when the full record type cannot be resolved at all, so the checker fails
+    // loudly instead of the registry lying.
+    const drops = compactProps && fullProps ? fullProps.filter((n) => !compactProps.includes(n)) : [];
+    const dropsUnresolved = !(compactProps && fullProps);
     return {
       type: compactName,
       drops,
       dropsUnresolved,
       fields: compactProps ? fieldsForType(compactName) : null,
-      fullType: rt,
+      fullType: full ? full.name : rt,
       expand: 'expand: true returns the full typed record',
     };
   }
@@ -580,6 +629,8 @@ writeJson(path.join(OUT_DIR, 'capabilities.schema.json'), schemaDoc);
 console.log(`capabilities:build — plan ${path.relative(ROOT, PLAN_PATH)} planHash=${planHash}`);
 console.log(`capabilities:build — spec ${plan.spec ? plan.spec.source + ' v' + plan.spec.version : 'unknown'}; rows=${operations.length}; records emitted=${records.length}`);
 console.log(`capabilities:build — wrote ${WRITE_SRC ? 'src/capabilities.ts, ' : ''}${path.relative(ROOT, path.join(OUT_DIR, 'capabilities.json'))}, ${path.relative(ROOT, path.join(OUT_DIR, 'capabilities.schema.json'))}`);
+const unresolvedDrops = records.filter((r) => r.outputSchema && r.outputSchema.dropsUnresolved === true);
+console.log(`capabilities:build — records with dropsUnresolved=true: ${unresolvedDrops.length}${unresolvedDrops.length ? ' (' + unresolvedDrops.map((r) => r.name).join(', ') + ')' : ''}`);
 if (gaps.length) {
   console.log(`coverage gaps (${gaps.length}) — no registry record emitted:`);
   for (const g of gaps) console.log('  - ' + g);

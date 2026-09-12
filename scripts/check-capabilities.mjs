@@ -21,7 +21,9 @@
 //   helper-rationale         a helper has no helperRationale
 //   helper-tests             a helper has no test rows
 //   helper-usage             a helper has no usage guidance
-//   helper-compact-drops     a helper returning a compact shape does not name the dropped fields
+//   helper-compact-drops     a helper returning a compact shape is unresolved (`dropsUnresolved`)
+//                            or carries no drops array; a record whose `compact` is null must
+//                            make no drops claim at all. `drops: []` is valid (compact keeps all)
 //   preferredWhen            an operation with a sibling reaching the same outcome has no
 //                            preferredWhen. Sibling definition used here (documented, mechanical):
 //                            two rows in the same resource with the same normalised endpoint
@@ -346,11 +348,16 @@ if (registry) {
     if (!Array.isArray(rec.examples) || rec.examples.length === 0) fail('record-examples', `CAPABILITY_REGISTRY['${name}'].examples`, 'every operation has at least one realistic call');
     if (typeof rec.permissions !== 'string' || rec.permissions.length === 0) fail('record-permissions', `CAPABILITY_REGISTRY['${name}'].permissions`, 'permissions is missing or empty — the literal "unknown" is acceptable, an absent field is not');
     if (rec.purpose === null) warn('record-purpose', `CAPABILITY_REGISTRY['${name}'].purpose`, 'purpose is null (Architect judgement column unfilled)');
+    const outSchema = rec.outputSchema && typeof rec.outputSchema === 'object' ? rec.outputSchema : {};
+    const claimsDrops = 'drops' in outSchema || 'dropsUnresolved' in outSchema;
     if (rec.compact) {
-      const drops = rec.outputSchema ? rec.outputSchema.drops : undefined;
-      if (!Array.isArray(drops) || drops.length === 0) {
-        fail('helper-compact-drops', `CAPABILITY_REGISTRY['${name}'].outputSchema.drops`, `compact shape "${rec.compact}" must name the fields it drops${rec.outputSchema?.dropsUnresolved ? ' (the compact type is not declared in src/types, so drops could not be derived)' : ''}`);
+      if (outSchema.dropsUnresolved === true) {
+        fail('helper-compact-drops', `CAPABILITY_REGISTRY['${name}'].outputSchema.dropsUnresolved`, `compact shape "${rec.compact}" is declared but the full record type could not be resolved — drops cannot be named honestly`);
+      } else if (!Array.isArray(outSchema.drops)) {
+        fail('helper-compact-drops', `CAPABILITY_REGISTRY['${name}'].outputSchema.drops`, `compact shape "${rec.compact}" must carry a drops array (an empty array is valid when the compact shape keeps every field)`);
       }
+    } else if (claimsDrops) {
+      fail('helper-compact-drops', `CAPABILITY_REGISTRY['${name}'].outputSchema`, 'compact is null but the record carries a drops claim — a record without a compact shape makes no drops claim');
     }
   }
 }
