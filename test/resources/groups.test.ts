@@ -290,3 +290,20 @@ describe('GroupSummary projection pins the declared interface', () => {
     for (const key of declared) expect(projected[key], key).toEqual(SENTINEL[key]);
   });
 });
+
+describe('GroupsResource search overload call shapes', () => {
+  afterEach(() => clearFetch());
+
+  it('accepts the loose option bag and the narrow expand form', async () => {
+    // Compile-shape pin: loose `{ limit }` and narrow `{ expand: true }` must both
+    // typecheck against the PUBLIC overloads.
+    const client = makeClient();
+    stubFetch(() => json([group()]));
+    const loose = await client.groups.search('eng', { limit: 5 });
+    const expanded = await client.groups.search('eng', { expand: true });
+    const both = await client.groups.search('eng', { limit: 5, expand: true });
+    expect(loose[0]).not.toHaveProperty('members');
+    expect(expanded[0]).toHaveProperty('members');
+    expect(both[0]).toHaveProperty('members');
+  });
+});

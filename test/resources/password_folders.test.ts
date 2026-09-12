@@ -396,3 +396,20 @@ describe('PasswordFolderSummary projection pins the declared interface', () => {
     for (const key of declared) expect(projected[key], key).toEqual(SENTINEL[key]);
   });
 });
+
+describe('PasswordFoldersResource search overload call shapes', () => {
+  afterEach(() => clearFetch());
+
+  it('accepts the loose option bag and the narrow expand form', async () => {
+    // Compile-shape pin: loose `{ limit, company_id }` and narrow `{ expand: true }` must
+    // both typecheck against the PUBLIC overloads.
+    const client = makeClient();
+    stubFetch(() => json({ password_folders: [passwordFolder()] }));
+    const loose = await client.passwordFolders.search('prod', { limit: 5, company_id: 42 });
+    const expanded = await client.passwordFolders.search('prod', { expand: true });
+    const both = await client.passwordFolders.search('prod', { limit: 5, expand: true });
+    expect(loose[0]).not.toHaveProperty('allowed_groups');
+    expect(expanded[0]).toHaveProperty('allowed_groups');
+    expect(both[0]).toHaveProperty('allowed_groups');
+  });
+});

@@ -111,3 +111,35 @@ test/resources/{websites,folders,password_folders,groups,asset_layouts}.test.ts`
 Plan titles for all 5 resource files: 94/94 present, 0 missing. Coverage: my 4 resource files 100 %
 stmts/branch/func; `asset_layouts.ts` 99.1 % stmts (the single uncovered statement is its pre-existing
 100 000-page runaway guard), 100 % branch/func.
+
+## Additive typing fix — search overloads (reported by the operations implementer)
+
+`websites.search`, `password_folders.search` and `groups.search` had only ONE declaration line
+with a body after the narrow `{ expand: true }` overload — so the loose option bag existed only as the
+(consumer-invisible) implementation signature and `search('acme', { limit: 5 })` did not typecheck.
+
+Fix (declarations only; no behaviour change): each of the three now declares a PUBLIC loose overload
+immediately before the implementation signature, in the exact shape used by `companies.ts` /
+`articles.ts`:
+
+    async search(query: string, opts: { expand: true; limit?: number }): Promise<Website[]>;   // narrow, keeps its precise type
+    async search(query: string, opts?: WebsiteSearchOptions): Promise<WebsiteSummary[] | Website[]>;  // public loose
+    async search(query: string, opts?: WebsiteSearchOptions): Promise<WebsiteSummary[] | Website[]> { ... }
+
+New named option types: `WebsiteSearchOptions`, `PasswordFolderSearchOptions` (adds `company_id`),
+`GroupSearchOptions` — each documented, each exposing only what the helper honours (`limit`, `expand`;
+`resolutionDetails` and stale guards are deliberately absent from a list-shaped helper).
+`websites.resolve`/`findBySlug`, `folders.resolve`, `password_folders.resolve` and `groups.resolve`
+already had a public loose `HelperOptions` overload, so no other helper needed a change.
+
+Pin: one test per search helper calls the loose forms (`{ limit: 5 }`, `{ limit: 5, company_id: 42 }`),
+the narrow form (`{ expand: true }`) and the combined form (`{ limit: 5, expand: true }`), asserting the
+compact-vs-expanded result. Because the repo's `tsconfig.json` excludes `test/`, a test-file type error is
+not caught by `npx tsc --noEmit`; the call shapes were therefore ALSO verified with an explicit ad-hoc
+type check of the same calls against the public surface:
+
+    npx tsc --noEmit --strict --skipLibCheck --target ES2022 --lib ES2022 --module NodeNext \
+      --moduleResolution NodeNext --types node /tmp/hudu-overload-pin.ts     # exit 0
+
+Results: `npx tsc --noEmit` 0 · `npx eslint <my 9 src + 4 test files>` 0 · `npx vitest run
+test/resources/{websites,folders,password_folders,groups}.test.ts` 0 — 4 files, 123 tests.

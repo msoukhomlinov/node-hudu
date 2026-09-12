@@ -24,6 +24,20 @@ export interface PasswordFoldersListParams extends ListParams {
   search?: string;
 }
 
+/**
+ * Options of `password_folders.search`. A search returns a LIST, so it accepts neither
+ * `resolutionDetails` nor a stale guard: `limit`, `expand` and the vendor `company_id`
+ * scope only, and each is honoured.
+ */
+export interface PasswordFolderSearchOptions {
+  /** Maximum rows returned; default 25, hard maximum 100. */
+  limit?: number;
+  /** Return the full records instead of the compact summaries. */
+  expand?: boolean;
+  /** Narrow the vendor `search` with the vendor `company_id` filter. */
+  company_id?: number;
+}
+
 /** Rows a list-shaped helper returns when the caller does not say. */
 const DEFAULT_LIMIT = 25;
 /** Hard maximum rows a helper returns; above it the SDK refuses instead of clamping. */
@@ -224,11 +238,11 @@ export class PasswordFoldersResource extends BaseResource<PasswordFolder> {
    * with `company_id`. `limit` defaults to 25 and never exceeds 100.
    */
   async search(query: string): Promise<PasswordFolderSummary[]>;
+  /** `expand: true` returns the full records. */
   async search(query: string, opts: { expand: true; limit?: number; company_id?: number }): Promise<PasswordFolder[]>;
-  async search(
-    query: string,
-    opts?: { limit?: number; expand?: boolean; company_id?: number },
-  ): Promise<PasswordFolder[] | PasswordFolderSummary[]> {
+  /** The caller-facing loose form: `limit` bounds the rows, `company_id` narrows, `expand` returns full records. */
+  async search(query: string, opts?: PasswordFolderSearchOptions): Promise<PasswordFolderSummary[] | PasswordFolder[]>;
+  async search(query: string, opts?: PasswordFolderSearchOptions): Promise<PasswordFolderSummary[] | PasswordFolder[]> {
     const limit = helperLimit(opts?.limit, 'password_folders.search');
     const params: PasswordFoldersListParams = { search: query };
     if (opts?.company_id !== undefined) params.company_id = opts.company_id;

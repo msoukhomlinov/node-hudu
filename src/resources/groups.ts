@@ -14,6 +14,17 @@ export interface GroupsListParams extends ListParams {
   search?: string;
 }
 
+/**
+ * Options of `groups.search`. A search returns a LIST, so it accepts neither
+ * `resolutionDetails` nor a stale guard: only `limit` and `expand`, and both are honoured.
+ */
+export interface GroupSearchOptions {
+  /** Maximum rows returned; default 25, hard maximum 100. */
+  limit?: number;
+  /** Return the full records instead of the compact summaries. */
+  expand?: boolean;
+}
+
 /** Rows a list-shaped helper returns when the caller does not say. */
 const DEFAULT_LIMIT = 25;
 /** Hard maximum rows a helper returns; above it the SDK refuses instead of clamping. */
@@ -169,8 +180,11 @@ export class GroupsResource extends BaseResource<Group> {
 
   /** Search groups by name (vendor `search` filter). `limit` defaults to 25, max 100. */
   async search(query: string): Promise<GroupSummary[]>;
+  /** `expand: true` returns the full records. */
   async search(query: string, opts: { expand: true; limit?: number }): Promise<Group[]>;
-  async search(query: string, opts?: HelperOptions): Promise<Group[] | GroupSummary[]> {
+  /** The caller-facing loose form: `limit` bounds the rows, `expand` returns full records. */
+  async search(query: string, opts?: GroupSearchOptions): Promise<GroupSummary[] | Group[]>;
+  async search(query: string, opts?: GroupSearchOptions): Promise<GroupSummary[] | Group[]> {
     const limit = helperLimit(opts?.limit, 'groups.search');
     const page = await this.pageFetcher({ search: query })(1, limit);
     const items = page.items.slice(0, limit);

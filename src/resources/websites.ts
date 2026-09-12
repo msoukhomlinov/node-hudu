@@ -20,6 +20,18 @@ export interface WebsitesListParams extends ListParams {
   updated_at?: string;
 }
 
+/**
+ * Options of `websites.search`. A search returns a LIST, so it accepts neither
+ * `resolutionDetails` (a `Resolution<T>` wrapper is meaningless for a list) nor a stale
+ * guard: only `limit` and `expand`, and both are honoured.
+ */
+export interface WebsiteSearchOptions {
+  /** Maximum rows returned; default 25, hard maximum 100. */
+  limit?: number;
+  /** Return the full records instead of the compact summaries. */
+  expand?: boolean;
+}
+
 /** Rows a list-shaped helper returns when the caller does not say. */
 const DEFAULT_LIMIT = 25;
 /** Hard maximum rows a helper returns; above it the SDK refuses instead of clamping. */
@@ -240,8 +252,11 @@ export class WebsitesResource extends BaseResource<Website> {
 
   /** Search monitored websites by free text (vendor `search` filter). `limit` defaults to 25, max 100. */
   async search(query: string): Promise<WebsiteSummary[]>;
+  /** `expand: true` returns the full records. */
   async search(query: string, opts: { expand: true; limit?: number }): Promise<Website[]>;
-  async search(query: string, opts?: HelperOptions): Promise<Website[] | WebsiteSummary[]> {
+  /** The caller-facing loose form: `limit` bounds the rows, `expand` returns full records. */
+  async search(query: string, opts?: WebsiteSearchOptions): Promise<WebsiteSummary[] | Website[]>;
+  async search(query: string, opts?: WebsiteSearchOptions): Promise<WebsiteSummary[] | Website[]> {
     const limit = helperLimit(opts?.limit, 'websites.search');
     const page = await this.pageFetcher({ search: query })(1, limit);
     const items = page.items.slice(0, limit);

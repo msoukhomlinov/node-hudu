@@ -477,3 +477,23 @@ describe('WebsitesResource projection pins the declared interface', () => {
     }
   });
 });
+
+describe('WebsitesResource search overload call shapes', () => {
+  afterEach(() => clearFetch());
+
+  it('accepts the loose option bag and the narrow expand form', async () => {
+    // Compile-shape pin: the public overloads must accept a loose `{ limit }` bag AND the
+    // narrow `{ expand: true }` form, and the loose overload must be PUBLIC (not only the
+    // implementation signature) or these calls do not typecheck.
+    const client = makeClient();
+    stubFetch(() => json([website()]));
+    const loose = await client.websites.search('acme', { limit: 5 });
+    const expanded = await client.websites.search('acme', { expand: true });
+    const both = await client.websites.search('acme', { limit: 5, expand: true });
+    const plain = await client.websites.search('acme');
+    expect(loose[0]).not.toHaveProperty('headers');
+    expect(expanded[0]).toHaveProperty('headers');
+    expect(both[0]).toHaveProperty('headers');
+    expect(plain).toHaveLength(1);
+  });
+});

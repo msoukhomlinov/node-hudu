@@ -900,3 +900,41 @@ export const NoopLogger: Logger = {};
 - No zod generation or runtime schema validation inside the SDK.
 - No auto-generated code from the spec at build time (types are hand-written from
   `api-docs.json` to stay stable and readable).
+
+---
+
+## Agent execution layer (0.3.0)
+
+This SDK is also a deterministic execution layer for agents. The rules live in one place and the
+machine-readable surface is generated, never hand-written:
+
+| Artifact | Role |
+|----------|------|
+| `capabilities.plan.json` | **The authored source of record** — one row per operation (`endpoint`, `primitive`, `helper`, `effect`, `flags`, `dryRun`, `metadata`, `compact`, `resolution`, `staleCheck`, `redaction`, `errors`, `tests`, `group`, `status`). Judgement columns are human/Architect decisions; the rest is derived. |
+| `src/capabilities.ts` | The **generated runtime registry** (`node-hudu/capabilities`), one record per implemented operation, zero imports. |
+| `capabilities.json`, `capabilities.schema.json` | The emitted **data + JSON Schema** at the package root, for non-TypeScript consumers. Pin-checked by `planHash`. |
+| `MCP_TOOL_MANIFEST.md` | The **mechanical MCP projection** of the registry; curation deltas are recorded in `MCP_TOOL_OVERRIDES.json`. |
+| `scripts/*.mjs` | `plan:derive`, `capabilities:build`, `capabilities:check` (the gate), `mcp:project`, `public-surface`. |
+
+**The envelope/capability table above stays the contract for how responses are unwrapped** (singleKey,
+listKey, createType, PUT-unwraps-by-singleKey, paginated, void deletes). Everything else about an
+operation — its effect and flags, whether it can be dry-run, how it resolves, which errors it raises,
+what its helpers return and what they drop — is in the capability matrix, because that is what both a
+consumer and a tool generator need to read programmatically.
+
+**Helper floor.** `resolve` on every record-bearing resource; `findBy<Field>` where the vendor filters and
+callers look up by it; `search` where text search exists; `getContext` on the three workflow resources
+(`companies`, `assets`, `articles`); plus the cross-resource helpers in `src/operations/`. Primitives stay
+complete: adding a helper never shrinks the primitive surface, and no primitive returns a compact shape.
+
+**The gate.** `npm run capabilities:check` fails on drift between the plan, the registry and the code, on a
+missing helper, on an unanswered metadata column, on a mutation without a dry-run or a stale-check answer,
+on a dangling `related` target, on an unproven helper scan cap, on a stale emitted JSON, and on a stale MCP
+manifest. `--group A|B|C|D` scopes it to a batch; `--ship` requires every row to be `tested`. The checker
+itself ships with a committed negative fixture (`test/fixtures/capabilities.plan.drifted.json`) that must
+make it exit non-zero — a checker that has never failed is an untested checker.
+
+**Additive-only proof.** `test/public-surface.test.ts` compares the live exported surface (root exports,
+the types barrel, every resource method, every error code) against `test/__fixtures__/public-surface.json`,
+which was captured from the 0.2.1 baseline ref. Removing any baseline name fails the suite; additions are
+reported, not failed.

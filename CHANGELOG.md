@@ -5,106 +5,80 @@ All notable changes to **node-hudu** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.1] — 2026-09-12
+## [0.3.0] — 2026-09-13
 
-### Changed
+**The SDK is now a deterministic execution layer for agents, and still a conventional typed client.**
+Everything here is additive: no existing method changed its signature or return shape, and no existing
+error code changed meaning. `test/public-surface.test.ts` proves that against the 0.2.1 baseline.
 
-- **Reference spec refreshed to Hudu API 2.45.1.** `api-docs.json` now matches
-  `api-docs-v2.45.1.json` (same 82 paths; the only semantic delta is activity-log
-  filtering — `resource_type` is now a standalone server-side filter and
-  `resource_id` narrows within it). The SDK forwards list params to the API as-is,
-  so no code changes were required; the 2.45.1 behaviour applies automatically.
+### Added — helper tier (every resource)
 
-## [0.2.0] — 2026-08-11
+- **`resolve(identifier)`** on all 35 resources (34 record-bearing resources and `api_info`, whose
+  singleton is a documented degenerate case; `s3_exports` is write-only so it has no helpers at all).
+  An `{ id }` miss throws `NOT_FOUND`; `null` means a *complete* scan found nothing; a scan stopped by
+  its cap throws `RESOLUTION_TRUNCATED`; several exact matches throw `RESOLUTION_AMBIGUOUS` with the
+  candidate ids. Pass `{ resolutionDetails: true }` for a `Resolution<T>` with `resolutionCost`,
+  `scanned` and `scanTruncated`.
+- **`findBy<Field>()`** where Hudu actually filters on the field and callers look up by it
+  (`findByDomain`, `findBySlug`, `findBySerial`, `findByAddress`, `findByVlanId`, `findByEmail`, …).
+- **`search(query, { limit })`** where Hudu exposes text search. `limit` defaults to 25 and throws above 100.
+- **`getContext(id)`** on the three workflow resources (`companies`, `assets`, `articles`) — the record
+  plus its related records, each sub-list bounded.
+- **Cross-resource helpers** in `node-hudu/operations`: `searchAcrossResources(query, { resources, limit })`
+  and `resolveAny(identifier)`. Both fan out at a bounded concurrency (default 4) and never call `listAll`.
+  Also reachable as `hudu.operations.*`.
+- **Compact shapes** (`CompanySummary`, `AssetSummary`, …) returned by helpers by default, with an
+  `expand: true` escape hatch. Primitives still return the full record, and each summary declares exactly
+  which fields it drops in the capability registry.
 
-### Changed — MCP v2 alignment
+### Added — capability registry
 
-- **MCP example upgraded to official SDK v2** (`@modelcontextprotocol/server` instead of
-  legacy `@modelcontextprotocol/sdk`).
-- **Zod v4** in the MCP example (`import * as z from 'zod/v4'`).
-- **Structured output**: tools return `structuredContent` with typed `outputSchema`
-  alongside `content` for MCP spec compliance.
-- **Tool annotations**: `readOnlyHint` and `idempotentHint` declared per tool so MCP clients
-  can enforce safety policies.
-- **Search-first naming**: `hudu_search_companies`, `hudu_search_articles`,
-  `hudu_search_asset_layouts` (was `hudu_list_*`) — aligns with MCP v2 guidance that
-  search/list tools use bounded results.
-- **Bounded pagination**: search tools fetch a single page with `page_size=limit` via
-  `listPages()` instead of exhausting all pages, respecting the advertised bounded-search
-  behavior. `hudu_search_asset_layouts` iterates pages until `limit` is collected (the
-  upstream endpoint does not support `page_size`).
-- **Server metadata**: `title` and `websiteUrl` fields set for better client discovery.
-- **`serveStdio` factory pattern**: uses the v2-recommended `serveStdio(() => server)`
-  instead of `server.connect(transport)`.
+- **`capabilities.plan.json`** (authored) → **`src/capabilities.ts`** (generated) →
+  **`capabilities.json`** + **`capabilities.schema.json`** (emitted at the package root).
+  One record per operation: purpose, input/output schema, examples, `effect`, flags, `dryRun`,
+  `permissions`, `pagination`, `resolution`, `retry`, `errors`, `related`, `preferredWhen`, `usage`.
+  Import it from `node-hudu/capabilities`.
+- **`MCP_TOOL_MANIFEST.md`** projected from the registry, curated through `MCP_TOOL_OVERRIDES.json`:
+  search-first tool names, bounded results, helper-tier backing for reads, a single dry-run affordance on
+  every mutation, and no binary or download tools.
 
-**Note:** MCP SDK v2 requires Node >= 20. The SDK itself continues to support Node >= 18.
+### Added — mutation safety
 
-See [`examples/mcp-server.ts`](examples/mcp-server.ts) for the complete working example.
+- **`{ dryRun: true }` on every mutation** (create, update, delete, archive, unarchive, the special
+  writers, and the three bulk operations). A dry run performs its checks and **cannot issue the write**;
+  it returns a `DryRunResult<T>` with `simulated: true`, a request description, the checks it ran, a
+  best-effort `diff`, and an impact statement `{ affected, scope, reversible, exact? }`.
+  `exact: false` marks a floor rather than a final count, and `reversible` is only ever `true` where the
+  API really offers an undo path.
+- **Classification on every operation**: `effect` (`read`/`write`/`destructive`) plus
+  `sensitive`, `idempotent` and `requiresApproval` where they apply. Bulk deletes refuse to run
+  unconfirmed (`POLICY_DENIED`) and declare their impact bound.
+- **Stale-object guard**: pass `{ expectedUpdatedAt }` to a resource `update()` and a changed record
+  raises `STALE_OBJECT` before anything is written. Creates and deletes refuse the option rather than
+  ignoring it.
+- **Audit hook**: an optional `onAudit(event)` receives one event per request with the correlation id,
+  the operation, the effect, the outcome and the impact. One `redact()` helper removes credential-shaped
+  fields from what you log; returned data is never silently redacted.
 
-## [0.1.0] — 2026-08-10
+### Added — structured errors
 
-### Added — Initial release
+- Every error carries `code`, `category`, `operation`, `retryable`, `httpStatus`, `vendorError`,
+  `resourceIds`, `suggestedAction` and `correlationId`, so a caller can decide without parsing strings.
+  `status` remains as a deprecated alias of `httpStatus`. New classes: `ConflictError`,
+  `StaleObjectError`, `ResolutionError`, `PolicyDeniedError`, `ValidationFailedError`, `DuplicateFoundError`.
 
-- **Fully-typed TypeScript SDK** for the Hudu IT documentation API with **zero runtime
-  dependencies** (native `fetch`, `FormData`, `URLSearchParams`, `AbortSignal` on Node ≥ 18).
-- **One client facade**
+### Added — tooling
 
-```ts
-const hudu = new HuduClient({ baseUrl, apiKey });
-```
+- `npm run plan:derive` (spec + source tree → the capability plan), `npm run capabilities:build`
+  (plan → registry + emitted JSON), `npm run capabilities:check` (the drift/coverage/metadata gate,
+  with `--group`, `--ship` and `--plan`), `npm run mcp:project` (registry → MCP manifest), and
+  `npm run public-surface` (capture the exported surface).
+- `capabilities.plan.json` is the single authored source; the registry, the JSON, the schema and the MCP
+  manifest are generated. A committed negative fixture proves the gate actually fails.
 
-- **All 35 resource clients**, each exposing typed CRUD plus Hudu's special operations:
+### Notes
 
-| Resource | Reads | Writes / special ops |
-|----------|-------|----------------------|
-| companies | get, list, listPages, listAll | create, update, delete, archive, unarchive |
-| articles | get, list, listPages, listAll | create, update, delete, archive, unarchive |
-| asset_layouts | get, list, listPages, listAll | create, update (no delete) |
-| asset_passwords | get, list, listPages, listAll | create, update, delete, archive, unarchive |
-| assets | get, list, listPages, listAll, listAllAcrossCompanies | create, update, delete, archive, unarchive, moveLayout |
-| expirations | list, listPages, listAll | update, delete (no get/create) |
-| exports | list, listPages, listAll, get | create (initiate), get(download) |
-| flag_types | get, list, listPages, listAll | create, update, delete |
-| flags | get, list, listPages, listAll | create, update, delete |
-| folders | get, list, listPages, listAll | create, update, delete |
-| groups | get, list, listPages, listAll | read-only |
-| ip_addresses | get, list, listPages, listAll | create, update, delete |
-| label_types | get, list, listPages, listAll | create, update, delete |
-| labels | get, list, listPages, listAll | create, update, delete |
-| lists | get, list, listPages, listAll | create, update, delete |
-| magic_dash | list, listPages, listAll | create, delete, deleteById, updatePositions |
-| matchers | list, listPages, listAll | update, delete (no get/create) |
-| networks | get, list, listPages, listAll | create, update, delete |
-| password_folders | get, list, listPages, listAll | create, update, delete |
-| photos | get, list, listPages, listAll | create (multipart), update, delete, get(download) |
-| procedure_tasks | get, list, listPages, listAll | create, update, delete |
-| procedures | get, list, listPages, listAll | create, update, delete, duplicate, createFromTemplate, kickoff |
-| public_photos | get, list, listPages, listAll | create/update (multipart), no delete |
-| rack_storage_items | get, list, listPages, listAll | create, update, delete |
-| rack_storages | get, list, listPages, listAll | create, update, delete |
-| relations | list, listPages, listAll | create, delete (no get/update) |
-| s3_exports | — | create (initiate) |
-| uploads | list, listPages, listAll, get | upload (multipart), delete, get(download) |
-| users | get, list, listPages, listAll | read-only |
-| vlan_zones | get, list, listPages, listAll | create, update, delete |
-| vlans | get, list, listPages, listAll | create, update, delete |
-| websites | get, list, listPages, listAll | create, update, delete |
-| api_info | get | — |
-| activity_logs | list, listPages, listAll | deleteAll |
-| cards | lookup, jump | — |
-
-- **MCP-ready reads**: every list method exposes `list()`, `listPages()`, and `listAll()`;
-  `listAll()` returns a plain `T[]` in a single call and is the recommended MCP read.
-- **Plain typed data** everywhere — no wrappers, no `this`, results feed directly into zod
-  output schemas, MCP tools, or ETL.
-- **Typed error hierarchy** (`HuduError` + `HuduConfigError`, `HuduNetworkError`,
-  `BadRequestError`, `UnauthorizedError`, `ForbiddenError`, `NotFoundError`,
-  `MethodNotAllowedError`, `NotAcceptableError`, `UnprocessableEntityError`,
-  `RateLimitError`, `ServerError`) with machine-readable `code` values.
-- **Retries** with exponential backoff on `429`/`5xx` (idempotent `GET`/`PUT`/`DELETE`
-  only, honouring `Retry-After`; `POST` never retried).
-- **Config validation** (`HuduClient`) and an **optional client-side token-bucket rate
-  limiter** for bursty MCP servers.
-- **Dual ESM + CJS** build (`dist/index.js` / `dist/index.cjs`) with full `.d.ts` types, and
-  optional deep-import subpaths (`node-hudu/resources`, `node-hudu/types`,
-  `node-hudu/errors`).
+- Zero runtime dependencies; Node >= 18; dual ESM + CJS; the existing subpaths are unchanged and
+  `./capabilities` and `./operations` are new.
+- `ARCHITECTURE.md` gained the agent-execution-layer section that points at the capability matrix;
+  `docs/API.md` gained a generated appendix of every operation the registry knows about.
