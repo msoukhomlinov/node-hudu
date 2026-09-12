@@ -1,16 +1,121 @@
 # MORNING REPORT — node-hudu agent-execution-layer backfill
 
-**Run:** `node-hudu-backfill-20260912` · **Branch:** `feat/agent-execution-layer` · **Baseline:** `main` @ `9332efe` (0.2.1) · **Target:** 0.3.0 (minor, additive)
-**Written:** 2026-09-13T01:46:15.215873+10:00 · **Status of this file:** drafted mid-run; the Finalise step rewrites the TL;DR and the ledger.
+**Run:** `node-hudu-backfill-20260912` · **Branch:** `feat/agent-execution-layer` @ `0cef6c9` (41 commits, tree CLEAN) · **Baseline:** `main` @ `9332efe` (0.2.1) · **Target:** 0.3.0 (minor, additive)
+**Finished:** 2026-09-13T02:26+10:00 (started 2026-09-12T23:07), inside the 06:30 stopBy. The heartbeat is paused.
 
 ## 1. TL;DR
 
-1. **Done:** the whole retrofit is implemented, tested and gated. 225 plan rows (158 primitives + 67 helpers incl. 2 cross-resource) all reach `tested`; `capabilities:check --ship` PASSES; the full suite is green with coverage above the frozen thresholds; the package builds, packs and imports from ESM and CJS in a clean directory.
-2. **In review right now:** the final five-lens QA pass (4 lenses running, the packaging lens waits on the MCP curation); one MCP-surface de-duplication is in flight.
-3. **What to do first in the morning:** read §4 (QA) and §6 (autonomous decisions), then run `npm run typecheck && npm run lint && npm test && npm run capabilities:check -- --ship` on the branch head and open the PR (§8 has the literal command).
+1. **Done and ready for review on the branch.** The SDK is a deterministic execution layer for agents and still a conventional typed client: 225 plan rows (158 primitives + 67 helpers, including 2 cross-resource ones) all reach `tested`; every gate is green; nothing was pushed and `main` was never touched.
+2. **Nothing is blocked.** Every QA finding from five independent lenses is fixed or accepted in writing with a reversal recipe (sections 4 and 6).
+3. **Do this first:** read section 6, then open the PR with the command in section 8. The one thing no agent could do is a live-vendor smoke test (no credentials on this machine).
 
-## 2. Commits (30 on the branch, none on `main`, nothing pushed)
+## 2. Final gate results (frozen head `0cef6c9`)
 
+| Gate | Result |
+|---|---|
+| `npx tsc --noEmit` | exit 0 |
+| `npm run lint` | exit 0 |
+| `npm test` | **49 files, 1524 tests, all pass** |
+| `npm test -- --coverage` | **99.65 lines / 99.89 functions / 92.49 branches / 99.28 statements** vs the unchanged thresholds 97/94/83/97 (`vitest.config.ts` byte-identical to `main`) |
+| `node scripts/check-capabilities.mjs` | PASS — 0 failures, 225 rows, 225 registry records, 66 warnings |
+| `--group A`, `--group B`, `--group C`, `--group D`, `--group operations` | each PASS |
+| `--ship` | PASS — no row left `planned` or `implemented` |
+| negative fixture (`--plan test/fixtures/capabilities.plan.drifted.json`) | exit 1, by design (a checker that has never failed is an untested checker) |
+| `npm run verify:pack` | **33 checks, SHIPPABLE** — every declared entry point exists inside the tarball, the packed dist registry agrees with `capabilities.json`, and the installed tarball imports from ESM and CJS |
+| `test/public-surface.test.ts` | passes — the additive-only proof against the 0.2.1 baseline (69 value exports, star barrels, 35 classes, 11 error codes) |
+
+## 3. Per group
+
+| Group | Rows | implement / tests / QA / fix |
+|---|---|---|
+| A — primary nouns (companies, articles, assets, asset_layouts, asset_passwords, websites, folders, password_folders, groups) | 77 | done / done / done / done |
+| B — infrastructure (networks, vlans, vlan_zones, ip_addresses, rack_storages, rack_storage_items, relations, flags, flag_types) | 57 | done / done / done / done |
+| C — operations and workflow (procedures, procedure_tasks, cards, activity_logs, expirations, matchers, magic_dash, api_info) | 44 | done / done / done / done |
+| D — attachments and rest (uploads, photos, public_photos, exports, s3_exports, lists, label_types, labels, users) | 47 | done / done / done / done |
+| operations (`searchAcrossResources`, `resolveAny`) | 2 | done / done / done / — |
+
+All 158 spec operations map 1:1 to a primitive row. `s3_exports` is write-only and has no helpers (documented, SCOPING decision 14).
+
+## 4. QA — five independent lenses, then a final pass
+
+| Lens | Verdict | Worst finding | Outcome |
+|---|---|---|---|
+| `qa-safety` (**cross-model: claude-sonnet**) | 5 findings | **CRITICAL:** dry-runs claimed `reversible: true` for exports with no cancel or delete path | fixed; re-auditing found a **third** instance (`public_photos.create`); every remaining claim re-derived from the vendor spec |
+| same lens, final pass | 1 CRITICAL, 2 HIGH | the **executed** audit event contradicted its own dry-run on the highest-risk operations | fixed: one impact object threaded into both paths, parity test per operation |
+| `qa-agent-layer` | 14 findings | stale MCP manifest; opaque `inputSchema`; a summary dropping the field it resolved by | all HIGH/MEDIUM fixed; final pass 0 CRITICAL / 0 HIGH, its three HIGH proven CLOSED |
+| `qa-registry` (plus a re-dispatched attempt) | 15 findings | **CRITICAL:** about 66 mutating registry examples documented calls that throw | fixed; 11 new checker rules, each proven by an injection |
+| `qa-contract` | 9 findings | **the coordinator's own additive guard was vacuous** — the capture script missed `export type * from`, so the whole types surface was unprotected | fixed: baseline `--ref` capture, exact-set comparison, and a meta-test that fails if the guard goes vacuous |
+| `qa-final-packaging` | 12 findings | **CRITICAL:** a pack could ship a stale `dist/` and two disagreeing registries; the pack proof was machine-local | fixed: the `verify:pack` gate plus a `prepack` build |
+
+Accepted in writing with a reversal recipe (all LOW/NIT, none a correctness bug): the guard-refusal helper is
+still duplicated across resource files; the widening guard covers the four shapes its owner wrote rather than
+all 35; three mapped-type generics stay unresolved in two registry output schemas; sourcemaps inline `src` in
+the tarball; the maintainer-only `scripts/*.mjs` are not shipped.
+
+## 5. Blockers
+
+**None.** Three operational notes:
+
+- The safety guard blocked a recursive delete of a stray `coverage-ops/` directory (approval token `6659405459f4c527`); it was gitignored instead and its owner removed the other scratch files.
+- `tsconfig.json` excludes `test/`, so type errors inside test files are invisible to `npx tsc --noEmit` (pre-existing repo condition; the affected files were type-checked out-of-band).
+- **Untested against the live vendor:** no Hudu credentials exist on this machine, so every API interaction is verified against the spec plus mocked transports. This is the one check a human should do.
+
+## 6. Autonomous decisions (each with its reversal)
+
+| Decision | Why | Reversal |
+|---|---|---|
+| Coding model = `inherit` (the coordinator's model) | the handover left the model unpinned and the user was asleep; "inherit" is an explicitly valid answer. The QA pin was the SAME model, so a cross-model lens was added for the two highest-risk heads | set `codingModel` in `.run/RUN-STATE.json` and SCOPING section H to a selector from `await rlm.find_models(...)` |
+| Three QA lenses run once over all four groups instead of three per group | the four batches landed in one commit range within about 25 minutes and were no longer separable in time | spawn the per-group lenses from `.run/RUN-STATE.json` and `.run/design/` |
+| `staleCheck` is operation-shaped (only the 20 guarded `<res>.update` rows say `updated_at`) | the first pass set it per resource, so creates claimed a guard they cannot have; three implementers independently hit the resulting false claims | edit the `staleCheck` cells in `capabilities.plan.json`, re-run `npm run plan:derive` |
+| `expectedUpdatedAt` is REFUSED with `HuduConfigError` on create/delete/archive | silently ignoring an option claims a guard that never ran | remove `assertNoExpectedUpdatedAt` from `src/resources/base.ts` |
+| Executed-mutation impact lives on the audit event, not on return values | primitive return shapes are frozen by the additive-only rule | delete `AuditEvent.impact` |
+| The two bulk deletes report a labelled lower bound (`affected: 1`, `scope: bulk`, `exact: false`) on the LIVE path; the pre-read stays in the dry-run only | the pre-read added a GET to two existing primitives and broke two pre-existing tests; an extra call per delete is a behaviour change for existing callers | restore the pre-read in the live path and update `test/resources/special.test.ts` |
+| Compact summaries live next to their resource; the five in `types/common.ts` were removed | five reports of TS2308 duplicates, and one writer per file while four implementers worked in parallel | move them back into `src/types/common.ts` and update the barrel |
+| The registry's `errors` column lists what the SDK actually throws | a registry naming codes the code never raises produces unwritable test rows | edit the rules in `scripts/derive-plan.mjs` |
+| Plan test titles reconciled to the titles the group-A tests actually carry (44 rows) | that implementer disambiguated repeated titles with an operation suffix; the tests exist and assert the right behaviour | restore the previous titles and rename the tests |
+| Three LOW findings accepted rather than fixed (duplicated refusal helper, partial widening guard, unresolved generics) | no correctness effect; each fix touched idle owners' files or the release-critical generator | the reversal recipe for each is in `.run/RUN-STATE.json` under `autonomousDecisions` |
+| A stalled lens was retired and re-dispatched rather than waited on | `qa-final-registry` completed with an EMPTY deliverable after 25 minutes | it was deleted by explicit id and re-dispatched with a 35-call budget; the retry delivered in full |
+
+## 7. Ledger
+
+- **spawns 21** (7 implementers, 3 platform owners, 1 MCP toolsmith, 9 QA agents across two passes), **commits 41**, **gate runs 60+**, **QA findings about 70**, **fixed about 64**, the rest accepted in writing
+- wall clock 23:07 to 02:26 (3 h 19 min), well inside the 06:30 stopBy
+- artifacts: `.run/RUN-STATE.json`, `.run/PROGRESS.log`, `.run/qa/*.md` (five final verdicts plus the first pass), `.run/reports/*.md` (seven implementer reports), `.run/design/A.md`, `.run/design/B.md`, `.run/design/C.md`, `.run/design/D.md`
+
+## 8. Resume and next actions
+
+```bash
+cd /Users/maxs/gitrepos/node-hudu
+git log --oneline main..HEAD
+npm run typecheck && npm run lint && npm test && npm run capabilities:check -- --ship && npm run verify:pack
+cat .run/qa/qa-final-*.md
+```
+
+Then open the PR — the one step this run deliberately stopped short of:
+
+```bash
+gh pr create --base main --head feat/agent-execution-layer \
+  --title "feat: agent execution layer (0.3.0) - helper tier, capability registry, mutation safety" \
+  --body-file MORNING-REPORT.md
+```
+
+**Before publishing:** run one live-vendor smoke test (a `companies.resolve` by name, one dry-run, one real
+update with `expectedUpdatedAt`). The pack gate, the ship gate and the additive-only guard all pass, so the
+only untested assumption left is the vendor's own behaviour.
+
+## 2b. Commits (41 on the branch, none on `main`, nothing pushed)
+
+- `0cef6c9` — fix(capabilities): stop advertising options an operation cannot honour, and gate the emitted registry
+- `9e34644` — fix(safety): restore the 0.2.1 request shape for the bulk deletes, keep the audit impact honest
+- `b1dc57f` — chore(run): record the packaging verdict and its fixes
+- `494ce30` — fix(packaging): add a reproducible pack gate and close the packaging lens findings
+- `46b7d3a` — chore(run): record the registry lens verdict and dispatch its three findings
+- `144c6d4` — fix(safety): the executed audit event now matches its own dry-run on every mutating path
+- `1659924` — fix(registry): drop the unreachable resolution code from two filter-only helpers
+- `49f7886` — chore(run): launch the fifth and final QA lens (packaging)
+- `98e25d8` — chore(run): retire the silent registry lens and re-dispatch it with a tighter budget
+- `ec9b7e1` — feat(mcp): curated tool surface, and thread the executed impact into every mutation
+- `1c6051a` — docs(run): draft the morning report from the recorded run state
 - `a364ef7` — chore(run): record the MCP curation result and dispatch the tool-list de-duplication
 - `9de0463` — chore(run): start the final five-lens pass and record the release re-verification
 - `ca011f1` — chore(run): record the release artefacts and the packaging proof
@@ -41,71 +146,3 @@
 - `fdab7e9` — feat(plan): design groups A-D - judgement columns, 65 helper rows, compact shapes, design docs
 - `7401338` — feat(plan): fill group A judgement columns and add the 25 group A helper rows
 - `6882fce` — chore: bootstrap agent-execution-layer retrofit (branch, scoping, plan derivation, run state)
-
-## 3. Per group — status and gate results
-
-| Group | Rows | Implement | Tests | QA | Fix |
-|---|---|---|---|---|---|
-| A (companies, articles, assets, asset_layouts, asset_passwords, websites, folders, password_folders, groups) | 77 | done | done | done | done |
-| B (networks, vlans, vlan_zones, ip_addresses, rack_storages, rack_storage_items, relations, flags, flag_types) | 57 | done | done | done | done |
-| C (procedures, procedure_tasks, cards, activity_logs, expirations, matchers, magic_dash, api_info) | 44 | done | done | done | done |
-| D (uploads, photos, public_photos, exports, s3_exports, lists, label_types, labels, users) | 47 | done | done | done | done |
-| operations (searchAcrossResources, resolveAny) | 2 | done | done | in the final pass | — |
-
-Gate evidence, all on the branch: `npx tsc --noEmit` exit 0 · `npm run lint` exit 0 · `npm test -- --coverage` exit 0 with 99.65 lines / 99.89 functions / 92.49 branches / 99.27 statements (thresholds 97/94/83/97, unchanged since `main`) · `node scripts/check-capabilities.mjs` PASS 0 failures · `--group A|B|C|D|operations` PASS · `--ship` PASS · negative fixture exit 1 (by design) · `npm run build` emits 6 entries × 4 formats · `npm pack` + clean install imports ESM and CJS for root, `/capabilities`, `/operations`, `/resources`, `/errors`.
-
-## 4. QA — findings raised, fixed, deferred
-
-Four independent read-only lenses ran after the batch implementation, then a final pass over the whole branch.
-
-| Lens | Findings | Fixed | Deferred / accepted |
-|---|---|---|---|
-| `qa-safety` (run cross-model on claude-sonnet) | 5 (1 CRITICAL, 2 HIGH, 1 LOW, 1 NIT) | 4 | 1 LOW accepted: the guard-refusal helper is duplicated in 17 resource files (no correctness bug; the variants emit different messages that tests assert; a 17-file refactor minutes before release was judged riskier than the debt) |
-| `qa-agent-layer` | 14 (3 HIGH, 3 MEDIUM, 4 LOW, 4 NIT) | all HIGH + MEDIUM | LOW/NIT recorded |
-| `qa-registry` | 15 (1 CRITICAL, 2 HIGH, 10 MEDIUM, 3 LOW, 1 NIT) | the CRITICAL, both HIGH, and the gate holes | cosmetic LOWs (example realism, two pagination shapes) |
-| `qa-contract` | 9 (2 HIGH, 4 MEDIUM, 2 LOW, 1 NIT) | both HIGH | 1 pre-existing note (public_photos `singleKey` in ARCHITECTURE.md was already stale in 0.2.1 and is inert) |
-
-The three findings worth reading about:
-
-- **CRITICAL (safety, cross-model):** `exports.create` and `s3_exports.create` dry-runs claimed `impact.reversible: true` although the API has no cancel or delete path — a false safety claim no same-model reviewer or implementer test had caught. Fixed, and re-auditing found a **third** instance (`public_photos.create`). Every remaining `reversible: true` was then re-derived from the vendor spec.
-- **CRITICAL (registry):** ~66 mutating records shipped examples containing `expectedUpdatedAt` on create/delete/archive, which the SDK now refuses — the registry's most-copied field documented calls that throw. Fixed in the generator, with a checker rule to keep it fixed.
-- **HIGH (contract): the coordinator's own additive-only guard was vacuous.** The capture script never matched `export type * from`, so the star-barrel list was empty and deleting both type barrels left the test green — the entire types surface was unprotected. Fixed with `--ref` capture from the baseline, 113 type-barrel names in the fixture, and a meta-test that fails if the guard becomes vacuous again.
-
-## 5. Blockers
-
-_None that need a human decision._ Two operational notes:
-
-- The safety guard blocked a recursive delete of a stray `coverage-ops/` directory (approval token `6659405459f4c527`). It was left in place and `coverage-*/` was gitignored instead; its owner deleted the other scratch artifacts.
-- `tsconfig.json` excludes `test/`, so type errors inside test files are invisible to `npx tsc --noEmit` (pre-existing repo condition, flagged by two agents; the test files were type-checked out-of-band).
-
-## 6. Autonomous decisions (each with its reversal)
-
-| Decision | Why | Reversal |
-|---|---|---|
-| Coding model = `inherit` (the coordinator's model) | the handover makes the model the user's choice and left it unpinned; the user was asleep and "inherit" is an explicitly valid answer. Recorded because the QA pin is the SAME model, so I added a cross-model lens for the two highest-risk heads | set `codingModel` in `.run/RUN-STATE.json` and `SCOPING.md` §H to a selector from `await rlm.find_models(...)`, then re-dispatch the affected step |
-| Three QA lenses run once over all four groups instead of three per group (12 spawns) | the four batches landed in one commit range within ~25 minutes and were no longer separable in time | spawn the per-group lenses from the gate entries in `.run/RUN-STATE.json` and the design docs in `.run/design/` |
-| `staleCheck` is operation-shaped: `updated_at` only on the 20 guarded `<res>.update` rows, `unavailable` on every create/delete/archive/special | my first pass set it per resource, which made a create claim a stale guard it cannot have; three implementers independently hit the resulting false claims | edit the `staleCheck` cells in `capabilities.plan.json` and re-run `npm run plan:derive` |
-| `expectedUpdatedAt` is REFUSED (HuduConfigError) rather than ignored on create/delete/archive | a silently ignored option claims a guard that never ran | remove `assertNoExpectedUpdatedAt` from `src/resources/base.ts` |
-| Executed-mutation impact lives on the audit event (`AuditEvent.impact`), not on return values | primitive return shapes are frozen by the additive-only rule; the audit event is the SDK's result-metadata channel | delete the field from `AuditEvent` and from the two bulk pre-read paths |
-| Compact summaries are declared next to their resource; the five the core layer had put in `types/common.ts` were removed | five reports of TS2308 duplicates; one writer per file while four implementers worked in parallel | move them back into `src/types/common.ts` and update the barrel |
-| The registry's `errors` column lists what the SDK actually throws (`CONFIG_ERROR` everywhere, `STALE_OBJECT` on the guarded updates, no `RESOLUTION_*` on id-only helpers) | a registry that names codes the code never raises produces unwritable test rows | edit the rules in `scripts/derive-plan.mjs` |
-| Plan test titles were reconciled to the titles the group-A tests actually carry (44 rows) | that implementer disambiguated repeated titles with an operation suffix; the tests exist and assert the right behaviour | restore the previous titles in `capabilities.plan.json` and rename the tests |
-| The `qa-safety` LOW (17 duplicated guard-refusal helpers) accepted as debt | no correctness bug; variants emit different messages that tests assert | add the shared function to `src/resources/agent-layer-helpers.ts` and replace the remaining 11 local definitions |
-
-## 7. Ledger
-
-- spawns **19** · commits **30** · gate runs **40+** · QA findings **~43** · QA findings fixed **~38**
-- wall clock: started 2026-09-12T23:07+10:00, still running at 01:46 (stopBy 2026-09-13T06:30:00+10:00)
-- groups ran in parallel (7 implementers, ≤5 resources each) plus one tooling owner, one core-plumbing owner, one operations owner and one MCP toolsmith
-
-## 8. Resume
-
-```bash
-cd /Users/maxs/gitrepos/node-hudu
-cat .run/RUN-STATE.json            # first step that is not done
-git log --oneline main..HEAD       # the commits that step claims
-npm run typecheck && npm run lint && npm test && npm run capabilities:check -- --ship
-cat .run/qa/qa-final-*.md          # the final lens verdicts
-```
-
-To open the PR once the final pass is closed: `gh pr create --base main --head feat/agent-execution-layer --title "feat: agent execution layer (0.3.0)" --body-file MORNING-REPORT.md`

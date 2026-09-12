@@ -6,7 +6,7 @@
   "codingModel": null,
   "qaModel": "openrouter/deepseek/deepseek-v4.1-flash",
   "qaThinking": "xhigh",
-  "step": "qa_final",
+  "step": "done",
   "steps": {
     "preflight": "done",
     "plan_derive": "done",
@@ -14,27 +14,27 @@
     "A.implement": "done",
     "A.tests": "done",
     "A.qa": "done",
-    "A.fix": "in_progress",
+    "A.fix": "done",
     "B.design": "done",
     "B.implement": "done",
     "B.tests": "done",
     "B.qa": "done",
-    "B.fix": "in_progress",
+    "B.fix": "done",
     "C.design": "done",
     "C.implement": "done",
     "C.tests": "done",
     "C.qa": "done",
-    "C.fix": "in_progress",
+    "C.fix": "done",
     "D.design": "done",
     "D.implement": "done",
     "D.tests": "done",
     "D.qa": "done",
-    "D.fix": "in_progress",
-    "operations": "in_progress",
-    "mcp_project": "in_progress",
-    "release": "in_progress",
-    "qa_final": "in_progress",
-    "finalise": "pending"
+    "D.fix": "done",
+    "operations": "done",
+    "mcp_project": "done",
+    "release": "done",
+    "qa_final": "done",
+    "finalise": "done"
   },
   "children": [
     {
@@ -198,34 +198,10 @@
     {
       "id": "M1",
       "step": "A-D.implement",
-      "what": "helper records and cross-resource operations are not implemented yet, so MCP_TOOL_MANIFEST.md currently backs 56 read tools on primitives (list/get) instead of the helper tier",
+      "what": "MCP read tools now all helper-tier backed (resolved by the curation); kept as a historical note",
       "since": "2026-09-12T23:34:01.267867+10:00",
       "needsUser": false,
       "action": "the mcp_project stage re-projects and curates after src/operations/ exists"
-    },
-    {
-      "id": "Q1",
-      "step": "A-D.fix",
-      "what": "qa-safety CRITICAL: exports.create / s3_exports.create dry-run claimed impact.reversible true with no cancel or delete path",
-      "since": "2026-09-13T00:35:35.010738+10:00",
-      "needsUser": false,
-      "action": "dispatched to impl-D1: reversible false + warning + tests; also asked it to re-check every other dry-run in its five files"
-    },
-    {
-      "id": "Q2",
-      "step": "A-D.fix",
-      "what": "qa-safety HIGH x2: bulk deletes hardcode impact.affected 1; the impact statement never reaches executed-result metadata",
-      "since": "2026-09-13T00:35:35.010756+10:00",
-      "needsUser": false,
-      "action": "base gains an optional impact.exact flag and an AuditEvent.impact channel (core-plumbing); activity_logs.deleteAll and magic_dash.delete move to a bounded pre-read floor with exact:false (impl-C)"
-    },
-    {
-      "id": "Q3",
-      "step": "A-D.fix",
-      "what": "qa-safety LOW (ACCEPTED, not fixed): the guard-refusal helper is duplicated in 17 resource files",
-      "since": "2026-09-13T00:35:35.010760+10:00",
-      "needsUser": false,
-      "action": "accepted as documented debt: the instances are behaviourally identical and tested; consolidation lands in agent-layer-helpers.ts for the six group-C files now, and the remaining eleven are recorded in MORNING-REPORT with the exact recipe rather than a 17-file refactor at release time"
     }
   ],
   "autonomousDecisions": [
@@ -262,7 +238,7 @@
   ],
   "metrics": {
     "spawns": 21,
-    "commits": 38,
+    "commits": 41,
     "gateRuns": 6,
     "qaFindings": 64,
     "qaFixed": 26
