@@ -130,7 +130,13 @@ function formatResolution<T, S>(
 
 export class GroupsResource extends BaseResource<Group> {
   constructor(http: HttpClient) {
-    super(http, { resourcePath: 'groups', singleKey: undefined, listKey: undefined, createType: 'raw', paginated: true });
+    // The vendor wraps both list responses (`{"groups":[...]}`) and single records
+    // (`{"group":{...}}`) for this resource, unlike most endpoints which return the
+    // bare array/record. Without these keys the envelope was handed back typed as a
+    // `Group[]`/`Group` and every consumer crashed (live-verified on Hudu 2.45.1:
+    // `groups.listAll()` threw "Spread syntax requires ...iterable", `groups.get(1)`
+    // returned `{group: {...}}`).
+    super(http, { resourcePath: 'groups', singleKey: 'group', listKey: 'groups', createType: 'raw', paginated: true });
   }
 
   /** Get a groups by id. */

@@ -114,7 +114,10 @@ function projectResolution<T, S>(resolution: Resolution<T>, project: (item: T) =
 
 export class UsersResource extends BaseResource<User> {
   constructor(http: HttpClient) {
-    super(http, { resourcePath: 'users', singleKey: undefined, listKey: undefined, createType: 'raw', paginated: true });
+    // Live-verified on Hudu 2.45.1: `/users` returns `{"users":[...]}` and `/users/{id}`
+    // returns `{"user":{...}}`. Leaving the keys undefined handed the raw envelope back
+    // typed as `User[]`/`User` (the same crash class as `groups`).
+    super(http, { resourcePath: 'users', singleKey: 'user', listKey: 'users', createType: 'raw', paginated: true });
   }
 
   /** Get a users by id. */

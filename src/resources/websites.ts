@@ -153,7 +153,13 @@ function formatResolution<T, S>(
 
 export class WebsitesResource extends BaseResource<Website> {
   constructor(http: HttpClient) {
-    super(http, { resourcePath: 'websites', singleKey: undefined, listKey: undefined, createType: 'raw', paginated: true });
+    // Live-verified on Hudu 2.45.1: `/websites` returns a BARE ARRAY, but the moment a
+    // filter is applied (`?search=`, `?name=`) the vendor switches to `{"websites":[...]}`.
+    // With `listKey` undefined the object was passed through as `Website[]`, so
+    // `websites.search()` and `operations.searchAcrossResources()` crashed
+    // ("page.items.slice is not a function"). `singleKey` is set for symmetry: a bare
+    // single record is returned unchanged, an envelope is unwrapped.
+    super(http, { resourcePath: 'websites', singleKey: 'website', listKey: 'websites', createType: 'raw', paginated: true });
   }
 
   /** Get a websites by id. */

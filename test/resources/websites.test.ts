@@ -191,12 +191,22 @@ describe('WebsitesResource', () => {
   });
 
   it('unwraps the PUT response by singleKey', async () => {
-    // `/websites` declares NO singleKey, so the PUT body is passed through unchanged
-    // (the unwrap is a documented pass-through rather than an invented envelope).
+    // `/websites` DID declare no singleKey, so a `{"website":{...}}` PUT body was handed
+    // back typed as `Website`. Live-verified on Hudu 2.45.1: the vendor really does wrap
+    // this response (the fixture below is its shape), so `websites.update` now unwraps it
+    // and `singleKey` is set on the resource. A BARE record still passes through
+    // unchanged, which is the second case below.
     const enveloped = { website: website() };
     stubFetch(() => json(enveloped));
-    const res = await makeClient().websites.update(7, { paused: true });
-    expect(res).toEqual(enveloped);
+    await expect(makeClient().websites.update(7, { paused: true })).resolves.toEqual(website());
+  });
+
+  it('passes a bare single record through unchanged', async () => {
+    // `unwrapByKey` only unwraps when the envelope key is present, so endpoints that
+    // answer with the record itself keep working (live GET /websites/{id} does this).
+    const bare = website();
+    stubFetch(() => json(bare));
+    await expect(makeClient().websites.get(7)).resolves.toEqual(bare);
   });
 
   it('resolves void after a successful delete', async () => {
