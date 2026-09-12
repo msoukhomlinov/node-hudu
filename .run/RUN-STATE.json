@@ -6,12 +6,12 @@
   "codingModel": null,
   "qaModel": "openrouter/deepseek/deepseek-v4.1-flash",
   "qaThinking": "xhigh",
-  "step": "preflight",
+  "step": "A.implement",
   "steps": {
-    "preflight": "running",
+    "preflight": "done",
     "plan_derive": "done",
-    "A.design": "pending",
-    "A.implement": "pending",
+    "A.design": "done",
+    "A.implement": "running",
     "A.tests": "pending",
     "A.qa": "pending",
     "A.fix": "pending",
@@ -44,12 +44,30 @@
       "startedAt": "2026-09-12T23:12:54.635479+10:00",
       "budget": "60 grounding calls",
       "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-f393c463"
+    },
+    {
+      "name": "core-plumbing",
+      "id": "sub-e37b6897",
+      "step": "A.implement",
+      "startedAt": "2026-09-12T23:19:15.857305+10:00",
+      "budget": "80 grounding calls",
+      "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-e37b6897"
     }
   ],
   "gates": {
-    "plan_derive": "pass (158 rows, groups populated, 158/158 implemented, re-run byte-stable)"
+    "plan_derive": "pass (158 rows, groups populated, 158/158 implemented, re-run byte-stable)",
+    "A.design": "pass (52 primitive rows + 25 helper rows have every judgement column answered; helperRationale on every helper; preferredWhen where siblings overlap; plan:derive preserves them, 183 rows)"
   },
-  "blockers": [],
+  "blockers": [
+    {
+      "id": "T1",
+      "step": "A.implement",
+      "what": "tools/scripts (plan:derive excluded) do not exist yet; the tooling-scripts child is still working",
+      "since": "2026-09-12T23:19:15.857305+10:00",
+      "needsUser": false,
+      "action": "continue; re-check the child's jsonl age at the next wake"
+    }
+  ],
   "autonomousDecisions": [
     {
       "what": "codingModel left as inherit (no user answer to the model question at preflight)",
@@ -58,8 +76,8 @@
     }
   ],
   "metrics": {
-    "spawns": 1,
-    "commits": 1,
+    "spawns": 2,
+    "commits": 2,
     "gateRuns": 0,
     "qaFindings": 0,
     "qaFixed": 0

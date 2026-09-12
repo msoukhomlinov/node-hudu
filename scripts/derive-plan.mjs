@@ -276,23 +276,30 @@ const priorByEndpoint = new Map((prior?.operations ?? []).map((r) => [r.endpoint
 
 const selected = derived.filter((r) => only.length === 0 || only.includes(r._resource));
 for (const r of selected) r._before = priorByEndpoint.get(r.endpoint);
+const preservedCount = selected.filter((r) => r._before).length;
 const rows = selected.map(preserve);
 
+/** Helper rows (endpoint: null) are AUTHORED by the coordinator, never derived: keep them. */
+const priorHelpers = (prior?.operations ?? []).filter((r) => r.endpoint === null || r.endpoint === undefined);
+const sortRows = (list) => list.sort((a, b) => {
+  const g = String(a.group).localeCompare(String(b.group));
+  if (g !== 0) return g;
+  const ra = RES_ORDER.indexOf(((a.primitive ?? a.helper) ?? '').split('.')[0]);
+  const rb = RES_ORDER.indexOf(((b.primitive ?? b.helper) ?? '').split('.')[0]);
+  if (ra !== rb) return ra - rb;
+  const ha = a.helper ? 1 : 0, hb = b.helper ? 1 : 0;
+  if (ha !== hb) return ha - hb;
+  return String(a.endpoint ?? '').localeCompare(String(b.endpoint ?? ''));
+});
+
 let operations;
-if (only.length === 0) operations = rows;
+if (only.length === 0) operations = [...rows, ...priorHelpers];
 else {
   const rewritten = new Map(rows.map((r) => [r.endpoint, r]));
   operations = (prior?.operations ?? []).map((r) => rewritten.get(r.endpoint) ?? r);
   for (const r of rows) if (!operations.some((o) => o.endpoint === r.endpoint)) operations.push(r);
-  operations.sort((a, b) => {
-    const g = String(a.group).localeCompare(String(b.group));
-    if (g !== 0) return g;
-    const ra = RES_ORDER.indexOf((a.primitive ?? '').split('.')[0]);
-    const rb = RES_ORDER.indexOf((b.primitive ?? '').split('.')[0]);
-    if (ra !== rb) return ra - rb;
-    return String(a.endpoint).localeCompare(String(b.endpoint));
-  });
 }
+operations = sortRows(operations);
 
 const resources = {};
 for (const r of RES_ORDER) {
@@ -321,10 +328,10 @@ writeFileSync(PLAN_PATH, out);
 const notFound = derived.filter((r) => r.status !== 'implemented');
 const perGroup = {};
 for (const r of derived) perGroup[r.group] = (perGroup[r.group] ?? 0) + 1;
-const preserved = selected.filter((r) => r._before).length;
+const preserved = preservedCount;
 console.log(`plan:derive -> capabilities.plan.json`);
 console.log(`  spec                 : ${SPEC_PATH} (swagger ${spec.swagger}, ${Object.keys(spec.paths).length} paths)`);
-console.log(`  operations           : ${operations.length} rows (${derived.length} derived from the spec)`);
+console.log(`  operations           : ${operations.length} rows (${derived.length} derived from the spec, ${operations.filter((r) => r.helper).length} authored helper rows preserved)`);
 console.log(`  per group           : ${Object.entries(perGroup).map(([g, n]) => `${g}=${n}`).join(' ')}`);
 console.log(`  resources           : ${RES_ORDER.length}`);
 console.log(`  status implemented  : ${derived.length - notFound.length}`);

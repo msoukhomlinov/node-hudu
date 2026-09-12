@@ -3,53 +3,53 @@
     "source": "api-docs.json",
     "version": "2.45.1"
   },
-  "generatedAt": "2026-09-12T13:10:32.035Z",
+  "generatedAt": "2026-09-12T13:18:38.895Z",
   "resources": {
     "companies": {
       "helperCap": 4,
-      "compact": null,
-      "workflowResource": false,
+      "compact": "CompanySummary",
+      "workflowResource": true,
       "group": "A"
     },
     "articles": {
       "helperCap": 4,
-      "compact": null,
-      "workflowResource": false,
+      "compact": "ArticleSummary",
+      "workflowResource": true,
       "group": "A"
     },
     "assets": {
       "helperCap": 4,
-      "compact": null,
-      "workflowResource": false,
+      "compact": "AssetSummary",
+      "workflowResource": true,
       "group": "A"
     },
     "asset_layouts": {
       "helperCap": 4,
-      "compact": null,
+      "compact": "AssetLayoutSummary",
       "workflowResource": false,
       "group": "A"
     },
     "asset_passwords": {
       "helperCap": 4,
-      "compact": null,
+      "compact": "AssetPasswordSummary",
       "workflowResource": false,
       "group": "A"
     },
     "websites": {
       "helperCap": 4,
-      "compact": null,
+      "compact": "WebsiteSummary",
       "workflowResource": false,
       "group": "A"
     },
     "folders": {
       "helperCap": 4,
-      "compact": null,
+      "compact": "FolderSummary",
       "workflowResource": false,
       "group": "A"
     },
     "password_folders": {
       "helperCap": 4,
-      "compact": null,
+      "compact": "PasswordFolderSummary",
       "workflowResource": false,
       "group": "A"
     },
@@ -227,17 +227,22 @@
       "helperBasis": null,
       "helperRationale": null,
       "effect": "destructive",
-      "flags": [],
+      "flags": [
+        "idempotent",
+        "requiresApproval"
+      ],
       "dryRun": true,
       "metadata": {
         "purpose": "Delete a specific company.",
         "usage": "Mutating path for companies; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": null,
-        "related": []
+        "preferredWhen": "Irreversible; prefer companies.archive when the record may be needed again.",
+        "related": [
+          "companies.archive"
+        ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": null,
+      "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -254,6 +259,16 @@
           "id": "companies.delete.dry-run",
           "file": "test/resources/companies.test.ts",
           "title": "dry-run issues no DELETE request and returns simulated: true"
+        },
+        {
+          "id": "companies.delete.correlation",
+          "file": "test/resources/companies.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
+        },
+        {
+          "id": "companies.delete.stale",
+          "file": "test/resources/companies.test.ts",
+          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
@@ -284,9 +299,12 @@
       "dryRun": false,
       "metadata": {
         "purpose": "Retrieve a list of companies.",
-        "usage": "Read path for companies. Primitives return the full typed record.",
-        "preferredWhen": null,
-        "related": []
+        "usage": "Read path for companies returning the full typed record; helpers return compact shapes.",
+        "preferredWhen": "Use when many records are needed; prefer companies.search or companies.resolve for a single lookup.",
+        "related": [
+          "companies.resolve",
+          "companies.search"
+        ]
       },
       "compact": null,
       "resolution": null,
@@ -307,6 +325,11 @@
           "id": "companies.list.pagination",
           "file": "test/resources/companies.test.ts",
           "title": "sends page/page_size and stops on a short page"
+        },
+        {
+          "id": "companies.list.correlation",
+          "file": "test/resources/companies.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
         }
       ],
       "group": "A",
@@ -326,9 +349,12 @@
       "dryRun": false,
       "metadata": {
         "purpose": "Retrieve a specific company.",
-        "usage": "Read path for companies. Primitives return the full typed record.",
-        "preferredWhen": null,
-        "related": []
+        "usage": "Read path for companies returning the full typed record; helpers return compact shapes.",
+        "preferredWhen": "Preferred when the numeric id is already known; companies.resolve is for a name, slug or domain.",
+        "related": [
+          "companies.resolve",
+          "companies.list"
+        ]
       },
       "compact": null,
       "resolution": null,
@@ -349,6 +375,11 @@
           "id": "companies.get.not-found",
           "file": "test/resources/companies.test.ts",
           "title": "normalises a 404 into NOT_FOUND"
+        },
+        {
+          "id": "companies.get.correlation",
+          "file": "test/resources/companies.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
         }
       ],
       "group": "A",
@@ -372,9 +403,11 @@
       "dryRun": false,
       "metadata": {
         "purpose": "Jump to a company with integration details.",
-        "usage": "Read path for companies. Primitives return the full typed record.",
-        "preferredWhen": null,
-        "related": []
+        "usage": "Read path for companies returning the full typed record; helpers return compact shapes.",
+        "preferredWhen": "Preferred when the caller has an integration identifier instead of a Hudu id; companies.get is for a known id.",
+        "related": [
+          "companies.get"
+        ]
       },
       "compact": null,
       "resolution": null,
@@ -391,6 +424,11 @@
           "id": "companies.jump.success",
           "file": "test/resources/companies.test.ts",
           "title": "calls the companies.jump endpoint and returns the documented shape"
+        },
+        {
+          "id": "companies.jump.correlation",
+          "file": "test/resources/companies.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
         }
       ],
       "group": "A",
@@ -411,12 +449,14 @@
       "metadata": {
         "purpose": "Create a new company.",
         "usage": "Mutating path for companies; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": null,
-        "related": []
+        "preferredWhen": "Only for a record that does not exist yet; prefer companies.update for an id you already have.",
+        "related": [
+          "companies.update"
+        ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": null,
+      "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -434,6 +474,16 @@
           "id": "companies.create.dry-run",
           "file": "test/resources/companies.test.ts",
           "title": "dry-run issues no mutating request and returns simulated: true"
+        },
+        {
+          "id": "companies.create.correlation",
+          "file": "test/resources/companies.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
+        },
+        {
+          "id": "companies.create.stale",
+          "file": "test/resources/companies.test.ts",
+          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
@@ -449,17 +499,21 @@
       "helperBasis": null,
       "helperRationale": null,
       "effect": "write",
-      "flags": [],
+      "flags": [
+        "idempotent"
+      ],
       "dryRun": true,
       "metadata": {
         "purpose": "Update a specific company.",
         "usage": "Mutating path for companies; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": null,
-        "related": []
+        "preferredWhen": "Preferred over create or delete when the record exists and only some fields change.",
+        "related": [
+          "companies.get"
+        ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": null,
+      "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -482,6 +536,16 @@
           "id": "companies.update.unwraps-by-singleKey",
           "file": "test/resources/companies.test.ts",
           "title": "unwraps the PUT response by singleKey"
+        },
+        {
+          "id": "companies.update.correlation",
+          "file": "test/resources/companies.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
+        },
+        {
+          "id": "companies.update.stale",
+          "file": "test/resources/companies.test.ts",
+          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
@@ -497,17 +561,22 @@
       "helperBasis": null,
       "helperRationale": null,
       "effect": "write",
-      "flags": [],
+      "flags": [
+        "idempotent"
+      ],
       "dryRun": true,
       "metadata": {
         "purpose": "Archive a specific company.",
         "usage": "Mutating path for companies; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": null,
-        "related": []
+        "preferredWhen": "Preferred over companies.delete when the record may be needed again.",
+        "related": [
+          "companies.delete",
+          "companies.unarchive"
+        ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": null,
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -525,6 +594,11 @@
           "id": "companies.archive.dry-run",
           "file": "test/resources/companies.test.ts",
           "title": "dry-run issues no mutating request and returns simulated: true"
+        },
+        {
+          "id": "companies.archive.correlation",
+          "file": "test/resources/companies.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
         }
       ],
       "group": "A",
@@ -540,17 +614,21 @@
       "helperBasis": null,
       "helperRationale": null,
       "effect": "write",
-      "flags": [],
+      "flags": [
+        "idempotent"
+      ],
       "dryRun": true,
       "metadata": {
         "purpose": "Unarchive a specific company.",
         "usage": "Mutating path for companies; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": null,
-        "related": []
+        "preferredWhen": "Preferred over re-creating an archived record.",
+        "related": [
+          "companies.delete"
+        ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": null,
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -568,10 +646,331 @@
           "id": "companies.unarchive.dry-run",
           "file": "test/resources/companies.test.ts",
           "title": "dry-run issues no mutating request and returns simulated: true"
+        },
+        {
+          "id": "companies.unarchive.correlation",
+          "file": "test/resources/companies.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
         }
       ],
       "group": "A",
       "status": "implemented"
+    },
+    {
+      "endpoint": null,
+      "primitive": null,
+      "specialOp": null,
+      "vendorFilters": [],
+      "search": null,
+      "helper": "companies.resolve",
+      "helperBasis": "server-filter",
+      "helperRationale": "Removes the caller-side choice of lookup endpoint and the paging + exact-match loop; without it every agent re-implements name/domain matching and reads a truncated scan as 'does not exist'.",
+      "effect": "read",
+      "flags": [],
+      "dryRun": false,
+      "metadata": {
+        "purpose": "Resolve a company from an id, name, slug or domain.",
+        "usage": "Accepts {id} (direct fetch; a miss throws NOT_FOUND), {name}, {slug} or {website}/{domain}. A bare value is read in the documented order: numeric id, slug, exact name, domain. Never returns null after a partial scan.",
+        "preferredWhen": "Use when the caller has an identifier rather than a numeric id; companies.get is cheaper when the id is known.",
+        "related": [
+          "companies.get",
+          "companies.findByDomain",
+          "companies.findBySlug",
+          "companies.search",
+          "companies.getContext"
+        ]
+      },
+      "compact": "CompanySummary",
+      "resolution": {
+        "basis": "server-filter",
+        "maxScanRecords": 500,
+        "maxScanPages": 4
+      },
+      "staleCheck": null,
+      "redaction": "none",
+      "errors": [
+        "NOT_FOUND",
+        "RESOLUTION_AMBIGUOUS",
+        "RESOLUTION_TRUNCATED",
+        "NETWORK_ERROR"
+      ],
+      "tests": [
+        {
+          "id": "companies.resolve.id",
+          "file": "test/resources/companies.test.ts",
+          "title": "fetches by id without a scan"
+        },
+        {
+          "id": "companies.resolve.id-miss",
+          "file": "test/resources/companies.test.ts",
+          "title": "throws NOT_FOUND for an unknown id"
+        },
+        {
+          "id": "companies.resolve.unique",
+          "file": "test/resources/companies.test.ts",
+          "title": "returns the single exact match"
+        },
+        {
+          "id": "companies.resolve.miss",
+          "file": "test/resources/companies.test.ts",
+          "title": "returns null after a complete scan"
+        },
+        {
+          "id": "companies.resolve.ambiguous",
+          "file": "test/resources/companies.test.ts",
+          "title": "throws RESOLUTION_AMBIGUOUS with candidate ids when the filter is not exact"
+        },
+        {
+          "id": "companies.resolve.truncated",
+          "file": "test/resources/companies.test.ts",
+          "title": "throws RESOLUTION_TRUNCATED instead of null when the scan hits the cap"
+        },
+        {
+          "id": "companies.resolve.compact",
+          "file": "test/resources/companies.test.ts",
+          "title": "returns the compact shape and omits exactly the documented fields"
+        },
+        {
+          "id": "companies.resolve.expand",
+          "file": "test/resources/companies.test.ts",
+          "title": "expand: true returns the full record"
+        }
+      ],
+      "group": "A",
+      "status": "planned"
+    },
+    {
+      "endpoint": null,
+      "primitive": null,
+      "specialOp": null,
+      "vendorFilters": [],
+      "search": null,
+      "helper": "companies.findByDomain",
+      "helperBasis": "server-filter",
+      "helperRationale": "Removes a paged list call plus the client-side exact match the vendor filter does not guarantee, and gives that cost one bounded, declared home.",
+      "effect": "read",
+      "flags": [],
+      "dryRun": false,
+      "metadata": {
+        "purpose": "Find one company by its website/domain.",
+        "usage": "Uses the vendor `website` filter and compares the returned value exactly, so a fuzzy vendor match cannot produce a false positive. Bounded by the resolution caps; throws RESOLUTION_TRUNCATED at the cap and RESOLUTION_AMBIGUOUS for several exact matches.",
+        "preferredWhen": "Preferred over companies.list for any domain lookup.",
+        "related": [
+          "companies.resolve",
+          "companies.findBySlug"
+        ]
+      },
+      "compact": "CompanySummary",
+      "resolution": {
+        "basis": "server-filter",
+        "maxScanRecords": 500,
+        "maxScanPages": 4
+      },
+      "staleCheck": null,
+      "redaction": "none",
+      "errors": [
+        "RESOLUTION_AMBIGUOUS",
+        "RESOLUTION_TRUNCATED",
+        "NETWORK_ERROR"
+      ],
+      "tests": [
+        {
+          "id": "companies.findByDomain.match",
+          "file": "test/resources/companies.test.ts",
+          "title": "returns the exact match"
+        },
+        {
+          "id": "companies.findByDomain.no-match",
+          "file": "test/resources/companies.test.ts",
+          "title": "returns null after a complete scan"
+        },
+        {
+          "id": "companies.findByDomain.ambiguous",
+          "file": "test/resources/companies.test.ts",
+          "title": "throws RESOLUTION_AMBIGUOUS when several companies share the domain"
+        },
+        {
+          "id": "companies.findByDomain.truncated",
+          "file": "test/resources/companies.test.ts",
+          "title": "throws RESOLUTION_TRUNCATED when the cap is reached"
+        },
+        {
+          "id": "companies.findByDomain.compact",
+          "file": "test/resources/companies.test.ts",
+          "title": "returns CompanySummary and omits exactly the documented fields"
+        },
+        {
+          "id": "companies.findByDomain.expand",
+          "file": "test/resources/companies.test.ts",
+          "title": "expand: true returns the full company record"
+        }
+      ],
+      "group": "A",
+      "status": "planned"
+    },
+    {
+      "endpoint": null,
+      "primitive": null,
+      "specialOp": null,
+      "vendorFilters": [],
+      "search": null,
+      "helper": "companies.findBySlug",
+      "helperBasis": "server-filter",
+      "helperRationale": "Removes a paged list call plus the client-side exact match the vendor filter does not guarantee, and gives that cost one bounded, declared home.",
+      "effect": "read",
+      "flags": [],
+      "dryRun": false,
+      "metadata": {
+        "purpose": "Find one company by its URL slug.",
+        "usage": "Uses the vendor `slug` filter with an exact compare. Bounded by the resolution caps.",
+        "preferredWhen": "Preferred over companies.list for a slug lookup.",
+        "related": [
+          "companies.resolve",
+          "companies.findByDomain"
+        ]
+      },
+      "compact": "CompanySummary",
+      "resolution": {
+        "basis": "server-filter",
+        "maxScanRecords": 500,
+        "maxScanPages": 4
+      },
+      "staleCheck": null,
+      "redaction": "none",
+      "errors": [
+        "RESOLUTION_AMBIGUOUS",
+        "RESOLUTION_TRUNCATED",
+        "NETWORK_ERROR"
+      ],
+      "tests": [
+        {
+          "id": "companies.findBySlug.match",
+          "file": "test/resources/companies.test.ts",
+          "title": "returns the exact match"
+        },
+        {
+          "id": "companies.findBySlug.no-match",
+          "file": "test/resources/companies.test.ts",
+          "title": "returns null after a complete scan"
+        },
+        {
+          "id": "companies.findBySlug.compact",
+          "file": "test/resources/companies.test.ts",
+          "title": "returns CompanySummary"
+        },
+        {
+          "id": "companies.findBySlug.expand",
+          "file": "test/resources/companies.test.ts",
+          "title": "expand: true returns the full company record"
+        }
+      ],
+      "group": "A",
+      "status": "planned"
+    },
+    {
+      "endpoint": null,
+      "primitive": null,
+      "specialOp": null,
+      "vendorFilters": [],
+      "search": null,
+      "helper": "companies.search",
+      "helperBasis": "server-filter",
+      "helperRationale": "Replaces an agent's own paging loop with the vendor's text search and returns compact records, so a search does not pull full records into context.",
+      "effect": "read",
+      "flags": [],
+      "dryRun": false,
+      "metadata": {
+        "purpose": "Search companies by a free-text query.",
+        "usage": "Passes the vendor `search` filter through. limit defaults to 25 and is capped at 100; results are compact unless expand: true.",
+        "preferredWhen": "Preferred over companies.list for any text search.",
+        "related": [
+          "companies.list",
+          "companies.resolve"
+        ]
+      },
+      "compact": "CompanySummary",
+      "resolution": {
+        "basis": "server-filter",
+        "maxScanRecords": 500,
+        "maxScanPages": 4
+      },
+      "staleCheck": null,
+      "redaction": "none",
+      "errors": [
+        "BAD_REQUEST",
+        "RATE_LIMIT",
+        "NETWORK_ERROR"
+      ],
+      "tests": [
+        {
+          "id": "companies.search.match",
+          "file": "test/resources/companies.test.ts",
+          "title": "returns the matching companies as CompanySummary"
+        },
+        {
+          "id": "companies.search.limit",
+          "file": "test/resources/companies.test.ts",
+          "title": "honours limit and never exceeds the maximum of 100"
+        },
+        {
+          "id": "companies.search.expand",
+          "file": "test/resources/companies.test.ts",
+          "title": "expand: true returns full company records"
+        }
+      ],
+      "group": "A",
+      "status": "planned"
+    },
+    {
+      "endpoint": null,
+      "primitive": null,
+      "specialOp": null,
+      "vendorFilters": [],
+      "search": null,
+      "helper": "companies.getContext",
+      "helperBasis": "workflow",
+      "helperRationale": "Replaces several sequential calls (and the agent's reasoning about which resources relate to this one) with one bounded composite read.",
+      "effect": "read",
+      "flags": [],
+      "dryRun": false,
+      "metadata": {
+        "purpose": "Fetch a company together with the bounded context an agent needs about it.",
+        "usage": "Returns the company plus bounded lists of its assets, articles, websites and asset passwords (limit defaults to 25, max 100). Every sub-list is a bounded fetch - nothing here pages the account.",
+        "preferredWhen": "Preferred over four separate list calls when an agent starts work on a company.",
+        "related": [
+          "companies.get",
+          "assets.listAll",
+          "articles.list",
+          "websites.list"
+        ]
+      },
+      "compact": "CompanyContext",
+      "resolution": null,
+      "staleCheck": null,
+      "redaction": "none",
+      "errors": [
+        "NOT_FOUND",
+        "NETWORK_ERROR"
+      ],
+      "tests": [
+        {
+          "id": "companies.getContext.shape",
+          "file": "test/resources/companies.test.ts",
+          "title": "returns the context bundle with bounded sub-lists"
+        },
+        {
+          "id": "companies.getContext.missing",
+          "file": "test/resources/companies.test.ts",
+          "title": "throws NOT_FOUND for an unknown company id"
+        },
+        {
+          "id": "companies.getContext.limit",
+          "file": "test/resources/companies.test.ts",
+          "title": "honours the per-list limit and cap"
+        }
+      ],
+      "group": "A",
+      "status": "planned"
     },
     {
       "endpoint": "DELETE /articles/{id}",
@@ -583,17 +982,22 @@
       "helperBasis": null,
       "helperRationale": null,
       "effect": "destructive",
-      "flags": [],
+      "flags": [
+        "idempotent",
+        "requiresApproval"
+      ],
       "dryRun": true,
       "metadata": {
         "purpose": "Delete a Knowledge Base Article.",
         "usage": "Mutating path for articles; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": null,
-        "related": []
+        "preferredWhen": "Irreversible; prefer articles.archive when the record may be needed again.",
+        "related": [
+          "articles.archive"
+        ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": null,
+      "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -610,6 +1014,16 @@
           "id": "articles.delete.dry-run",
           "file": "test/resources/articles.test.ts",
           "title": "dry-run issues no DELETE request and returns simulated: true"
+        },
+        {
+          "id": "articles.delete.correlation",
+          "file": "test/resources/articles.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
+        },
+        {
+          "id": "articles.delete.stale",
+          "file": "test/resources/articles.test.ts",
+          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
@@ -637,9 +1051,12 @@
       "dryRun": false,
       "metadata": {
         "purpose": "Get a list of Knowledge Base Articles.",
-        "usage": "Read path for articles. Primitives return the full typed record.",
-        "preferredWhen": null,
-        "related": []
+        "usage": "Read path for articles returning the full typed record; helpers return compact shapes.",
+        "preferredWhen": "Use when many records are needed; prefer articles.search or articles.resolve for a single lookup.",
+        "related": [
+          "articles.resolve",
+          "articles.search"
+        ]
       },
       "compact": null,
       "resolution": null,
@@ -660,6 +1077,11 @@
           "id": "articles.list.pagination",
           "file": "test/resources/articles.test.ts",
           "title": "sends page/page_size and stops on a short page"
+        },
+        {
+          "id": "articles.list.correlation",
+          "file": "test/resources/articles.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
         }
       ],
       "group": "A",
@@ -679,9 +1101,12 @@
       "dryRun": false,
       "metadata": {
         "purpose": "Get a Knowledge Base Article.",
-        "usage": "Read path for articles. Primitives return the full typed record.",
-        "preferredWhen": null,
-        "related": []
+        "usage": "Read path for articles returning the full typed record; helpers return compact shapes.",
+        "preferredWhen": "Preferred when the numeric id is already known; articles.resolve is for a name, slug or domain.",
+        "related": [
+          "articles.resolve",
+          "articles.list"
+        ]
       },
       "compact": null,
       "resolution": null,
@@ -702,6 +1127,11 @@
           "id": "articles.get.not-found",
           "file": "test/resources/articles.test.ts",
           "title": "normalises a 404 into NOT_FOUND"
+        },
+        {
+          "id": "articles.get.correlation",
+          "file": "test/resources/articles.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
         }
       ],
       "group": "A",
@@ -722,12 +1152,14 @@
       "metadata": {
         "purpose": "Create a Knowledge Base Article.",
         "usage": "Mutating path for articles; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": null,
-        "related": []
+        "preferredWhen": "Only for a record that does not exist yet; prefer articles.update for an id you already have.",
+        "related": [
+          "articles.update"
+        ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": null,
+      "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -744,6 +1176,16 @@
           "id": "articles.create.dry-run",
           "file": "test/resources/articles.test.ts",
           "title": "dry-run issues no mutating request and returns simulated: true"
+        },
+        {
+          "id": "articles.create.correlation",
+          "file": "test/resources/articles.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
+        },
+        {
+          "id": "articles.create.stale",
+          "file": "test/resources/articles.test.ts",
+          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
@@ -759,17 +1201,21 @@
       "helperBasis": null,
       "helperRationale": null,
       "effect": "write",
-      "flags": [],
+      "flags": [
+        "idempotent"
+      ],
       "dryRun": true,
       "metadata": {
         "purpose": "Update a Knowledge Base Article.",
         "usage": "Mutating path for articles; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": null,
-        "related": []
+        "preferredWhen": "Preferred over create or delete when the record exists and only some fields change.",
+        "related": [
+          "articles.get"
+        ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": null,
+      "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -792,6 +1238,16 @@
           "id": "articles.update.unwraps-by-singleKey",
           "file": "test/resources/articles.test.ts",
           "title": "unwraps the PUT response by singleKey"
+        },
+        {
+          "id": "articles.update.correlation",
+          "file": "test/resources/articles.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
+        },
+        {
+          "id": "articles.update.stale",
+          "file": "test/resources/articles.test.ts",
+          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
@@ -807,17 +1263,22 @@
       "helperBasis": null,
       "helperRationale": null,
       "effect": "write",
-      "flags": [],
+      "flags": [
+        "idempotent"
+      ],
       "dryRun": true,
       "metadata": {
         "purpose": "Archive a Knowledge Base Article.",
         "usage": "Mutating path for articles; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": null,
-        "related": []
+        "preferredWhen": "Preferred over articles.delete when the record may be needed again.",
+        "related": [
+          "articles.delete",
+          "articles.unarchive"
+        ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": null,
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -835,6 +1296,11 @@
           "id": "articles.archive.dry-run",
           "file": "test/resources/articles.test.ts",
           "title": "dry-run issues no mutating request and returns simulated: true"
+        },
+        {
+          "id": "articles.archive.correlation",
+          "file": "test/resources/articles.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
         }
       ],
       "group": "A",
@@ -850,17 +1316,21 @@
       "helperBasis": null,
       "helperRationale": null,
       "effect": "write",
-      "flags": [],
+      "flags": [
+        "idempotent"
+      ],
       "dryRun": true,
       "metadata": {
         "purpose": "Unarchive a Knowledge Base Article.",
         "usage": "Mutating path for articles; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": null,
-        "related": []
+        "preferredWhen": "Preferred over re-creating an archived record.",
+        "related": [
+          "articles.delete"
+        ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": null,
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -878,10 +1348,255 @@
           "id": "articles.unarchive.dry-run",
           "file": "test/resources/articles.test.ts",
           "title": "dry-run issues no mutating request and returns simulated: true"
+        },
+        {
+          "id": "articles.unarchive.correlation",
+          "file": "test/resources/articles.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
         }
       ],
       "group": "A",
       "status": "implemented"
+    },
+    {
+      "endpoint": null,
+      "primitive": null,
+      "specialOp": null,
+      "vendorFilters": [],
+      "search": null,
+      "helper": "articles.resolve",
+      "helperBasis": "server-filter",
+      "helperRationale": "Removes the caller-side choice of lookup endpoint and the paging + exact-match loop; without it every agent re-implements name/domain matching and reads a truncated scan as 'does not exist'.",
+      "effect": "read",
+      "flags": [],
+      "dryRun": false,
+      "metadata": {
+        "purpose": "Resolve a knowledge-base article from an id, name or slug.",
+        "usage": "Bare values are read in the order: numeric id, slug, exact name (optionally narrowed by company_id). A miss on {id} throws NOT_FOUND; a complete scan with no match returns null.",
+        "preferredWhen": "Use when the article identifier is a name or slug; articles.get is cheaper for a known id.",
+        "related": [
+          "articles.get",
+          "articles.findBySlug",
+          "articles.search",
+          "articles.getContext"
+        ]
+      },
+      "compact": "ArticleSummary",
+      "resolution": {
+        "basis": "server-filter",
+        "maxScanRecords": 500,
+        "maxScanPages": 4
+      },
+      "staleCheck": null,
+      "redaction": "none",
+      "errors": [
+        "NOT_FOUND",
+        "RESOLUTION_AMBIGUOUS",
+        "RESOLUTION_TRUNCATED",
+        "NETWORK_ERROR"
+      ],
+      "tests": [
+        {
+          "id": "articles.resolve.id",
+          "file": "test/resources/articles.test.ts",
+          "title": "fetches by id without a scan"
+        },
+        {
+          "id": "articles.resolve.id-miss",
+          "file": "test/resources/articles.test.ts",
+          "title": "throws NOT_FOUND for an unknown id"
+        },
+        {
+          "id": "articles.resolve.unique",
+          "file": "test/resources/articles.test.ts",
+          "title": "returns the single exact match"
+        },
+        {
+          "id": "articles.resolve.miss",
+          "file": "test/resources/articles.test.ts",
+          "title": "returns null after a complete scan"
+        },
+        {
+          "id": "articles.resolve.ambiguous",
+          "file": "test/resources/articles.test.ts",
+          "title": "throws RESOLUTION_AMBIGUOUS with candidate ids"
+        },
+        {
+          "id": "articles.resolve.truncated",
+          "file": "test/resources/articles.test.ts",
+          "title": "throws RESOLUTION_TRUNCATED at the cap"
+        },
+        {
+          "id": "articles.resolve.compact",
+          "file": "test/resources/articles.test.ts",
+          "title": "returns ArticleSummary"
+        },
+        {
+          "id": "articles.resolve.expand",
+          "file": "test/resources/articles.test.ts",
+          "title": "expand: true returns the full article"
+        }
+      ],
+      "group": "A",
+      "status": "planned"
+    },
+    {
+      "endpoint": null,
+      "primitive": null,
+      "specialOp": null,
+      "vendorFilters": [],
+      "search": null,
+      "helper": "articles.findBySlug",
+      "helperBasis": "server-filter",
+      "helperRationale": "Removes a paged list call plus the client-side exact match the vendor filter does not guarantee, and gives that cost one bounded, declared home.",
+      "effect": "read",
+      "flags": [],
+      "dryRun": false,
+      "metadata": {
+        "purpose": "Find one article by its URL slug.",
+        "usage": "Vendor `slug` filter with an exact compare, bounded by the resolution caps.",
+        "preferredWhen": "Preferred over articles.list for a slug lookup.",
+        "related": [
+          "articles.resolve",
+          "articles.search"
+        ]
+      },
+      "compact": "ArticleSummary",
+      "resolution": {
+        "basis": "server-filter",
+        "maxScanRecords": 500,
+        "maxScanPages": 4
+      },
+      "staleCheck": null,
+      "redaction": "none",
+      "errors": [
+        "RESOLUTION_AMBIGUOUS",
+        "RESOLUTION_TRUNCATED",
+        "NETWORK_ERROR"
+      ],
+      "tests": [
+        {
+          "id": "articles.findBySlug.match",
+          "file": "test/resources/articles.test.ts",
+          "title": "returns the exact match"
+        },
+        {
+          "id": "articles.findBySlug.no-match",
+          "file": "test/resources/articles.test.ts",
+          "title": "returns null after a complete scan"
+        },
+        {
+          "id": "articles.findBySlug.compact",
+          "file": "test/resources/articles.test.ts",
+          "title": "returns ArticleSummary"
+        },
+        {
+          "id": "articles.findBySlug.expand",
+          "file": "test/resources/articles.test.ts",
+          "title": "expand: true returns the full article"
+        }
+      ],
+      "group": "A",
+      "status": "planned"
+    },
+    {
+      "endpoint": null,
+      "primitive": null,
+      "specialOp": null,
+      "vendorFilters": [],
+      "search": null,
+      "helper": "articles.search",
+      "helperBasis": "server-filter",
+      "helperRationale": "Replaces an agent's own paging loop with the vendor's text search and returns compact records, so a search does not pull full records into context.",
+      "effect": "read",
+      "flags": [],
+      "dryRun": false,
+      "metadata": {
+        "purpose": "Search knowledge-base articles by a free-text query.",
+        "usage": "Vendor `search` filter, optionally scoped with company_id. limit defaults to 25, max 100.",
+        "preferredWhen": "Preferred over articles.list for any text search.",
+        "related": [
+          "articles.list",
+          "articles.resolve"
+        ]
+      },
+      "compact": "ArticleSummary",
+      "resolution": {
+        "basis": "server-filter",
+        "maxScanRecords": 500,
+        "maxScanPages": 4
+      },
+      "staleCheck": null,
+      "redaction": "none",
+      "errors": [
+        "BAD_REQUEST",
+        "RATE_LIMIT",
+        "NETWORK_ERROR"
+      ],
+      "tests": [
+        {
+          "id": "articles.search.match",
+          "file": "test/resources/articles.test.ts",
+          "title": "returns matching ArticleSummary records"
+        },
+        {
+          "id": "articles.search.limit",
+          "file": "test/resources/articles.test.ts",
+          "title": "honours limit and never exceeds 100"
+        },
+        {
+          "id": "articles.search.scoped",
+          "file": "test/resources/articles.test.ts",
+          "title": "narrows the search to company_id when given"
+        }
+      ],
+      "group": "A",
+      "status": "planned"
+    },
+    {
+      "endpoint": null,
+      "primitive": null,
+      "specialOp": null,
+      "vendorFilters": [],
+      "search": null,
+      "helper": "articles.getContext",
+      "helperBasis": "workflow",
+      "helperRationale": "Replaces several sequential calls (and the agent's reasoning about which resources relate to this one) with one bounded composite read.",
+      "effect": "read",
+      "flags": [],
+      "dryRun": false,
+      "metadata": {
+        "purpose": "Fetch an article with its company and folder context.",
+        "usage": "Returns the article plus its company and folder (when set) in one call. Every part is a bounded fetch.",
+        "preferredWhen": "Preferred over three separate calls when an agent starts from an article.",
+        "related": [
+          "articles.get",
+          "companies.resolve",
+          "folders.get"
+        ]
+      },
+      "compact": "ArticleContext",
+      "resolution": null,
+      "staleCheck": null,
+      "redaction": "none",
+      "errors": [
+        "NOT_FOUND",
+        "NETWORK_ERROR"
+      ],
+      "tests": [
+        {
+          "id": "articles.getContext.shape",
+          "file": "test/resources/articles.test.ts",
+          "title": "returns the article with its company and folder context"
+        },
+        {
+          "id": "articles.getContext.missing",
+          "file": "test/resources/articles.test.ts",
+          "title": "throws NOT_FOUND for an unknown article id"
+        }
+      ],
+      "group": "A",
+      "status": "planned"
     },
     {
       "endpoint": "DELETE /companies/{company_id}/assets/{id}",
@@ -893,17 +1608,22 @@
       "helperBasis": null,
       "helperRationale": null,
       "effect": "destructive",
-      "flags": [],
+      "flags": [
+        "idempotent",
+        "requiresApproval"
+      ],
       "dryRun": true,
       "metadata": {
         "purpose": "Delete an Asset.",
         "usage": "Mutating path for assets; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": null,
-        "related": []
+        "preferredWhen": "Irreversible; prefer assets.archive when the record may be needed again.",
+        "related": [
+          "assets.archive"
+        ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": null,
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -920,6 +1640,11 @@
           "id": "assets.delete.dry-run",
           "file": "test/resources/assets.test.ts",
           "title": "dry-run issues no DELETE request and returns simulated: true"
+        },
+        {
+          "id": "assets.delete.correlation",
+          "file": "test/resources/assets.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
         }
       ],
       "group": "A",
@@ -949,9 +1674,12 @@
       "dryRun": false,
       "metadata": {
         "purpose": "Retrieve a list of assets.",
-        "usage": "Read path for assets. Primitives return the full typed record.",
-        "preferredWhen": null,
-        "related": []
+        "usage": "Read path for assets returning the full typed record; helpers return compact shapes.",
+        "preferredWhen": "Prefer assets.list when the company is known; prefer assets.search for a text query.",
+        "related": [
+          "assets.list",
+          "assets.search"
+        ]
       },
       "compact": null,
       "resolution": null,
@@ -967,6 +1695,11 @@
           "id": "assets.listAcrossCompanies.success",
           "file": "test/resources/assets.test.ts",
           "title": "calls the assets.listAcrossCompanies endpoint and returns the documented shape"
+        },
+        {
+          "id": "assets.listAcrossCompanies.correlation",
+          "file": "test/resources/assets.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
         }
       ],
       "group": "A",
@@ -988,9 +1721,12 @@
       "dryRun": false,
       "metadata": {
         "purpose": "Get a list of Assets specific to a Company.",
-        "usage": "Read path for assets. Primitives return the full typed record.",
-        "preferredWhen": null,
-        "related": []
+        "usage": "Read path for assets returning the full typed record; helpers return compact shapes.",
+        "preferredWhen": "Use when many records are needed; prefer assets.search or assets.resolve for a single lookup.",
+        "related": [
+          "assets.resolve",
+          "assets.search"
+        ]
       },
       "compact": null,
       "resolution": null,
@@ -1011,6 +1747,11 @@
           "id": "assets.list.pagination",
           "file": "test/resources/assets.test.ts",
           "title": "sends page/page_size and stops on a short page"
+        },
+        {
+          "id": "assets.list.correlation",
+          "file": "test/resources/assets.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
         }
       ],
       "group": "A",
@@ -1030,9 +1771,12 @@
       "dryRun": false,
       "metadata": {
         "purpose": "Get an Asset.",
-        "usage": "Read path for assets. Primitives return the full typed record.",
-        "preferredWhen": null,
-        "related": []
+        "usage": "Read path for assets returning the full typed record; helpers return compact shapes.",
+        "preferredWhen": "Preferred when the numeric id is already known; assets.resolve is for a name, slug or domain.",
+        "related": [
+          "assets.resolve",
+          "assets.list"
+        ]
       },
       "compact": null,
       "resolution": null,
@@ -1053,6 +1797,11 @@
           "id": "assets.get.not-found",
           "file": "test/resources/assets.test.ts",
           "title": "normalises a 404 into NOT_FOUND"
+        },
+        {
+          "id": "assets.get.correlation",
+          "file": "test/resources/assets.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
         }
       ],
       "group": "A",
@@ -1073,12 +1822,14 @@
       "metadata": {
         "purpose": "Create an Asset.",
         "usage": "Mutating path for assets; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": null,
-        "related": []
+        "preferredWhen": "Only for a record that does not exist yet; prefer assets.update for an id you already have.",
+        "related": [
+          "assets.update"
+        ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": null,
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR"
@@ -1093,6 +1844,11 @@
           "id": "assets.create.dry-run",
           "file": "test/resources/assets.test.ts",
           "title": "dry-run issues no mutating request and returns simulated: true"
+        },
+        {
+          "id": "assets.create.correlation",
+          "file": "test/resources/assets.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
         }
       ],
       "group": "A",
@@ -1108,17 +1864,21 @@
       "helperBasis": null,
       "helperRationale": null,
       "effect": "write",
-      "flags": [],
+      "flags": [
+        "idempotent"
+      ],
       "dryRun": true,
       "metadata": {
         "purpose": "Update an Asset.",
         "usage": "Mutating path for assets; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": null,
-        "related": []
+        "preferredWhen": "Preferred over create or delete when the record exists and only some fields change.",
+        "related": [
+          "assets.get"
+        ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": null,
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -1141,6 +1901,11 @@
           "id": "assets.update.unwraps-by-singleKey",
           "file": "test/resources/assets.test.ts",
           "title": "unwraps the PUT response by singleKey"
+        },
+        {
+          "id": "assets.update.correlation",
+          "file": "test/resources/assets.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
         }
       ],
       "group": "A",
@@ -1156,17 +1921,22 @@
       "helperBasis": null,
       "helperRationale": null,
       "effect": "write",
-      "flags": [],
+      "flags": [
+        "idempotent"
+      ],
       "dryRun": true,
       "metadata": {
         "purpose": "Archive an Asset.",
         "usage": "Mutating path for assets; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": null,
-        "related": []
+        "preferredWhen": "Preferred over assets.delete when the record may be needed again.",
+        "related": [
+          "assets.delete",
+          "assets.unarchive"
+        ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": null,
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -1184,6 +1954,11 @@
           "id": "assets.archive.dry-run",
           "file": "test/resources/assets.test.ts",
           "title": "dry-run issues no mutating request and returns simulated: true"
+        },
+        {
+          "id": "assets.archive.correlation",
+          "file": "test/resources/assets.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
         }
       ],
       "group": "A",
@@ -1199,7 +1974,9 @@
       "helperBasis": null,
       "helperRationale": null,
       "effect": "write",
-      "flags": [],
+      "flags": [
+        "idempotent"
+      ],
       "dryRun": true,
       "metadata": {
         "purpose": "Move asset to a different layout.",
@@ -1209,7 +1986,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": null,
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -1227,6 +2004,11 @@
           "id": "assets.moveLayout.dry-run",
           "file": "test/resources/assets.test.ts",
           "title": "dry-run issues no mutating request and returns simulated: true"
+        },
+        {
+          "id": "assets.moveLayout.correlation",
+          "file": "test/resources/assets.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
         }
       ],
       "group": "A",
@@ -1242,17 +2024,21 @@
       "helperBasis": null,
       "helperRationale": null,
       "effect": "write",
-      "flags": [],
+      "flags": [
+        "idempotent"
+      ],
       "dryRun": true,
       "metadata": {
         "purpose": "Unarchive an Asset.",
         "usage": "Mutating path for assets; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": null,
-        "related": []
+        "preferredWhen": "Preferred over re-creating an archived record.",
+        "related": [
+          "assets.delete"
+        ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": null,
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -1270,10 +2056,267 @@
           "id": "assets.unarchive.dry-run",
           "file": "test/resources/assets.test.ts",
           "title": "dry-run issues no mutating request and returns simulated: true"
+        },
+        {
+          "id": "assets.unarchive.correlation",
+          "file": "test/resources/assets.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
         }
       ],
       "group": "A",
       "status": "implemented"
+    },
+    {
+      "endpoint": null,
+      "primitive": null,
+      "specialOp": null,
+      "vendorFilters": [],
+      "search": null,
+      "helper": "assets.resolve",
+      "helperBasis": "server-filter",
+      "helperRationale": "Removes the caller-side choice of lookup endpoint and the paging + exact-match loop; without it every agent re-implements name/domain matching and reads a truncated scan as 'does not exist'.",
+      "effect": "read",
+      "flags": [],
+      "dryRun": false,
+      "metadata": {
+        "purpose": "Resolve an asset from an id, serial, name or slug.",
+        "usage": "Accepts {companyId, id} for a direct company-scoped fetch, or an account-wide identifier (primary_serial, name, slug) that uses the vendor filters on GET /assets. Bare values are read in the order: numeric id, primary_serial, name, slug.",
+        "preferredWhen": "Use when the identifier is a serial or a name; assets.get is cheaper for a known id.",
+        "related": [
+          "assets.get",
+          "assets.findBySerial",
+          "assets.search",
+          "assets.getContext"
+        ]
+      },
+      "compact": "AssetSummary",
+      "resolution": {
+        "basis": "server-filter",
+        "maxScanRecords": 500,
+        "maxScanPages": 4
+      },
+      "staleCheck": null,
+      "redaction": "none",
+      "errors": [
+        "NOT_FOUND",
+        "RESOLUTION_AMBIGUOUS",
+        "RESOLUTION_TRUNCATED",
+        "NETWORK_ERROR"
+      ],
+      "tests": [
+        {
+          "id": "assets.resolve.id",
+          "file": "test/resources/assets.test.ts",
+          "title": "fetches by company id and asset id without a scan"
+        },
+        {
+          "id": "assets.resolve.id-miss",
+          "file": "test/resources/assets.test.ts",
+          "title": "throws NOT_FOUND for an unknown asset id"
+        },
+        {
+          "id": "assets.resolve.unique",
+          "file": "test/resources/assets.test.ts",
+          "title": "returns the single exact match"
+        },
+        {
+          "id": "assets.resolve.miss",
+          "file": "test/resources/assets.test.ts",
+          "title": "returns null after a complete scan"
+        },
+        {
+          "id": "assets.resolve.ambiguous",
+          "file": "test/resources/assets.test.ts",
+          "title": "throws RESOLUTION_AMBIGUOUS with candidate ids"
+        },
+        {
+          "id": "assets.resolve.truncated",
+          "file": "test/resources/assets.test.ts",
+          "title": "throws RESOLUTION_TRUNCATED at the cap"
+        },
+        {
+          "id": "assets.resolve.compact",
+          "file": "test/resources/assets.test.ts",
+          "title": "returns AssetSummary"
+        },
+        {
+          "id": "assets.resolve.expand",
+          "file": "test/resources/assets.test.ts",
+          "title": "expand: true returns the full asset"
+        }
+      ],
+      "group": "A",
+      "status": "planned"
+    },
+    {
+      "endpoint": null,
+      "primitive": null,
+      "specialOp": null,
+      "vendorFilters": [],
+      "search": null,
+      "helper": "assets.findBySerial",
+      "helperBasis": "server-filter",
+      "helperRationale": "Removes a paged list call plus the client-side exact match the vendor filter does not guarantee, and gives that cost one bounded, declared home.",
+      "effect": "read",
+      "flags": [],
+      "dryRun": false,
+      "metadata": {
+        "purpose": "Find one asset by its primary serial number.",
+        "usage": "Uses the vendor `primary_serial` filter with an exact compare, bounded by the resolution caps. Most useful for the account-wide path; a company-scoped asset can be fetched directly with assets.get.",
+        "preferredWhen": "Preferred over assets.listAllAcrossCompanies for any serial lookup.",
+        "related": [
+          "assets.resolve",
+          "assets.get"
+        ]
+      },
+      "compact": "AssetSummary",
+      "resolution": {
+        "basis": "server-filter",
+        "maxScanRecords": 500,
+        "maxScanPages": 4
+      },
+      "staleCheck": null,
+      "redaction": "none",
+      "errors": [
+        "RESOLUTION_AMBIGUOUS",
+        "RESOLUTION_TRUNCATED",
+        "NETWORK_ERROR"
+      ],
+      "tests": [
+        {
+          "id": "assets.findBySerial.match",
+          "file": "test/resources/assets.test.ts",
+          "title": "returns the exact match"
+        },
+        {
+          "id": "assets.findBySerial.no-match",
+          "file": "test/resources/assets.test.ts",
+          "title": "returns null after a complete scan"
+        },
+        {
+          "id": "assets.findBySerial.ambiguous",
+          "file": "test/resources/assets.test.ts",
+          "title": "throws RESOLUTION_AMBIGUOUS when several assets share the serial"
+        },
+        {
+          "id": "assets.findBySerial.compact",
+          "file": "test/resources/assets.test.ts",
+          "title": "returns AssetSummary"
+        },
+        {
+          "id": "assets.findBySerial.expand",
+          "file": "test/resources/assets.test.ts",
+          "title": "expand: true returns the full asset"
+        }
+      ],
+      "group": "A",
+      "status": "planned"
+    },
+    {
+      "endpoint": null,
+      "primitive": null,
+      "specialOp": null,
+      "vendorFilters": [],
+      "search": null,
+      "helper": "assets.search",
+      "helperBasis": "server-filter",
+      "helperRationale": "Replaces an agent's own paging loop with the vendor's text search and returns compact records, so a search does not pull full records into context.",
+      "effect": "read",
+      "flags": [],
+      "dryRun": false,
+      "metadata": {
+        "purpose": "Search assets by a free-text query, optionally scoped to one company.",
+        "usage": "Uses the vendor `search` filter on the account-wide list (optionally narrowed with company_id). limit defaults to 25, max 100. Company scoping is applied by the caller, so an agent does not have to know which endpoint to use.",
+        "preferredWhen": "Preferred over the asset list endpoints for any text search.",
+        "related": [
+          "assets.list",
+          "assets.listAcrossCompanies",
+          "assets.resolve"
+        ]
+      },
+      "compact": "AssetSummary",
+      "resolution": {
+        "basis": "server-filter",
+        "maxScanRecords": 500,
+        "maxScanPages": 4
+      },
+      "staleCheck": null,
+      "redaction": "none",
+      "errors": [
+        "BAD_REQUEST",
+        "RATE_LIMIT",
+        "NETWORK_ERROR"
+      ],
+      "tests": [
+        {
+          "id": "assets.search.match",
+          "file": "test/resources/assets.test.ts",
+          "title": "returns matching AssetSummary records"
+        },
+        {
+          "id": "assets.search.scoped",
+          "file": "test/resources/assets.test.ts",
+          "title": "narrows the search to company_id when given"
+        },
+        {
+          "id": "assets.search.limit",
+          "file": "test/resources/assets.test.ts",
+          "title": "honours limit and never exceeds 100"
+        }
+      ],
+      "group": "A",
+      "status": "planned"
+    },
+    {
+      "endpoint": null,
+      "primitive": null,
+      "specialOp": null,
+      "vendorFilters": [],
+      "search": null,
+      "helper": "assets.getContext",
+      "helperBasis": "workflow",
+      "helperRationale": "Replaces several sequential calls (and the agent's reasoning about which resources relate to this one) with one bounded composite read.",
+      "effect": "read",
+      "flags": [],
+      "dryRun": false,
+      "metadata": {
+        "purpose": "Fetch an asset with the context an agent needs about it.",
+        "usage": "Returns the asset, its layout, its expirations and its relations in one call, each as a bounded list (limit defaults to 25, max 100).",
+        "preferredWhen": "Preferred over four separate calls when an agent starts from an asset.",
+        "related": [
+          "assets.get",
+          "asset_layouts.get",
+          "expirations.list",
+          "relations.list"
+        ]
+      },
+      "compact": "AssetContext",
+      "resolution": null,
+      "staleCheck": null,
+      "redaction": "none",
+      "errors": [
+        "NOT_FOUND",
+        "NETWORK_ERROR"
+      ],
+      "tests": [
+        {
+          "id": "assets.getContext.shape",
+          "file": "test/resources/assets.test.ts",
+          "title": "returns the asset with its layout, expirations and relations"
+        },
+        {
+          "id": "assets.getContext.missing",
+          "file": "test/resources/assets.test.ts",
+          "title": "throws NOT_FOUND for an unknown asset"
+        },
+        {
+          "id": "assets.getContext.limit",
+          "file": "test/resources/assets.test.ts",
+          "title": "honours the per-list limit and cap"
+        }
+      ],
+      "group": "A",
+      "status": "planned"
     },
     {
       "endpoint": "GET /asset_layouts",
@@ -1294,9 +2337,12 @@
       "dryRun": false,
       "metadata": {
         "purpose": "Get a list of Asset Layouts.",
-        "usage": "Read path for asset_layouts. Primitives return the full typed record.",
-        "preferredWhen": null,
-        "related": []
+        "usage": "Read path for asset_layouts returning the full typed record; helpers return compact shapes.",
+        "preferredWhen": "Use when many records are needed; prefer asset_layouts.search or asset_layouts.resolve for a single lookup.",
+        "related": [
+          "asset_layouts.resolve",
+          "asset_layouts.search"
+        ]
       },
       "compact": null,
       "resolution": null,
@@ -1318,6 +2364,11 @@
           "id": "asset_layouts.list.pagination",
           "file": "test/resources/asset_layouts.test.ts",
           "title": "sends page/page_size and stops on a short page"
+        },
+        {
+          "id": "asset_layouts.list.correlation",
+          "file": "test/resources/asset_layouts.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
         }
       ],
       "group": "A",
@@ -1337,9 +2388,12 @@
       "dryRun": false,
       "metadata": {
         "purpose": "Get an Asset Layout.",
-        "usage": "Read path for asset_layouts. Primitives return the full typed record.",
-        "preferredWhen": null,
-        "related": []
+        "usage": "Read path for asset_layouts returning the full typed record; helpers return compact shapes.",
+        "preferredWhen": "Preferred when the numeric id is already known; asset_layouts.resolve is for a name, slug or domain.",
+        "related": [
+          "asset_layouts.resolve",
+          "asset_layouts.list"
+        ]
       },
       "compact": null,
       "resolution": null,
@@ -1360,6 +2414,11 @@
           "id": "asset_layouts.get.not-found",
           "file": "test/resources/asset_layouts.test.ts",
           "title": "normalises a 404 into NOT_FOUND"
+        },
+        {
+          "id": "asset_layouts.get.correlation",
+          "file": "test/resources/asset_layouts.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
         }
       ],
       "group": "A",
@@ -1380,12 +2439,14 @@
       "metadata": {
         "purpose": "Create an Asset Layout.",
         "usage": "Mutating path for asset_layouts; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": null,
-        "related": []
+        "preferredWhen": "Only for a record that does not exist yet; prefer asset_layouts.update for an id you already have.",
+        "related": [
+          "asset_layouts.update"
+        ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": null,
+      "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -1403,6 +2464,16 @@
           "id": "asset_layouts.create.dry-run",
           "file": "test/resources/asset_layouts.test.ts",
           "title": "dry-run issues no mutating request and returns simulated: true"
+        },
+        {
+          "id": "asset_layouts.create.correlation",
+          "file": "test/resources/asset_layouts.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
+        },
+        {
+          "id": "asset_layouts.create.stale",
+          "file": "test/resources/asset_layouts.test.ts",
+          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
@@ -1418,17 +2489,21 @@
       "helperBasis": null,
       "helperRationale": null,
       "effect": "write",
-      "flags": [],
+      "flags": [
+        "idempotent"
+      ],
       "dryRun": true,
       "metadata": {
         "purpose": "Update an Asset Layout.",
         "usage": "Mutating path for asset_layouts; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": null,
-        "related": []
+        "preferredWhen": "Preferred over create or delete when the record exists and only some fields change.",
+        "related": [
+          "asset_layouts.get"
+        ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": null,
+      "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -1451,10 +2526,90 @@
           "id": "asset_layouts.update.unwraps-by-singleKey",
           "file": "test/resources/asset_layouts.test.ts",
           "title": "unwraps the PUT response by singleKey"
+        },
+        {
+          "id": "asset_layouts.update.correlation",
+          "file": "test/resources/asset_layouts.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
+        },
+        {
+          "id": "asset_layouts.update.stale",
+          "file": "test/resources/asset_layouts.test.ts",
+          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
       "status": "implemented"
+    },
+    {
+      "endpoint": null,
+      "primitive": null,
+      "specialOp": null,
+      "vendorFilters": [],
+      "search": null,
+      "helper": "asset_layouts.resolve",
+      "helperBasis": "server-filter",
+      "helperRationale": "Removes the caller-side choice of lookup endpoint and the paging + exact-match loop; without it every agent re-implements name/domain matching and reads a truncated scan as 'does not exist'.",
+      "effect": "read",
+      "flags": [],
+      "dryRun": false,
+      "metadata": {
+        "purpose": "Resolve an asset layout from an id, name or slug.",
+        "usage": "Bare values are read in the order: numeric id, slug, exact name. Layouts are a small configuration table, so the caps are never expected to be reached.",
+        "preferredWhen": "Use when the identifier is a layout name or slug; asset_layouts.get is cheaper for a known id.",
+        "related": [
+          "asset_layouts.get",
+          "asset_layouts.list"
+        ]
+      },
+      "compact": "AssetLayoutSummary",
+      "resolution": {
+        "basis": "server-filter",
+        "maxScanRecords": 500,
+        "maxScanPages": 4
+      },
+      "staleCheck": null,
+      "redaction": "none",
+      "errors": [
+        "NOT_FOUND",
+        "RESOLUTION_AMBIGUOUS",
+        "RESOLUTION_TRUNCATED",
+        "NETWORK_ERROR"
+      ],
+      "tests": [
+        {
+          "id": "asset_layouts.resolve.id",
+          "file": "test/resources/asset_layouts.test.ts",
+          "title": "fetches by id without a scan"
+        },
+        {
+          "id": "asset_layouts.resolve.id-miss",
+          "file": "test/resources/asset_layouts.test.ts",
+          "title": "throws NOT_FOUND for an unknown id"
+        },
+        {
+          "id": "asset_layouts.resolve.unique",
+          "file": "test/resources/asset_layouts.test.ts",
+          "title": "returns the single exact match"
+        },
+        {
+          "id": "asset_layouts.resolve.miss",
+          "file": "test/resources/asset_layouts.test.ts",
+          "title": "returns null after a complete scan"
+        },
+        {
+          "id": "asset_layouts.resolve.compact",
+          "file": "test/resources/asset_layouts.test.ts",
+          "title": "returns AssetLayoutSummary"
+        },
+        {
+          "id": "asset_layouts.resolve.expand",
+          "file": "test/resources/asset_layouts.test.ts",
+          "title": "expand: true returns the full layout"
+        }
+      ],
+      "group": "A",
+      "status": "planned"
     },
     {
       "endpoint": "DELETE /asset_passwords/{id}",
@@ -1466,18 +2621,24 @@
       "helperBasis": null,
       "helperRationale": null,
       "effect": "destructive",
-      "flags": [],
+      "flags": [
+        "sensitive",
+        "idempotent",
+        "requiresApproval"
+      ],
       "dryRun": true,
       "metadata": {
         "purpose": "Delete a Password.",
         "usage": "Mutating path for asset_passwords; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": null,
-        "related": []
+        "preferredWhen": "Irreversible; prefer asset_passwords.archive when the record may be needed again.",
+        "related": [
+          "asset_passwords.archive"
+        ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": null,
-      "redaction": "none",
+      "staleCheck": "updated_at",
+      "redaction": "credentials",
       "errors": [
         "NETWORK_ERROR",
         "NOT_FOUND",
@@ -1493,6 +2654,16 @@
           "id": "asset_passwords.delete.dry-run",
           "file": "test/resources/asset_passwords.test.ts",
           "title": "dry-run issues no DELETE request and returns simulated: true"
+        },
+        {
+          "id": "asset_passwords.delete.correlation",
+          "file": "test/resources/asset_passwords.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
+        },
+        {
+          "id": "asset_passwords.delete.stale",
+          "file": "test/resources/asset_passwords.test.ts",
+          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
@@ -1515,18 +2686,23 @@
       "helperBasis": null,
       "helperRationale": null,
       "effect": "read",
-      "flags": [],
+      "flags": [
+        "sensitive"
+      ],
       "dryRun": false,
       "metadata": {
         "purpose": "Get a list of Passwords.",
-        "usage": "Read path for asset_passwords. Primitives return the full typed record.",
-        "preferredWhen": null,
-        "related": []
+        "usage": "Read path for asset_passwords returning the full typed record; helpers return compact shapes.",
+        "preferredWhen": "Use when many records are needed; prefer asset_passwords.search or asset_passwords.resolve for a single lookup.",
+        "related": [
+          "asset_passwords.resolve",
+          "asset_passwords.search"
+        ]
       },
       "compact": null,
       "resolution": null,
       "staleCheck": null,
-      "redaction": "none",
+      "redaction": "credentials",
       "errors": [
         "NETWORK_ERROR",
         "UNAUTHORIZED"
@@ -1541,6 +2717,16 @@
           "id": "asset_passwords.list.pagination",
           "file": "test/resources/asset_passwords.test.ts",
           "title": "sends page/page_size and stops on a short page"
+        },
+        {
+          "id": "asset_passwords.list.correlation",
+          "file": "test/resources/asset_passwords.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
+        },
+        {
+          "id": "asset_passwords.list.redaction",
+          "file": "test/resources/asset_passwords.test.ts",
+          "title": "does not log credential-shaped fields and redact() removes them from the returned data"
         }
       ],
       "group": "A",
@@ -1556,18 +2742,23 @@
       "helperBasis": null,
       "helperRationale": null,
       "effect": "read",
-      "flags": [],
+      "flags": [
+        "sensitive"
+      ],
       "dryRun": false,
       "metadata": {
         "purpose": "Get a Password.",
-        "usage": "Read path for asset_passwords. Primitives return the full typed record.",
-        "preferredWhen": null,
-        "related": []
+        "usage": "Read path for asset_passwords returning the full typed record; helpers return compact shapes.",
+        "preferredWhen": "Preferred when the numeric id is already known; asset_passwords.resolve is for a name, slug or domain.",
+        "related": [
+          "asset_passwords.resolve",
+          "asset_passwords.list"
+        ]
       },
       "compact": null,
       "resolution": null,
       "staleCheck": null,
-      "redaction": "none",
+      "redaction": "credentials",
       "errors": [
         "NETWORK_ERROR",
         "NOT_FOUND",
@@ -1583,6 +2774,16 @@
           "id": "asset_passwords.get.not-found",
           "file": "test/resources/asset_passwords.test.ts",
           "title": "normalises a 404 into NOT_FOUND"
+        },
+        {
+          "id": "asset_passwords.get.correlation",
+          "file": "test/resources/asset_passwords.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
+        },
+        {
+          "id": "asset_passwords.get.redaction",
+          "file": "test/resources/asset_passwords.test.ts",
+          "title": "does not log credential-shaped fields and redact() removes them from the returned data"
         }
       ],
       "group": "A",
@@ -1598,18 +2799,22 @@
       "helperBasis": null,
       "helperRationale": null,
       "effect": "write",
-      "flags": [],
+      "flags": [
+        "sensitive"
+      ],
       "dryRun": true,
       "metadata": {
         "purpose": "Create a Password.",
         "usage": "Mutating path for asset_passwords; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": null,
-        "related": []
+        "preferredWhen": "Only for a record that does not exist yet; prefer asset_passwords.update for an id you already have.",
+        "related": [
+          "asset_passwords.update"
+        ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": null,
-      "redaction": "none",
+      "staleCheck": "updated_at",
+      "redaction": "credentials",
       "errors": [
         "NETWORK_ERROR",
         "UNAUTHORIZED",
@@ -1625,6 +2830,16 @@
           "id": "asset_passwords.create.dry-run",
           "file": "test/resources/asset_passwords.test.ts",
           "title": "dry-run issues no mutating request and returns simulated: true"
+        },
+        {
+          "id": "asset_passwords.create.correlation",
+          "file": "test/resources/asset_passwords.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
+        },
+        {
+          "id": "asset_passwords.create.stale",
+          "file": "test/resources/asset_passwords.test.ts",
+          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
@@ -1640,18 +2855,23 @@
       "helperBasis": null,
       "helperRationale": null,
       "effect": "write",
-      "flags": [],
+      "flags": [
+        "sensitive",
+        "idempotent"
+      ],
       "dryRun": true,
       "metadata": {
         "purpose": "Update a Password.",
         "usage": "Mutating path for asset_passwords; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": null,
-        "related": []
+        "preferredWhen": "Preferred over create or delete when the record exists and only some fields change.",
+        "related": [
+          "asset_passwords.get"
+        ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": null,
-      "redaction": "none",
+      "staleCheck": "updated_at",
+      "redaction": "credentials",
       "errors": [
         "NETWORK_ERROR",
         "NOT_FOUND",
@@ -1673,6 +2893,16 @@
           "id": "asset_passwords.update.unwraps-by-singleKey",
           "file": "test/resources/asset_passwords.test.ts",
           "title": "unwraps the PUT response by singleKey"
+        },
+        {
+          "id": "asset_passwords.update.correlation",
+          "file": "test/resources/asset_passwords.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
+        },
+        {
+          "id": "asset_passwords.update.stale",
+          "file": "test/resources/asset_passwords.test.ts",
+          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
@@ -1688,18 +2918,24 @@
       "helperBasis": null,
       "helperRationale": null,
       "effect": "write",
-      "flags": [],
+      "flags": [
+        "sensitive",
+        "idempotent"
+      ],
       "dryRun": true,
       "metadata": {
         "purpose": "Archive a Password.",
         "usage": "Mutating path for asset_passwords; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": null,
-        "related": []
+        "preferredWhen": "Preferred over asset_passwords.delete when the record may be needed again.",
+        "related": [
+          "asset_passwords.delete",
+          "asset_passwords.unarchive"
+        ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": null,
-      "redaction": "none",
+      "staleCheck": "unavailable",
+      "redaction": "credentials",
       "errors": [
         "NETWORK_ERROR",
         "NOT_FOUND",
@@ -1716,6 +2952,11 @@
           "id": "asset_passwords.archive.dry-run",
           "file": "test/resources/asset_passwords.test.ts",
           "title": "dry-run issues no mutating request and returns simulated: true"
+        },
+        {
+          "id": "asset_passwords.archive.correlation",
+          "file": "test/resources/asset_passwords.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
         }
       ],
       "group": "A",
@@ -1731,18 +2972,23 @@
       "helperBasis": null,
       "helperRationale": null,
       "effect": "write",
-      "flags": [],
+      "flags": [
+        "sensitive",
+        "idempotent"
+      ],
       "dryRun": true,
       "metadata": {
         "purpose": "Unarchive a Password.",
         "usage": "Mutating path for asset_passwords; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": null,
-        "related": []
+        "preferredWhen": "Preferred over re-creating an archived record.",
+        "related": [
+          "asset_passwords.delete"
+        ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": null,
-      "redaction": "none",
+      "staleCheck": "unavailable",
+      "redaction": "credentials",
       "errors": [
         "NETWORK_ERROR",
         "NOT_FOUND",
@@ -1759,10 +3005,205 @@
           "id": "asset_passwords.unarchive.dry-run",
           "file": "test/resources/asset_passwords.test.ts",
           "title": "dry-run issues no mutating request and returns simulated: true"
+        },
+        {
+          "id": "asset_passwords.unarchive.correlation",
+          "file": "test/resources/asset_passwords.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
         }
       ],
       "group": "A",
       "status": "implemented"
+    },
+    {
+      "endpoint": null,
+      "primitive": null,
+      "specialOp": null,
+      "vendorFilters": [],
+      "search": null,
+      "helper": "asset_passwords.resolve",
+      "helperBasis": "server-filter",
+      "helperRationale": "Removes the caller-side choice of lookup endpoint and the paging + exact-match loop; without it every agent re-implements name/domain matching and reads a truncated scan as 'does not exist'.",
+      "effect": "read",
+      "flags": [
+        "sensitive"
+      ],
+      "dryRun": false,
+      "metadata": {
+        "purpose": "Resolve a password record from an id, name or slug.",
+        "usage": "Sensitive resource: the summary never contains the secret. Bare values are read in the order: numeric id, slug, exact name (optionally narrowed by company_id).",
+        "preferredWhen": "Use when the identifier is a name or slug; asset_passwords.get returns the full record including the secret.",
+        "related": [
+          "asset_passwords.get",
+          "asset_passwords.findBySlug",
+          "asset_passwords.search"
+        ]
+      },
+      "compact": "AssetPasswordSummary",
+      "resolution": {
+        "basis": "server-filter",
+        "maxScanRecords": 500,
+        "maxScanPages": 4
+      },
+      "staleCheck": null,
+      "redaction": "credentials",
+      "errors": [
+        "NOT_FOUND",
+        "RESOLUTION_AMBIGUOUS",
+        "RESOLUTION_TRUNCATED",
+        "NETWORK_ERROR"
+      ],
+      "tests": [
+        {
+          "id": "asset_passwords.resolve.id",
+          "file": "test/resources/asset_passwords.test.ts",
+          "title": "fetches by id without a scan"
+        },
+        {
+          "id": "asset_passwords.resolve.id-miss",
+          "file": "test/resources/asset_passwords.test.ts",
+          "title": "throws NOT_FOUND for an unknown id"
+        },
+        {
+          "id": "asset_passwords.resolve.unique",
+          "file": "test/resources/asset_passwords.test.ts",
+          "title": "returns the single exact match"
+        },
+        {
+          "id": "asset_passwords.resolve.miss",
+          "file": "test/resources/asset_passwords.test.ts",
+          "title": "returns null after a complete scan"
+        },
+        {
+          "id": "asset_passwords.resolve.ambiguous",
+          "file": "test/resources/asset_passwords.test.ts",
+          "title": "throws RESOLUTION_AMBIGUOUS with candidate ids"
+        },
+        {
+          "id": "asset_passwords.resolve.compact",
+          "file": "test/resources/asset_passwords.test.ts",
+          "title": "returns AssetPasswordSummary, which omits the secret"
+        },
+        {
+          "id": "asset_passwords.resolve.expand",
+          "file": "test/resources/asset_passwords.test.ts",
+          "title": "expand: true returns the full password record"
+        }
+      ],
+      "group": "A",
+      "status": "planned"
+    },
+    {
+      "endpoint": null,
+      "primitive": null,
+      "specialOp": null,
+      "vendorFilters": [],
+      "search": null,
+      "helper": "asset_passwords.findBySlug",
+      "helperBasis": "server-filter",
+      "helperRationale": "Removes a paged list call plus the client-side exact match the vendor filter does not guarantee, and gives that cost one bounded, declared home.",
+      "effect": "read",
+      "flags": [
+        "sensitive"
+      ],
+      "dryRun": false,
+      "metadata": {
+        "purpose": "Find one password record by its URL slug.",
+        "usage": "Vendor `slug` filter with an exact compare, bounded by the resolution caps. The summary omits the secret.",
+        "preferredWhen": "Preferred over asset_passwords.list for a slug lookup.",
+        "related": [
+          "asset_passwords.resolve",
+          "asset_passwords.search"
+        ]
+      },
+      "compact": "AssetPasswordSummary",
+      "resolution": {
+        "basis": "server-filter",
+        "maxScanRecords": 500,
+        "maxScanPages": 4
+      },
+      "staleCheck": null,
+      "redaction": "credentials",
+      "errors": [
+        "RESOLUTION_AMBIGUOUS",
+        "RESOLUTION_TRUNCATED",
+        "NETWORK_ERROR"
+      ],
+      "tests": [
+        {
+          "id": "asset_passwords.findBySlug.match",
+          "file": "test/resources/asset_passwords.test.ts",
+          "title": "returns the exact match as AssetPasswordSummary"
+        },
+        {
+          "id": "asset_passwords.findBySlug.no-match",
+          "file": "test/resources/asset_passwords.test.ts",
+          "title": "returns null after a complete scan"
+        },
+        {
+          "id": "asset_passwords.findBySlug.compact",
+          "file": "test/resources/asset_passwords.test.ts",
+          "title": "returns AssetPasswordSummary without the secret"
+        }
+      ],
+      "group": "A",
+      "status": "planned"
+    },
+    {
+      "endpoint": null,
+      "primitive": null,
+      "specialOp": null,
+      "vendorFilters": [],
+      "search": null,
+      "helper": "asset_passwords.search",
+      "helperBasis": "server-filter",
+      "helperRationale": "Replaces an agent's own paging loop with the vendor's text search and returns compact records, so a search does not pull full records into context.",
+      "effect": "read",
+      "flags": [
+        "sensitive"
+      ],
+      "dryRun": false,
+      "metadata": {
+        "purpose": "Search password records by a free-text query.",
+        "usage": "Vendor `search` filter, optionally scoped with company_id. limit defaults to 25, max 100. The summary omits password and otp_secret, so a search never pulls secrets into an agent's context.",
+        "preferredWhen": "Preferred over asset_passwords.list for any text search.",
+        "related": [
+          "asset_passwords.list",
+          "asset_passwords.resolve"
+        ]
+      },
+      "compact": "AssetPasswordSummary",
+      "resolution": {
+        "basis": "server-filter",
+        "maxScanRecords": 500,
+        "maxScanPages": 4
+      },
+      "staleCheck": null,
+      "redaction": "credentials",
+      "errors": [
+        "BAD_REQUEST",
+        "RATE_LIMIT",
+        "NETWORK_ERROR"
+      ],
+      "tests": [
+        {
+          "id": "asset_passwords.search.match",
+          "file": "test/resources/asset_passwords.test.ts",
+          "title": "returns matching AssetPasswordSummary records"
+        },
+        {
+          "id": "asset_passwords.search.no-secret",
+          "file": "test/resources/asset_passwords.test.ts",
+          "title": "never includes password or otp_secret"
+        },
+        {
+          "id": "asset_passwords.search.limit",
+          "file": "test/resources/asset_passwords.test.ts",
+          "title": "honours limit and never exceeds 100"
+        }
+      ],
+      "group": "A",
+      "status": "planned"
     },
     {
       "endpoint": "DELETE /websites/{id}",
@@ -1774,17 +3215,22 @@
       "helperBasis": null,
       "helperRationale": null,
       "effect": "destructive",
-      "flags": [],
+      "flags": [
+        "idempotent",
+        "requiresApproval"
+      ],
       "dryRun": true,
       "metadata": {
         "purpose": "Delete a Website.",
         "usage": "Mutating path for websites; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": null,
-        "related": []
+        "preferredWhen": "Irreversible; prefer websites.archive when the record may be needed again.",
+        "related": [
+          "websites.archive"
+        ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": null,
+      "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -1801,6 +3247,16 @@
           "id": "websites.delete.dry-run",
           "file": "test/resources/websites.test.ts",
           "title": "dry-run issues no DELETE request and returns simulated: true"
+        },
+        {
+          "id": "websites.delete.correlation",
+          "file": "test/resources/websites.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
+        },
+        {
+          "id": "websites.delete.stale",
+          "file": "test/resources/websites.test.ts",
+          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
@@ -1825,9 +3281,12 @@
       "dryRun": false,
       "metadata": {
         "purpose": "Get a list of all websites.",
-        "usage": "Read path for websites. Primitives return the full typed record.",
-        "preferredWhen": null,
-        "related": []
+        "usage": "Read path for websites returning the full typed record; helpers return compact shapes.",
+        "preferredWhen": "Use when many records are needed; prefer websites.search or websites.resolve for a single lookup.",
+        "related": [
+          "websites.resolve",
+          "websites.search"
+        ]
       },
       "compact": null,
       "resolution": null,
@@ -1848,6 +3307,11 @@
           "id": "websites.list.pagination",
           "file": "test/resources/websites.test.ts",
           "title": "sends page/page_size and stops on a short page"
+        },
+        {
+          "id": "websites.list.correlation",
+          "file": "test/resources/websites.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
         }
       ],
       "group": "A",
@@ -1867,9 +3331,12 @@
       "dryRun": false,
       "metadata": {
         "purpose": "Get a Website.",
-        "usage": "Read path for websites. Primitives return the full typed record.",
-        "preferredWhen": null,
-        "related": []
+        "usage": "Read path for websites returning the full typed record; helpers return compact shapes.",
+        "preferredWhen": "Preferred when the numeric id is already known; websites.resolve is for a name, slug or domain.",
+        "related": [
+          "websites.resolve",
+          "websites.list"
+        ]
       },
       "compact": null,
       "resolution": null,
@@ -1890,6 +3357,11 @@
           "id": "websites.get.not-found",
           "file": "test/resources/websites.test.ts",
           "title": "normalises a 404 into NOT_FOUND"
+        },
+        {
+          "id": "websites.get.correlation",
+          "file": "test/resources/websites.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
         }
       ],
       "group": "A",
@@ -1910,12 +3382,14 @@
       "metadata": {
         "purpose": "Create a Website.",
         "usage": "Mutating path for websites; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": null,
-        "related": []
+        "preferredWhen": "Only for a record that does not exist yet; prefer websites.update for an id you already have.",
+        "related": [
+          "websites.update"
+        ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": null,
+      "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -1933,6 +3407,16 @@
           "id": "websites.create.dry-run",
           "file": "test/resources/websites.test.ts",
           "title": "dry-run issues no mutating request and returns simulated: true"
+        },
+        {
+          "id": "websites.create.correlation",
+          "file": "test/resources/websites.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
+        },
+        {
+          "id": "websites.create.stale",
+          "file": "test/resources/websites.test.ts",
+          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
@@ -1948,17 +3432,21 @@
       "helperBasis": null,
       "helperRationale": null,
       "effect": "write",
-      "flags": [],
+      "flags": [
+        "idempotent"
+      ],
       "dryRun": true,
       "metadata": {
         "purpose": "Update a Website.",
         "usage": "Mutating path for websites; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": null,
-        "related": []
+        "preferredWhen": "Preferred over create or delete when the record exists and only some fields change.",
+        "related": [
+          "websites.get"
+        ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": null,
+      "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -1981,10 +3469,194 @@
           "id": "websites.update.unwraps-by-singleKey",
           "file": "test/resources/websites.test.ts",
           "title": "unwraps the PUT response by singleKey"
+        },
+        {
+          "id": "websites.update.correlation",
+          "file": "test/resources/websites.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
+        },
+        {
+          "id": "websites.update.stale",
+          "file": "test/resources/websites.test.ts",
+          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
       "status": "implemented"
+    },
+    {
+      "endpoint": null,
+      "primitive": null,
+      "specialOp": null,
+      "vendorFilters": [],
+      "search": null,
+      "helper": "websites.resolve",
+      "helperBasis": "server-filter",
+      "helperRationale": "Removes the caller-side choice of lookup endpoint and the paging + exact-match loop; without it every agent re-implements name/domain matching and reads a truncated scan as 'does not exist'.",
+      "effect": "read",
+      "flags": [],
+      "dryRun": false,
+      "metadata": {
+        "purpose": "Resolve a website from an id, name or slug.",
+        "usage": "Bare values are read in the order: numeric id, slug, exact name. Monitoring fields are reached through the full record, not the summary.",
+        "preferredWhen": "Use when the identifier is a name or slug; websites.get is cheaper for a known id.",
+        "related": [
+          "websites.get",
+          "websites.findBySlug",
+          "websites.search"
+        ]
+      },
+      "compact": "WebsiteSummary",
+      "resolution": {
+        "basis": "server-filter",
+        "maxScanRecords": 500,
+        "maxScanPages": 4
+      },
+      "staleCheck": null,
+      "redaction": "none",
+      "errors": [
+        "NOT_FOUND",
+        "RESOLUTION_AMBIGUOUS",
+        "RESOLUTION_TRUNCATED",
+        "NETWORK_ERROR"
+      ],
+      "tests": [
+        {
+          "id": "websites.resolve.id",
+          "file": "test/resources/websites.test.ts",
+          "title": "fetches by id without a scan"
+        },
+        {
+          "id": "websites.resolve.id-miss",
+          "file": "test/resources/websites.test.ts",
+          "title": "throws NOT_FOUND for an unknown id"
+        },
+        {
+          "id": "websites.resolve.unique",
+          "file": "test/resources/websites.test.ts",
+          "title": "returns the single exact match"
+        },
+        {
+          "id": "websites.resolve.miss",
+          "file": "test/resources/websites.test.ts",
+          "title": "returns null after a complete scan"
+        },
+        {
+          "id": "websites.resolve.compact",
+          "file": "test/resources/websites.test.ts",
+          "title": "returns WebsiteSummary"
+        },
+        {
+          "id": "websites.resolve.expand",
+          "file": "test/resources/websites.test.ts",
+          "title": "expand: true returns the full website"
+        }
+      ],
+      "group": "A",
+      "status": "planned"
+    },
+    {
+      "endpoint": null,
+      "primitive": null,
+      "specialOp": null,
+      "vendorFilters": [],
+      "search": null,
+      "helper": "websites.findBySlug",
+      "helperBasis": "server-filter",
+      "helperRationale": "Removes a paged list call plus the client-side exact match the vendor filter does not guarantee, and gives that cost one bounded, declared home.",
+      "effect": "read",
+      "flags": [],
+      "dryRun": false,
+      "metadata": {
+        "purpose": "Find one website by its URL slug.",
+        "usage": "Vendor `slug` filter with an exact compare, bounded by the resolution caps.",
+        "preferredWhen": "Preferred over websites.list for a slug lookup.",
+        "related": [
+          "websites.resolve",
+          "websites.search"
+        ]
+      },
+      "compact": "WebsiteSummary",
+      "resolution": {
+        "basis": "server-filter",
+        "maxScanRecords": 500,
+        "maxScanPages": 4
+      },
+      "staleCheck": null,
+      "redaction": "none",
+      "errors": [
+        "RESOLUTION_AMBIGUOUS",
+        "RESOLUTION_TRUNCATED",
+        "NETWORK_ERROR"
+      ],
+      "tests": [
+        {
+          "id": "websites.findBySlug.match",
+          "file": "test/resources/websites.test.ts",
+          "title": "returns the exact match"
+        },
+        {
+          "id": "websites.findBySlug.no-match",
+          "file": "test/resources/websites.test.ts",
+          "title": "returns null after a complete scan"
+        },
+        {
+          "id": "websites.findBySlug.compact",
+          "file": "test/resources/websites.test.ts",
+          "title": "returns WebsiteSummary"
+        }
+      ],
+      "group": "A",
+      "status": "planned"
+    },
+    {
+      "endpoint": null,
+      "primitive": null,
+      "specialOp": null,
+      "vendorFilters": [],
+      "search": null,
+      "helper": "websites.search",
+      "helperBasis": "server-filter",
+      "helperRationale": "Replaces an agent's own paging loop with the vendor's text search and returns compact records, so a search does not pull full records into context.",
+      "effect": "read",
+      "flags": [],
+      "dryRun": false,
+      "metadata": {
+        "purpose": "Search monitored websites by a free-text query.",
+        "usage": "Vendor `search` filter. limit defaults to 25, max 100.",
+        "preferredWhen": "Preferred over websites.list for any text search.",
+        "related": [
+          "websites.list",
+          "websites.resolve"
+        ]
+      },
+      "compact": "WebsiteSummary",
+      "resolution": {
+        "basis": "server-filter",
+        "maxScanRecords": 500,
+        "maxScanPages": 4
+      },
+      "staleCheck": null,
+      "redaction": "none",
+      "errors": [
+        "BAD_REQUEST",
+        "RATE_LIMIT",
+        "NETWORK_ERROR"
+      ],
+      "tests": [
+        {
+          "id": "websites.search.match",
+          "file": "test/resources/websites.test.ts",
+          "title": "returns matching WebsiteSummary records"
+        },
+        {
+          "id": "websites.search.limit",
+          "file": "test/resources/websites.test.ts",
+          "title": "honours limit and never exceeds 100"
+        }
+      ],
+      "group": "A",
+      "status": "planned"
     },
     {
       "endpoint": "DELETE /folders/{id}",
@@ -1996,17 +3668,22 @@
       "helperBasis": null,
       "helperRationale": null,
       "effect": "destructive",
-      "flags": [],
+      "flags": [
+        "idempotent",
+        "requiresApproval"
+      ],
       "dryRun": true,
       "metadata": {
         "purpose": "Delete a folder.",
         "usage": "Mutating path for folders; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": null,
-        "related": []
+        "preferredWhen": "Irreversible; prefer folders.archive when the record may be needed again.",
+        "related": [
+          "folders.archive"
+        ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": null,
+      "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -2023,6 +3700,16 @@
           "id": "folders.delete.dry-run",
           "file": "test/resources/folders.test.ts",
           "title": "dry-run issues no DELETE request and returns simulated: true"
+        },
+        {
+          "id": "folders.delete.correlation",
+          "file": "test/resources/folders.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
+        },
+        {
+          "id": "folders.delete.stale",
+          "file": "test/resources/folders.test.ts",
+          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
@@ -2047,9 +3734,12 @@
       "dryRun": false,
       "metadata": {
         "purpose": "Retrieve a list of folders.",
-        "usage": "Read path for folders. Primitives return the full typed record.",
-        "preferredWhen": null,
-        "related": []
+        "usage": "Read path for folders returning the full typed record; helpers return compact shapes.",
+        "preferredWhen": "Use when many records are needed; prefer folders.search or folders.resolve for a single lookup.",
+        "related": [
+          "folders.resolve",
+          "folders.search"
+        ]
       },
       "compact": null,
       "resolution": null,
@@ -2070,6 +3760,11 @@
           "id": "folders.list.pagination",
           "file": "test/resources/folders.test.ts",
           "title": "sends page/page_size and stops on a short page"
+        },
+        {
+          "id": "folders.list.correlation",
+          "file": "test/resources/folders.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
         }
       ],
       "group": "A",
@@ -2089,9 +3784,12 @@
       "dryRun": false,
       "metadata": {
         "purpose": "Retrieve a folder by ID.",
-        "usage": "Read path for folders. Primitives return the full typed record.",
-        "preferredWhen": null,
-        "related": []
+        "usage": "Read path for folders returning the full typed record; helpers return compact shapes.",
+        "preferredWhen": "Preferred when the numeric id is already known; folders.resolve is for a name, slug or domain.",
+        "related": [
+          "folders.resolve",
+          "folders.list"
+        ]
       },
       "compact": null,
       "resolution": null,
@@ -2112,6 +3810,11 @@
           "id": "folders.get.not-found",
           "file": "test/resources/folders.test.ts",
           "title": "normalises a 404 into NOT_FOUND"
+        },
+        {
+          "id": "folders.get.correlation",
+          "file": "test/resources/folders.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
         }
       ],
       "group": "A",
@@ -2132,12 +3835,14 @@
       "metadata": {
         "purpose": "Create a folder.",
         "usage": "Mutating path for folders; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": null,
-        "related": []
+        "preferredWhen": "Only for a record that does not exist yet; prefer folders.update for an id you already have.",
+        "related": [
+          "folders.update"
+        ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": null,
+      "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -2155,6 +3860,16 @@
           "id": "folders.create.dry-run",
           "file": "test/resources/folders.test.ts",
           "title": "dry-run issues no mutating request and returns simulated: true"
+        },
+        {
+          "id": "folders.create.correlation",
+          "file": "test/resources/folders.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
+        },
+        {
+          "id": "folders.create.stale",
+          "file": "test/resources/folders.test.ts",
+          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
@@ -2170,17 +3885,21 @@
       "helperBasis": null,
       "helperRationale": null,
       "effect": "write",
-      "flags": [],
+      "flags": [
+        "idempotent"
+      ],
       "dryRun": true,
       "metadata": {
         "purpose": "Update a folder.",
         "usage": "Mutating path for folders; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": null,
-        "related": []
+        "preferredWhen": "Preferred over create or delete when the record exists and only some fields change.",
+        "related": [
+          "folders.get"
+        ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": null,
+      "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -2203,10 +3922,95 @@
           "id": "folders.update.unwraps-by-singleKey",
           "file": "test/resources/folders.test.ts",
           "title": "unwraps the PUT response by singleKey"
+        },
+        {
+          "id": "folders.update.correlation",
+          "file": "test/resources/folders.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
+        },
+        {
+          "id": "folders.update.stale",
+          "file": "test/resources/folders.test.ts",
+          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
       "status": "implemented"
+    },
+    {
+      "endpoint": null,
+      "primitive": null,
+      "specialOp": null,
+      "vendorFilters": [],
+      "search": null,
+      "helper": "folders.resolve",
+      "helperBasis": "server-filter",
+      "helperRationale": "Removes the caller-side choice of lookup endpoint and the paging + exact-match loop; without it every agent re-implements name/domain matching and reads a truncated scan as 'does not exist'.",
+      "effect": "read",
+      "flags": [],
+      "dryRun": false,
+      "metadata": {
+        "purpose": "Resolve a folder from an id or name, optionally scoped to a company.",
+        "usage": "Vendor `name` filter with an exact compare; pass companyId to disambiguate the account-wide folder of the same name. Narrow to KB or photo folders with folderType.",
+        "preferredWhen": "Use when the identifier is a folder name; folders.get is cheaper for a known id.",
+        "related": [
+          "folders.get",
+          "folders.list"
+        ]
+      },
+      "compact": "FolderSummary",
+      "resolution": {
+        "basis": "server-filter",
+        "maxScanRecords": 500,
+        "maxScanPages": 4
+      },
+      "staleCheck": null,
+      "redaction": "none",
+      "errors": [
+        "NOT_FOUND",
+        "RESOLUTION_AMBIGUOUS",
+        "RESOLUTION_TRUNCATED",
+        "NETWORK_ERROR"
+      ],
+      "tests": [
+        {
+          "id": "folders.resolve.id",
+          "file": "test/resources/folders.test.ts",
+          "title": "fetches by id without a scan"
+        },
+        {
+          "id": "folders.resolve.id-miss",
+          "file": "test/resources/folders.test.ts",
+          "title": "throws NOT_FOUND for an unknown id"
+        },
+        {
+          "id": "folders.resolve.unique",
+          "file": "test/resources/folders.test.ts",
+          "title": "returns the single exact match"
+        },
+        {
+          "id": "folders.resolve.miss",
+          "file": "test/resources/folders.test.ts",
+          "title": "returns null after a complete scan"
+        },
+        {
+          "id": "folders.resolve.ambiguous",
+          "file": "test/resources/folders.test.ts",
+          "title": "throws RESOLUTION_AMBIGUOUS when a name matches several folders"
+        },
+        {
+          "id": "folders.resolve.compact",
+          "file": "test/resources/folders.test.ts",
+          "title": "returns FolderSummary"
+        },
+        {
+          "id": "folders.resolve.expand",
+          "file": "test/resources/folders.test.ts",
+          "title": "expand: true returns the full folder"
+        }
+      ],
+      "group": "A",
+      "status": "planned"
     },
     {
       "endpoint": "DELETE /password_folders/{id}",
@@ -2218,18 +4022,24 @@
       "helperBasis": null,
       "helperRationale": null,
       "effect": "destructive",
-      "flags": [],
+      "flags": [
+        "sensitive",
+        "idempotent",
+        "requiresApproval"
+      ],
       "dryRun": true,
       "metadata": {
         "purpose": "Delete a password folder.",
         "usage": "Mutating path for password_folders; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": null,
-        "related": []
+        "preferredWhen": "Irreversible; prefer password_folders.archive when the record may be needed again.",
+        "related": [
+          "password_folders.archive"
+        ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": null,
-      "redaction": "none",
+      "staleCheck": "updated_at",
+      "redaction": "credentials",
       "errors": [
         "NETWORK_ERROR",
         "NOT_FOUND",
@@ -2245,6 +4055,16 @@
           "id": "password_folders.delete.dry-run",
           "file": "test/resources/password_folders.test.ts",
           "title": "dry-run issues no DELETE request and returns simulated: true"
+        },
+        {
+          "id": "password_folders.delete.correlation",
+          "file": "test/resources/password_folders.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
+        },
+        {
+          "id": "password_folders.delete.stale",
+          "file": "test/resources/password_folders.test.ts",
+          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
@@ -2264,18 +4084,23 @@
       "helperBasis": null,
       "helperRationale": null,
       "effect": "read",
-      "flags": [],
+      "flags": [
+        "sensitive"
+      ],
       "dryRun": false,
       "metadata": {
         "purpose": "Retrieve a list of password folders.",
-        "usage": "Read path for password_folders. Primitives return the full typed record.",
-        "preferredWhen": null,
-        "related": []
+        "usage": "Read path for password_folders returning the full typed record; helpers return compact shapes.",
+        "preferredWhen": "Use when many records are needed; prefer password_folders.search or password_folders.resolve for a single lookup.",
+        "related": [
+          "password_folders.resolve",
+          "password_folders.search"
+        ]
       },
       "compact": null,
       "resolution": null,
       "staleCheck": null,
-      "redaction": "none",
+      "redaction": "credentials",
       "errors": [
         "NETWORK_ERROR",
         "NOT_FOUND",
@@ -2291,6 +4116,16 @@
           "id": "password_folders.list.pagination",
           "file": "test/resources/password_folders.test.ts",
           "title": "sends page/page_size and stops on a short page"
+        },
+        {
+          "id": "password_folders.list.correlation",
+          "file": "test/resources/password_folders.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
+        },
+        {
+          "id": "password_folders.list.redaction",
+          "file": "test/resources/password_folders.test.ts",
+          "title": "does not log credential-shaped fields and redact() removes them from the returned data"
         }
       ],
       "group": "A",
@@ -2306,18 +4141,23 @@
       "helperBasis": null,
       "helperRationale": null,
       "effect": "read",
-      "flags": [],
+      "flags": [
+        "sensitive"
+      ],
       "dryRun": false,
       "metadata": {
         "purpose": "Retrieve a password folder by ID.",
-        "usage": "Read path for password_folders. Primitives return the full typed record.",
-        "preferredWhen": null,
-        "related": []
+        "usage": "Read path for password_folders returning the full typed record; helpers return compact shapes.",
+        "preferredWhen": "Preferred when the numeric id is already known; password_folders.resolve is for a name, slug or domain.",
+        "related": [
+          "password_folders.resolve",
+          "password_folders.list"
+        ]
       },
       "compact": null,
       "resolution": null,
       "staleCheck": null,
-      "redaction": "none",
+      "redaction": "credentials",
       "errors": [
         "NETWORK_ERROR",
         "NOT_FOUND",
@@ -2333,6 +4173,16 @@
           "id": "password_folders.get.not-found",
           "file": "test/resources/password_folders.test.ts",
           "title": "normalises a 404 into NOT_FOUND"
+        },
+        {
+          "id": "password_folders.get.correlation",
+          "file": "test/resources/password_folders.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
+        },
+        {
+          "id": "password_folders.get.redaction",
+          "file": "test/resources/password_folders.test.ts",
+          "title": "does not log credential-shaped fields and redact() removes them from the returned data"
         }
       ],
       "group": "A",
@@ -2348,18 +4198,22 @@
       "helperBasis": null,
       "helperRationale": null,
       "effect": "write",
-      "flags": [],
+      "flags": [
+        "sensitive"
+      ],
       "dryRun": true,
       "metadata": {
         "purpose": "Create a new password folder.",
         "usage": "Mutating path for password_folders; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": null,
-        "related": []
+        "preferredWhen": "Only for a record that does not exist yet; prefer password_folders.update for an id you already have.",
+        "related": [
+          "password_folders.update"
+        ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": null,
-      "redaction": "none",
+      "staleCheck": "updated_at",
+      "redaction": "credentials",
       "errors": [
         "NETWORK_ERROR",
         "UNAUTHORIZED",
@@ -2375,6 +4229,16 @@
           "id": "password_folders.create.dry-run",
           "file": "test/resources/password_folders.test.ts",
           "title": "dry-run issues no mutating request and returns simulated: true"
+        },
+        {
+          "id": "password_folders.create.correlation",
+          "file": "test/resources/password_folders.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
+        },
+        {
+          "id": "password_folders.create.stale",
+          "file": "test/resources/password_folders.test.ts",
+          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
@@ -2390,18 +4254,23 @@
       "helperBasis": null,
       "helperRationale": null,
       "effect": "write",
-      "flags": [],
+      "flags": [
+        "sensitive",
+        "idempotent"
+      ],
       "dryRun": true,
       "metadata": {
         "purpose": "Update an existing password folder.",
         "usage": "Mutating path for password_folders; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": null,
-        "related": []
+        "preferredWhen": "Preferred over create or delete when the record exists and only some fields change.",
+        "related": [
+          "password_folders.get"
+        ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": null,
-      "redaction": "none",
+      "staleCheck": "updated_at",
+      "redaction": "credentials",
       "errors": [
         "NETWORK_ERROR",
         "NOT_FOUND",
@@ -2423,10 +4292,143 @@
           "id": "password_folders.update.unwraps-by-singleKey",
           "file": "test/resources/password_folders.test.ts",
           "title": "unwraps the PUT response by singleKey"
+        },
+        {
+          "id": "password_folders.update.correlation",
+          "file": "test/resources/password_folders.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
+        },
+        {
+          "id": "password_folders.update.stale",
+          "file": "test/resources/password_folders.test.ts",
+          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
       "status": "implemented"
+    },
+    {
+      "endpoint": null,
+      "primitive": null,
+      "specialOp": null,
+      "vendorFilters": [],
+      "search": null,
+      "helper": "password_folders.resolve",
+      "helperBasis": "server-filter",
+      "helperRationale": "Removes the caller-side choice of lookup endpoint and the paging + exact-match loop; without it every agent re-implements name/domain matching and reads a truncated scan as 'does not exist'.",
+      "effect": "read",
+      "flags": [
+        "sensitive"
+      ],
+      "dryRun": false,
+      "metadata": {
+        "purpose": "Resolve a password folder from an id or name, optionally scoped to a company.",
+        "usage": "Sensitive resource. Vendor `name` filter with an exact compare; pass companyId to disambiguate. allowed_groups is dropped from the summary.",
+        "preferredWhen": "Use when the identifier is a folder name; password_folders.get is cheaper for a known id.",
+        "related": [
+          "password_folders.get",
+          "password_folders.search"
+        ]
+      },
+      "compact": "PasswordFolderSummary",
+      "resolution": {
+        "basis": "server-filter",
+        "maxScanRecords": 500,
+        "maxScanPages": 4
+      },
+      "staleCheck": null,
+      "redaction": "credentials",
+      "errors": [
+        "NOT_FOUND",
+        "RESOLUTION_AMBIGUOUS",
+        "RESOLUTION_TRUNCATED",
+        "NETWORK_ERROR"
+      ],
+      "tests": [
+        {
+          "id": "password_folders.resolve.id",
+          "file": "test/resources/password_folders.test.ts",
+          "title": "fetches by id without a scan"
+        },
+        {
+          "id": "password_folders.resolve.id-miss",
+          "file": "test/resources/password_folders.test.ts",
+          "title": "throws NOT_FOUND for an unknown id"
+        },
+        {
+          "id": "password_folders.resolve.unique",
+          "file": "test/resources/password_folders.test.ts",
+          "title": "returns the single exact match"
+        },
+        {
+          "id": "password_folders.resolve.miss",
+          "file": "test/resources/password_folders.test.ts",
+          "title": "returns null after a complete scan"
+        },
+        {
+          "id": "password_folders.resolve.compact",
+          "file": "test/resources/password_folders.test.ts",
+          "title": "returns PasswordFolderSummary"
+        },
+        {
+          "id": "password_folders.resolve.expand",
+          "file": "test/resources/password_folders.test.ts",
+          "title": "expand: true returns the full folder"
+        }
+      ],
+      "group": "A",
+      "status": "planned"
+    },
+    {
+      "endpoint": null,
+      "primitive": null,
+      "specialOp": null,
+      "vendorFilters": [],
+      "search": null,
+      "helper": "password_folders.search",
+      "helperBasis": "server-filter",
+      "helperRationale": "Replaces an agent's own paging loop with the vendor's text search and returns compact records, so a search does not pull full records into context.",
+      "effect": "read",
+      "flags": [
+        "sensitive"
+      ],
+      "dryRun": false,
+      "metadata": {
+        "purpose": "Search password folders by a free-text query.",
+        "usage": "Vendor `search` filter, optionally scoped with company_id. limit defaults to 25, max 100.",
+        "preferredWhen": "Preferred over password_folders.list for any text search.",
+        "related": [
+          "password_folders.list",
+          "password_folders.resolve"
+        ]
+      },
+      "compact": "PasswordFolderSummary",
+      "resolution": {
+        "basis": "server-filter",
+        "maxScanRecords": 500,
+        "maxScanPages": 4
+      },
+      "staleCheck": null,
+      "redaction": "credentials",
+      "errors": [
+        "BAD_REQUEST",
+        "RATE_LIMIT",
+        "NETWORK_ERROR"
+      ],
+      "tests": [
+        {
+          "id": "password_folders.search.match",
+          "file": "test/resources/password_folders.test.ts",
+          "title": "returns matching PasswordFolderSummary records"
+        },
+        {
+          "id": "password_folders.search.limit",
+          "file": "test/resources/password_folders.test.ts",
+          "title": "honours limit and never exceeds 100"
+        }
+      ],
+      "group": "A",
+      "status": "planned"
     },
     {
       "endpoint": "GET /groups",
@@ -2446,9 +4448,12 @@
       "dryRun": false,
       "metadata": {
         "purpose": "Retrieve a list of groups.",
-        "usage": "Read path for groups. Primitives return the full typed record.",
-        "preferredWhen": null,
-        "related": []
+        "usage": "Read path for groups returning the full typed record; helpers return compact shapes.",
+        "preferredWhen": "Use when many records are needed; prefer groups.search or groups.resolve for a single lookup.",
+        "related": [
+          "groups.resolve",
+          "groups.search"
+        ]
       },
       "compact": null,
       "resolution": null,
@@ -2469,6 +4474,11 @@
           "id": "groups.list.pagination",
           "file": "test/resources/groups.test.ts",
           "title": "sends page/page_size and stops on a short page"
+        },
+        {
+          "id": "groups.list.correlation",
+          "file": "test/resources/groups.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
         }
       ],
       "group": "A",
@@ -2488,9 +4498,12 @@
       "dryRun": false,
       "metadata": {
         "purpose": "Retrieve a group by ID.",
-        "usage": "Read path for groups. Primitives return the full typed record.",
-        "preferredWhen": null,
-        "related": []
+        "usage": "Read path for groups returning the full typed record; helpers return compact shapes.",
+        "preferredWhen": "Preferred when the numeric id is already known; groups.resolve is for a name, slug or domain.",
+        "related": [
+          "groups.resolve",
+          "groups.list"
+        ]
       },
       "compact": null,
       "resolution": null,
@@ -2511,10 +4524,134 @@
           "id": "groups.get.not-found",
           "file": "test/resources/groups.test.ts",
           "title": "normalises a 404 into NOT_FOUND"
+        },
+        {
+          "id": "groups.get.correlation",
+          "file": "test/resources/groups.test.ts",
+          "title": "surfaces a correlation id on the success path and the error path"
         }
       ],
       "group": "A",
       "status": "implemented"
+    },
+    {
+      "endpoint": null,
+      "primitive": null,
+      "specialOp": null,
+      "vendorFilters": [],
+      "search": null,
+      "helper": "groups.resolve",
+      "helperBasis": "server-filter",
+      "helperRationale": "Removes the caller-side choice of lookup endpoint and the paging + exact-match loop; without it every agent re-implements name/domain matching and reads a truncated scan as 'does not exist'.",
+      "effect": "read",
+      "flags": [],
+      "dryRun": false,
+      "metadata": {
+        "purpose": "Resolve a user group from an id, name or slug.",
+        "usage": "Bare values are read in the order: numeric id, slug, exact name. The summary carries member_count but not the member list.",
+        "preferredWhen": "Use when the identifier is a group name; groups.get is cheaper for a known id.",
+        "related": [
+          "groups.get",
+          "groups.search"
+        ]
+      },
+      "compact": "GroupSummary",
+      "resolution": {
+        "basis": "server-filter",
+        "maxScanRecords": 500,
+        "maxScanPages": 4
+      },
+      "staleCheck": null,
+      "redaction": "none",
+      "errors": [
+        "NOT_FOUND",
+        "RESOLUTION_AMBIGUOUS",
+        "RESOLUTION_TRUNCATED",
+        "NETWORK_ERROR"
+      ],
+      "tests": [
+        {
+          "id": "groups.resolve.id",
+          "file": "test/resources/groups.test.ts",
+          "title": "fetches by id without a scan"
+        },
+        {
+          "id": "groups.resolve.id-miss",
+          "file": "test/resources/groups.test.ts",
+          "title": "throws NOT_FOUND for an unknown id"
+        },
+        {
+          "id": "groups.resolve.unique",
+          "file": "test/resources/groups.test.ts",
+          "title": "returns the single exact match"
+        },
+        {
+          "id": "groups.resolve.miss",
+          "file": "test/resources/groups.test.ts",
+          "title": "returns null after a complete scan"
+        },
+        {
+          "id": "groups.resolve.compact",
+          "file": "test/resources/groups.test.ts",
+          "title": "returns GroupSummary"
+        },
+        {
+          "id": "groups.resolve.expand",
+          "file": "test/resources/groups.test.ts",
+          "title": "expand: true returns the full group"
+        }
+      ],
+      "group": "A",
+      "status": "planned"
+    },
+    {
+      "endpoint": null,
+      "primitive": null,
+      "specialOp": null,
+      "vendorFilters": [],
+      "search": null,
+      "helper": "groups.search",
+      "helperBasis": "server-filter",
+      "helperRationale": "Replaces an agent's own paging loop with the vendor's text search and returns compact records, so a search does not pull full records into context.",
+      "effect": "read",
+      "flags": [],
+      "dryRun": false,
+      "metadata": {
+        "purpose": "Search groups by name.",
+        "usage": "Vendor `search` filter. limit defaults to 25, max 100.",
+        "preferredWhen": "Preferred over groups.list for any group-name search.",
+        "related": [
+          "groups.list",
+          "groups.resolve"
+        ]
+      },
+      "compact": "GroupSummary",
+      "resolution": {
+        "basis": "server-filter",
+        "maxScanRecords": 500,
+        "maxScanPages": 4
+      },
+      "staleCheck": null,
+      "redaction": "none",
+      "errors": [
+        "BAD_REQUEST",
+        "RATE_LIMIT",
+        "NETWORK_ERROR"
+      ],
+      "tests": [
+        {
+          "id": "groups.search.match",
+          "file": "test/resources/groups.test.ts",
+          "title": "returns matching GroupSummary records"
+        },
+        {
+          "id": "groups.search.limit",
+          "file": "test/resources/groups.test.ts",
+          "title": "honours limit and never exceeds 100"
+        }
+      ],
+      "group": "A",
+      "status": "planned"
     },
     {
       "endpoint": "DELETE /networks/{id}",
