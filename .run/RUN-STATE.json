@@ -252,13 +252,18 @@
       "what": "accepted three qa-final-agent-layer LOWs instead of fixing them: (i) the compact-shape widening guard covers the 4 shapes impl-A2 owns rather than all 35 - the others are covered by the registry's derived outputSchema plus the static probe 'compact fields == TS summary interfaces 58/58'; (ii) resolveAny has no expand escape hatch (it returns candidates, not a projection); (iii) 3 generic output nodes (R / SearchableSummaryMap[R]) stay unresolved in the registry outputSchema of the 2 operations helpers because the generator cannot resolve a mapped-type generic, while their inputSchema and the MCP tool schemas are complete",
       "why": "each is a LOW/NIT with no correctness effect; a 35-shape runtime guard and a generic-type resolver were judged not worth the release-time risk, and both are recorded for the review stage",
       "reversal": "extend the sentinel test in each resource's test file to all 35 summary shapes; add a mapped-type resolver to scripts/generate-capabilities.mjs"
+    },
+    {
+      "what": "reverted the live-path bounded pre-read for activity_logs.deleteAll and magic_dash.delete: the executed audit impact for those two is now { affected: 1, scope: 'bulk', reversible: false, exact: false } instead of a pre-read floor",
+      "why": "the pre-read added a GET to two EXISTING primitives (GET-then-DELETE where 0.2.1 issued one DELETE) and broke two pre-existing tests; a labelled lower bound keeps the audit event honest without changing any existing caller's request pattern",
+      "reversal": "restore the pre-read in the live path of both methods and update test/resources/special.test.ts to expect GET-then-DELETE"
     }
   ],
   "metrics": {
     "spawns": 21,
     "commits": 28,
     "gateRuns": 6,
-    "qaFindings": 33,
+    "qaFindings": 50,
     "qaFixed": 26
   }
 }

@@ -18,6 +18,22 @@
 
 ## Findings ranked
 
+- **MEDIUM (worst finding of this lens) — 47 of the 66 MCP tools whose inputSchema advertises
+  `expectedUpdatedAt` are NOT update operations, so the agent-facing MCP surface offers an input the
+  SDK rejects with `CONFIG_ERROR`.** — `MCP_TOOL_MANIFEST.md` (`### hudu_create_flag`, `hudu_delete_*`,
+  `hudu_create_procedure_from_template`, `hudu_duplicate_procedure`, `hudu_kickoff_procedure`,
+  `hudu_update_ip_address`, `hudu_update_magic_dash_positions`, `hudu_update_matcher`,
+  `hudu_update_rack_storage_item`, … 47 tools) sourced from `src/capabilities.ts`
+  (`inputSchema.opts.fields` / `inputSchema.options.fields`). Evidence: parsed all 147 tool
+  inputSchemas; 66 contain `expectedUpdatedAt`, only the 19 real `.update`-with-`staleCheck:
+  updated_at` tools accept it (`src/resources/base.ts` assertNoExpectedUpdatedAt throws for every other
+  primitive). The Toolsmith curation already strips duplicate fields through
+  `MCP_TOOL_OVERRIDES.json` (`inputSchema.opts` on 82 tools), so the omission is curation drift, not a
+  missing mechanism. Why it matters: the MCP tool schema is what an LLM client copies into a call; a
+  wrong field there produces a validation error instead of a write, and the field is not marked
+  anywhere in the schema. Fix: add an `inputSchema.opts` / `inputSchema.options` override for every
+  non-update tool that removes `expectedUpdatedAt` (the same pass that removed `dryRun`), or emit it
+  only for records whose plan row has `staleCheck: "updated_at"`.
 - **MEDIUM — the gate's `errors-vocabulary` and `related-dangling` rules read the PLAN row, not the
   emitted record, so a defect introduced between plan and emission is ungated.** —
   `scripts/check-capabilities.mjs` (plan loop: `const related = row.metadata && ...; const rowErrors =
@@ -34,7 +50,7 @@
 - **MEDIUM — 48 non-update records still advertise `expectedUpdatedAt` as an accepted input field
   with no warning, and passing it throws `CONFIG_ERROR` before the request is issued.** —
   `src/capabilities.ts` (`inputSchema.opts.fields[].name === "expectedUpdatedAt"` on 72 records; 48 of
-  them are NOT `.update`-with-`staleCheck: updated_at`). Measured independently (JSON-parsed records):
+  them are NOT `.update`-with-`staleCheck: updated_at`). Measured independently (JSON-parsed records) — and from the MCP side: 47 of the 66 MCP tools that advertise the field are non-update operations (see the finding above):
   `{"name":"expectedUpdatedAt","type":"string","required":false}` — no `description`, no
   `deprecated`, no marker, on records such as `activity_logs.deleteAll`. The CRITICAL's *example* half
   is closed (0 offending examples), and every record now lists `CONFIG_ERROR`, so the failure is
@@ -114,8 +130,27 @@ reason. All three rules can be made to fail, so all three exist.
 | `related` dangling edge in a RECORD | **0** | none — rule is plan-only (see Finding 1) |
 | `CONFIG_ERROR` removed from a RECORD's `errors` | **0** | none — rule is plan-only (see Finding 1) |
 
-## Overrides & manifest audit
-(filling)
+## Overrides & manifest audit (MCP_TOOL_OVERRIDES.json: 644 records, manifest 147 tools)
+
+Method: parsed `MCP_TOOL_MANIFEST.md` (tool blocks + the three tables) and `MCP_TOOL_OVERRIDES.json`
+independently, then cross-checked against the registry records. Script: `/tmp/qa-reg-final/audit3.py`, `audit4.py`.
+
+| Requirement | Result | Evidence |
+|---|---|---|
+| every override record has `{tool, field, newValue, reason}` | **PASS** | 644/644 have exactly those 4 keys, non-empty `tool`/`field`/`reason`; 0 malformed |
+| override field vocabulary | PASS | `name` 147, `title` 147, `description` 147, `inputSchema.opts` 82, `annotations.bounded` 62, `exclude` 56, `inputSchema.options` 3 = 644 |
+| every override targets a tool that exists in the projection (or is excluded) | **PASS** | 0 override targets outside {projection ∪ 22 rule-excluded ∪ 56 curated-excluded ∪ the 147 pre-rename mechanical names the `name` overrides legitimately use}. All 147 `name` overrides' new names are projected; 0 overrides name a curated-excluded tool except the 56 `exclude` records themselves |
+| an excluded tool is NOT projected and IS listed with its reason | **PASS** | 56 curated-excluded tools; 0 of them appear under `## Tools`; 0 rows lack a reason; 56 distinct `backingOperation`; no duplicate rows. 22 rule-excluded listed with reasons (`## Excluded operations`) |
+| no two remaining read tools share a `backingOperation` | **PASS** | 62 read tools, 62 distinct `backingOperation` values, 0 collisions |
+| every remaining read tool states a real bound (default 10-25, max 100) | **PASS** | 62/62 carry `annotations.bounded` with `default 25` and `maximum 100`; 0 without a bound; 0 with a placeholder |
+| every remaining read tool is helper-tier backed | **PASS** | 62/62 `tier="helper"`; 0 `primitive-read` tools in the projection, 0 rows in "read tools still backed by a plain primitive" |
+| every mutation states its dry-run affordance exactly once | **PASS** | 85/85 mutations: exactly one top-level `dry_run` input key, `dryRunAffordance="dry_run"`, the registry `opts.dryRun` duplicate removed by override (0 tools still expose it), and the description states `dry_run: true` once |
+| sensitive / requiresApproval operations say so in their description | **PASS** | 13 projected `sensitive=true` tools (asset_passwords + password_folders) all contain "Sensitive:"; 27 projected `requiresApproval=true` tools all contain `requiresApproval:`; 0 registry `sensitive`/`requiresApproval` rows are projected without the annotation |
+| tier mislabel (`getWithTasks`) closed | **PASS** | records now carry `kind`, and `isHelperRecord`/tier read `kind === 'helper'` before the `HELPER_TIER_METHODS` regex, so the 3 compact holders the regex misses (`operations.resolveAny`, `operations.searchAcrossResources`, `procedures.getWithTasks`) are still tiered `helper`: manifest tiers = 62 helper + 85 primitive-write, 0 mislabelled |
+
+Only standard-contradicting item found: the 47 non-update tools advertising `expectedUpdatedAt`
+(Findings, item 2). No other tool contradicts the standard.
+
 
 ## VERIFIED OK
 - 225/225 registry records parsed independently from the emitted source; 158 primitive + 67 helper; plan rows and records correspond 1:1 (0 registry orphans, 0 plan rows without a record) — `python3 /tmp/qa-reg-final/audit.py`.
@@ -124,6 +159,9 @@ reason. All three rules can be made to fail, so all three exist.
 - `node scripts/check-capabilities.mjs --plan test/fixtures/capabilities.plan.drifted.json` → exit 1 (negative fixture honours `--plan`).
 - Every gated plan column has a faithful emission: 0 mismatches on `errors`, `related`, `preferredWhen`, `compact`, `dryRun`, `resolution`, `effect`, `flags`, `usage`, `purpose` across all 225 pairs. The only plan/record divergences are by design or documented: `permissions` (plan null → record "unknown"), `kind`/`resource` (derived), `redaction` and `staleCheck` (plan columns NOT carried into the record — `CapabilityRecord` in src/capabilities.ts:17-36 does not declare either), `group`/`status` (plan-only).
 - `maxPageSize` provenance: `groups.list` = 1000, `maxPageSizeSource: 'api-docs'`, verified against `api-docs.json` `/groups` → `page_size` "The number of results to return per page (max 1000)". 22 other page-mode records = 100 / `'default'`; all 23 `defaultPageSize: 25`. `page_size` maxima documented in api-docs.json: `/groups` (max 1000) and `/procedures` (default: 25, max: 1000); only `/groups` is picked up (see Finding 3).
+- Manifest/overrides audit: 644/644 override records well-formed; 56 curated exclusions (0 projected, all with reasons, 56 distinct `backingOperation`); 62 read tools with 62 distinct `backingOperation` and 62/62 stating `default 25 / maximum 100`; 85 mutations with exactly one `dry_run` affordance; 13 sensitive + 27 requiresApproval tools all stating it — `python3 /tmp/qa-reg-final/audit3.py`.
+- `inputSchema` schema-level duplicate removal verified: 0 of 94 `dryRun: true` records still expose a registry `dryRun` input on the tool; 0 tools have two dry-run affordances.
+- Emission faithfulness: 0 mismatches on `errors`, `related`, `preferredWhen`, `compact`, `dryRun`, `resolution`, `effect`, `flags`, `usage`, `purpose` between plan and registry across all 225 pairs.
 - 147 projected tools match the seeds: helper-tier 62, primitive-read 0, mutations 85; manifest header self-consistent.
 
 ## UNVERIFIED
@@ -132,3 +170,14 @@ reason. All three rules can be made to fail, so all three exist.
 - `npm test -- --coverage`, `npx tsc --noEmit`, `npm pack` install matrix: taken from the seeds, not re-run by me.
 - `src/operations/` runtime behaviour beyond its export surface.
 - The dirty working-tree edits' own correctness (out of scope: they belong to another lens).
+- I did not re-run `scripts/derive-plan.mjs` or `scripts/generate-capabilities.mjs` end to end, so I cannot
+  claim the plan emits from the vendor spec without drift — I verified the EMITTED artefacts only. The
+  `/procedures` max-page-size miss (Finding 3) is direct evidence that the generator is not fully
+  spec-faithful, and I did not enumerate every other place a vendor maximum could hide (I checked every
+  `page_size` description in api-docs.json: only `/groups` and `/procedures` document one).
+- The 56 curated exclusions' OUTCOME-equivalence judgements (whether each dropped tool really duplicates
+  the retained one) — I verified the mechanism and the one-tool-per-`backingOperation` invariant, not
+  each curation decision's semantics.
+- The 22 rule-excluded tools' reasons are consistent with rule 6 (binary resources); I did not test
+  whether a non-binary resource could hide behind that rule.
+- Whether MCP_TOOL_OVERRIDES.json's 147 renames are good names (naming standard) — not a registry claim.
