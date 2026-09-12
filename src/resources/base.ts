@@ -3,6 +3,7 @@
  */
 import type { HttpClient, RequestOptions } from '../http.js';
 import { unwrapByKey, unwrapList } from '../http.js';
+import { isRecord } from '../utils.js';
 import type { ListParams, Page } from '../pagination.js';
 import { collectAll, paginate, paginateItems } from '../pagination.js';
 import { HuduConfigError, ResolutionError, StaleObjectError } from '../errors.js';
@@ -234,7 +235,32 @@ export abstract class BaseResource<T = unknown> {
       operation,
       impact,
     });
-    return this.createType === 'wrapped' ? this.unwrapSingle<U>(body) : (body as U);
+    return this.unwrapCreated<U>(body);
+  }
+
+  /**
+   * Unwrap a CREATE response.
+   *
+   * A resource that declares `createType: 'wrapped'` asks for `singleKey` unwrapping outright. But live
+   * sandbox testing (Hudu 2.45.1) found that several resources declaring `'raw'` - `companies`,
+   * `articles` and `procedures` - are nevertheless wrapped by the vendor on POST, even though the
+   * vendored `api-docs.json` documents the 201 body as the bare record. `create()` then returned
+   * `{ company: {...} }` typed as `Company`, so `created.id` was `undefined`.
+   *
+   * The `'raw'` path is therefore defensive: it unwraps ONLY when the body is exactly a one-key envelope
+   * `{ singleKey: record }`, which is unambiguous. A bare record - even one carrying a single field, or
+   * one whose field happens to be named like the `singleKey` - passes through untouched, so a
+   * spec-conformant vendor is unaffected.
+   */
+  protected unwrapCreated<U = T>(body: unknown): U {
+    if (this.createType === 'wrapped') return this.unwrapSingle<U>(body);
+    const key = this.singleKey;
+    if (key !== undefined && isRecord(body)) {
+      const keys = Object.keys(body);
+      const inner = body[key];
+      if (keys.length === 1 && keys[0] === key && isRecord(inner)) return inner as U;
+    }
+    return body as U;
   }
 
   /**
