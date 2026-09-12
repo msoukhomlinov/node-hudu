@@ -132,3 +132,22 @@ Legend: **bare** = top-level array/object with no envelope key; **{k}** = wrappe
   could not clean up.
 - `assets` (company-scoped) excluded per coordinator.
 - Repro scripts (raw fetch + SDK) are in `/tmp/probe{1,2,3a,3b,3c,4}.mjs`, `/tmp/verify.mjs`, `/tmp/cleanup.mjs` (not in the repo).
+
+---
+
+## Coordinator verification (added after the report was filed)
+
+| Finding | Verdict | Evidence / action |
+|---|---|---|
+| F1 companies.create envelope | **CONFIRMED → FIXED** | `companies.create()` now returns a `Company` with a real id (live id 66, then deleted). Fixed in `f4c48c6` at the `BaseResource` choke point rather than by flipping `createType`, so the same class is closed for every resource, not just the three observed. |
+| F2 articles.create envelope | **CONFIRMED → FIXED** | live `articles.create({name, content, company_id: 13})` returns the Article (id 22, then deleted) |
+| F3 procedures.create envelope | **CONFIRMED (by the sweep) → FIXED** | covered by the same generic fix; not re-exercised live by the coordinator |
+| F11 "vendor ignores page_size" | **FALSIFIED** | direct probe: `/companies?page=1&page_size=5` returns **5** rows, `/companies?page=1&page_size=100` returns 21, `/activity_logs?page=1&page_size=5` returns **5**, `/activity_logs?page=1&page_size=100` returns **100**. `page_size` IS honoured; the SDK's content-derived `hasMore` is sound. No fix needed. (The claim likely came from a resource whose total row count was below the requested page size, which looks like "all rows on page 1".) |
+| F12 redact() apiKey | **CONFIRMED → FIXED** | `ad7be82`; credential keys are now compared with separators removed, so `apiKey`/`apikey`/`api_key`/`api-key` all mask, and `accessToken`/`clientSecret`/`otpSecret` are covered by the suffix rules. |
+| F5 matchers 500 | **CONFIRMED → FIXED** | `da9d273`; the list primitives refuse a missing/invalid `integration_id` before any IO (0 requests), the helper tier already did. |
+| F13/F14 harness gaps | **CONFIRMED → harness corrected** | the audit check now asserts the real field set (no `durationMs`/`status`), and the reversibility check compares against whether the resource actually has a delete/archive primitive. |
+| F9 s3_exports discards the returned id | **ACCEPTED (documented)** | `create()` is declared `Promise<void>`; widening it to return the record would change a published signature, which the additive-only rule forbids. Kept as a documented LOW. |
+| F6/F7/F8 vendor 500 on POST | **ACCEPTED (vendor bugs)** | the SDK correctly surfaces `ServerError`; nothing to fix client-side. |
+
+Verdict on the lens: the sweep found the create-path half of the envelope bug class that the coordinator's
+first pass had only closed for lists and gets, and its one wrong claim was caught and falsified with evidence.
