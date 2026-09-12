@@ -6,28 +6,28 @@
   "codingModel": null,
   "qaModel": "openrouter/deepseek/deepseek-v4.1-flash",
   "qaThinking": "xhigh",
-  "step": "A-D.implement",
+  "step": "A-D.tests",
   "steps": {
     "preflight": "done",
     "plan_derive": "done",
     "A.design": "done",
-    "A.implement": "running",
-    "A.tests": "pending",
+    "A.implement": "done",
+    "A.tests": "in_progress",
     "A.qa": "pending",
     "A.fix": "pending",
     "B.design": "done",
-    "B.implement": "running",
-    "B.tests": "pending",
+    "B.implement": "done",
+    "B.tests": "in_progress",
     "B.qa": "pending",
     "B.fix": "pending",
     "C.design": "done",
-    "C.implement": "running",
-    "C.tests": "pending",
+    "C.implement": "done",
+    "C.tests": "in_progress",
     "C.qa": "pending",
     "C.fix": "pending",
     "D.design": "done",
-    "D.implement": "running",
-    "D.tests": "pending",
+    "D.implement": "done",
+    "D.tests": "in_progress",
     "D.qa": "pending",
     "D.fix": "pending",
     "operations": "pending",
@@ -43,7 +43,8 @@
       "step": "A.implement",
       "startedAt": "2026-09-12T23:43:39.892358+10:00",
       "budget": "70 grounding calls",
-      "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-84cdf421"
+      "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-84cdf421",
+      "state": "done"
     },
     {
       "name": "impl-A2",
@@ -51,7 +52,8 @@
       "step": "A.implement",
       "startedAt": "2026-09-12T23:43:39.892358+10:00",
       "budget": "70 grounding calls",
-      "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-3c687e04"
+      "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-3c687e04",
+      "state": "done"
     },
     {
       "name": "impl-B1",
@@ -59,7 +61,8 @@
       "step": "B.implement",
       "startedAt": "2026-09-12T23:43:39.892358+10:00",
       "budget": "70 grounding calls",
-      "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-7eddcd6c"
+      "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-7eddcd6c",
+      "state": "done"
     },
     {
       "name": "impl-B2",
@@ -67,7 +70,8 @@
       "step": "B.implement",
       "startedAt": "2026-09-12T23:43:39.892358+10:00",
       "budget": "70 grounding calls",
-      "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-a9cf21cc"
+      "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-a9cf21cc",
+      "state": "done"
     },
     {
       "name": "impl-C",
@@ -75,7 +79,8 @@
       "step": "C.implement",
       "startedAt": "2026-09-12T23:43:39.892358+10:00",
       "budget": "70 grounding calls",
-      "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-f1cead72"
+      "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-f1cead72",
+      "state": "done"
     },
     {
       "name": "impl-D1",
@@ -83,7 +88,8 @@
       "step": "D.implement",
       "startedAt": "2026-09-12T23:43:39.892358+10:00",
       "budget": "70 grounding calls",
-      "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-df457ec9"
+      "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-df457ec9",
+      "state": "done"
     },
     {
       "name": "impl-D2",
@@ -91,7 +97,8 @@
       "step": "D.implement",
       "startedAt": "2026-09-12T23:43:39.892358+10:00",
       "budget": "70 grounding calls",
-      "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-157bed59"
+      "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-157bed59",
+      "state": "done"
     },
     {
       "name": "core-plumbing",
@@ -110,7 +117,11 @@
     "C.design": "pass (every judgement column answered on every row; helperRationale + preferredWhen + resolution + compact recorded)",
     "D.design": "pass (every judgement column answered on every row; helperRationale + preferredWhen + resolution + compact recorded)",
     "capabilities_tooling": "pass \u2014 4 scripts + negative fixture committed; check default PASS (0 failures), --group A fails on the 25 not-yet-implemented helper rows (the intended batch signal), --ship fails as designed; registry 158 records; src/capabilities.ts 100% covered",
-    "core_plumbing": "pass (verified by the coordinator, not just reported): npx tsc --noEmit exit 0; test/core-agent-layer.test.ts 40/40; child-reported full suite 427 tests green, coverage 98.23/83.07/97.42/98.29 vs 97/83/94/97"
+    "core_plumbing": "pass (verified by the coordinator, not just reported): npx tsc --noEmit exit 0; test/core-agent-layer.test.ts 40/40; child-reported full suite 427 tests green, coverage 98.23/83.07/97.42/98.29 vs 97/83/94/97",
+    "A.implement": "pass \u2014 tsc --noEmit 0; capabilities:check --group A 0 failures; rows implemented; registry 223 records, dropsUnresolved 0",
+    "B.implement": "pass \u2014 tsc --noEmit 0; capabilities:check --group B 0 failures; rows implemented; registry 223 records, dropsUnresolved 0",
+    "C.implement": "pass \u2014 tsc --noEmit 0; capabilities:check --group C 0 failures; rows implemented; registry 223 records, dropsUnresolved 0",
+    "D.implement": "pass \u2014 tsc --noEmit 0; capabilities:check --group D 0 failures; rows implemented; registry 223 records, dropsUnresolved 0"
   },
   "blockers": [
     {
@@ -122,12 +133,12 @@
       "action": "the mcp_project stage re-projects and curates after src/operations/ exists"
     },
     {
-      "id": "T2",
-      "step": "A-D.implement",
-      "what": "src/types/index.ts is a shared barrel and several implementers append to it; a later writer can clobber an earlier one",
-      "since": "2026-09-12T23:48:14.560488+10:00",
+      "id": "T3",
+      "step": "A-D.tests",
+      "what": "4 impl-B1 tests still assert the old silent no-op for delete(id,{expectedUpdatedAt}); the base now throws HuduConfigError",
+      "since": "2026-09-13T00:15:37.495905+10:00",
       "needsUser": false,
-      "action": "steered all 7 implementers to stop editing it; the coordinator verifies and completes the barrel at the batch gate (a clobbered entry is cosmetic - nothing imports the summaries through the barrel)"
+      "action": "dispatched to impl-B1 with the exact 4 files and the required assertion; re-run npm test at the next wake"
     }
   ],
   "autonomousDecisions": [
@@ -144,7 +155,7 @@
   ],
   "metrics": {
     "spawns": 9,
-    "commits": 10,
+    "commits": 15,
     "gateRuns": 6,
     "qaFindings": 0,
     "qaFixed": 0
