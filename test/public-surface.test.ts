@@ -37,9 +37,21 @@ describe(`public surface is additive only (baseline ${surface.capturedFrom})`, (
   });
 
   it('still exports every name in the types barrel', () => {
+    // Parse the barrel into an exact set of exported names. `barrel.includes(name)` was WRONG: every
+    // record type is a prefix of a derived name (Company is a prefix of CompanyCreate), so deleting
+    // `export type { Company }` still passed. Proven by the contract lens on a /tmp copy.
     const barrel = readFileSync(join(here, '..', 'src', 'types', 'index.ts'), 'utf8');
-    const missing = surface.typeBarrelExports.filter((name) => !barrel.includes(name));
+    const exported = new Set<string>();
+    for (const m of barrel.matchAll(/^export\s+(?:type\s+)?\{([^}]+)\}/gm)) {
+      for (const part of m[1].split(',')) {
+        const n = part.trim().replace(/^type\s+/, '').split(/\s+as\s+/).pop().trim();
+        if (n) exported.add(n);
+      }
+    }
+    const missing = surface.typeBarrelExports.filter((name) => !exported.has(name));
     expect(missing, `removed type-barrel exports: ${missing.join(', ')}`).toEqual([]);
+    // The types barrel enumerates every name explicitly, so the exact-set check above is the guard.
+    // (The star-barrel case is protected separately by the src/index.ts star-barrel test.)
   });
 
   it('the guard itself is not vacuous', () => {

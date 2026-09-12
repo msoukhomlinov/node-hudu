@@ -10,7 +10,14 @@ import type { HttpClient } from '../http.js';
 import { BaseResource } from './base.js';
 import type { ListParams, Page } from '../pagination.js';
 import { HuduConfigError } from '../errors.js';
-import type { DryRunCheck, DryRunResult, HelperOptions, MutationOptions, Resolution } from '../types/common.js';
+import type {
+  DryRunCheck,
+  DryRunResult,
+  HelperOptions,
+  MutationOptions,
+  OperationImpact,
+  Resolution,
+} from '../types/common.js';
 import type { Export, ExportCreate, ExportSummary } from '../types/export.js';
 
 export type ExportsListParams = ListParams;
@@ -160,16 +167,17 @@ export class ExportsResource extends BaseResource<Export> {
   async create(data: ExportCreate, opts?: MutationOptions): Promise<void | DryRunResult<void>> {
     const operation = 'exports.create';
     this.refuseGuardOutsideUpdate(operation, opts);
+    // One impact statement in both channels: the dry-run result AND the audit event of the
+    // executed call (policy §7.3). No compensating undo exists: /exports has GET and POST only
+    // (no DELETE, no cancel).
+    const impact: OperationImpact = { affected: 1, scope: 'single', reversible: false };
     if (opts?.dryRun) {
       return this.buildDryRunResult<void>({
         operation,
         method: 'POST',
         path: '/exports',
         checks: [this.payloadCheck(data), this.exportRequestCheck(data)],
-        affected: 1,
-        scope: 'single',
-        // No compensating undo exists: /exports has GET and POST only (no DELETE, no cancel).
-        reversible: false,
+        ...impact,
         warnings: [
           'POST /exports returns an empty 200 body, so there is no server-computed result to promise: the export ' +
             'record (id, status, download_url) is created asynchronously and cannot be described by dry-run',
@@ -177,7 +185,7 @@ export class ExportsResource extends BaseResource<Export> {
         ],
       });
     }
-    await this.http.request<unknown>({ method: 'POST', path: '/exports', body: { export: data }, operation });
+    await this.http.request<unknown>({ method: 'POST', path: '/exports', body: { export: data }, operation, impact });
   }
 
   /** Get export metadata or, when download=true, the file blob. */

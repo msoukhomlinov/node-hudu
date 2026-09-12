@@ -319,3 +319,36 @@ describe('PublicPhotosResource — dry-run impact truthfulness', () => {
     expect(spy.calls).toHaveLength(0);
   });
 });
+
+describe('PublicPhotosResource — dry-run impact equals the executed audit impact', () => {
+  afterEach(() => clearFetch());
+
+  it('public_photos.create: the executed audit event reports the same impact as the dry-run', async () => {
+    const events: AuditEvent[] = [];
+    const client = makeClient((event) => events.push(event));
+    stubFetch(() => json(photo, 201));
+    const dry = (await client.publicPhotos.create(
+      { photo: new Blob(['x']), record_type: 'Article', record_id: 5 },
+      { dryRun: true },
+    )) as DryRunResult<PublicPhoto>;
+    await client.publicPhotos.create({ photo: new Blob(['x']), record_type: 'Article', record_id: 5 });
+    expect(events[0]!.impact).toEqual(dry.impact);
+    // /public_photos has no DELETE: the create cannot be undone.
+    expect(dry.impact).toEqual({ affected: 1, scope: 'single', reversible: false });
+  });
+
+  it('public_photos.update: the executed audit event reports the same impact as the dry-run', async () => {
+    const events: AuditEvent[] = [];
+    const client = makeClient((event) => events.push(event));
+    stubFetch(() => json({ public_photo: photo }));
+    const dry = (await client.publicPhotos.update(
+      4,
+      { record_type: 'Article', record_id: 9 },
+      { dryRun: true },
+    )) as DryRunResult<PublicPhoto>;
+    await client.publicPhotos.update(4, { record_type: 'Article', record_id: 9 });
+    expect(events[0]!.impact).toEqual(dry.impact);
+    // Reversible: the prior record_type/record_id association can be written back.
+    expect(dry.impact).toEqual({ affected: 1, scope: 'single', reversible: true });
+  });
+});

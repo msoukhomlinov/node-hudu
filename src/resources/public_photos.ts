@@ -10,7 +10,14 @@ import type { HttpClient } from '../http.js';
 import { BaseResource } from './base.js';
 import type { ListParams, Page } from '../pagination.js';
 import { HuduConfigError } from '../errors.js';
-import type { DryRunCheck, DryRunResult, HelperOptions, MutationOptions, Resolution } from '../types/common.js';
+import type {
+  DryRunCheck,
+  DryRunResult,
+  HelperOptions,
+  MutationOptions,
+  OperationImpact,
+  Resolution,
+} from '../types/common.js';
 import type { PublicPhoto, PublicPhotoCreate, PublicPhotoUpdate } from '../types/public_photo.js';
 
 export type PublicPhotosListParams = ListParams;
@@ -192,17 +199,17 @@ export class PublicPhotosResource extends BaseResource<PublicPhoto> {
   async create(data: PublicPhotoCreate, opts?: MutationOptions): Promise<PublicPhoto | DryRunResult<PublicPhoto>> {
     const operation = 'public_photos.create';
     this.refuseGuardOutsideUpdate(operation, opts);
+    // One impact statement in both channels: the dry-run result AND the audit event of the
+    // executed call (policy §7.3). No compensating undo exists: /public_photos has GET and POST, and
+    // /public_photos/{id} has GET and PUT only — the API exposes no DELETE.
+    const impact: OperationImpact = { affected: 1, scope: 'single', reversible: false };
     if (opts?.dryRun) {
       return this.buildDryRunResult<PublicPhoto>({
         operation,
         method: 'POST',
         path: '/public_photos',
         checks: [this.photoCheck(data), this.recordCheck(data)],
-        affected: 1,
-        scope: 'single',
-        // No compensating undo exists: /public_photos has GET and POST, and /public_photos/{id} has GET and PUT
-        // only — the API exposes no DELETE, so a created public photo cannot be removed.
-        reversible: false,
+        ...impact,
         warnings: [
           'dry-run validates the multipart inputs without building or sending the body, so the server-computed ' +
             'public photo (id, url, file_size) cannot be promised',
@@ -221,6 +228,7 @@ export class PublicPhotosResource extends BaseResource<PublicPhoto> {
       formData: fd,
       operation,
       resourceIds: [data.record_id],
+      impact,
     });
     return body as PublicPhoto;
   }
@@ -238,6 +246,9 @@ export class PublicPhotosResource extends BaseResource<PublicPhoto> {
   async update(id: number, data: PublicPhotoUpdate, opts?: MutationOptions): Promise<PublicPhoto | DryRunResult<PublicPhoto>> {
     const operation = 'public_photos.update';
     this.refuseGuardOutsideUpdate(operation, opts);
+    // One impact statement in both channels (dry-run result + executed audit event). Reversible: the
+    // prior record_type/record_id association is known and can be written back with another PUT.
+    const impact: OperationImpact = { affected: 1, scope: 'single', reversible: true };
     if (opts?.dryRun) {
       return this.buildDryRunResult<PublicPhoto>({
         operation,
@@ -245,9 +256,7 @@ export class PublicPhotosResource extends BaseResource<PublicPhoto> {
         path: `/public_photos/${id}`,
         ids: [id],
         checks: [this.targetCheck(id), this.recordCheck(data)],
-        affected: 1,
-        scope: 'single',
-        reversible: true,
+        ...impact,
         warnings: [
           'dry-run describes the multipart PUT without building the body or issuing it, so the server-computed ' +
             'public photo fields cannot be promised',
@@ -263,6 +272,7 @@ export class PublicPhotosResource extends BaseResource<PublicPhoto> {
       formData: fd,
       operation,
       resourceIds: [id],
+      impact,
     });
     return this.unwrapSingle<PublicPhoto>(body);
   }

@@ -8462,7 +8462,7 @@
       "dryRun": false,
       "metadata": {
         "purpose": "Fetch a procedure together with its tasks in one call.",
-        "usage": "Combines GET /procedures/{id} with GET /procedure_tasks?procedure_id={id} (a non-paginated endpoint) so an agent does not have to know that the tasks live in another resource. The task list is bounded by limit (default 25, max 100).",
+        "usage": "Combines GET /procedures/{id} with GET /procedure_tasks?procedure_id={id} (a non-paginated endpoint) so an agent does not have to know that the tasks live in another resource. The task list is bounded by limit (default 25, max 100). The task list is bounded by `limit` (default 25, max 100) rather than by a scan cap, so no resolution caps apply.",
         "preferredWhen": "Preferred over calling procedures.get and procedure_tasks.listAll yourself whenever the goal is to read or report on a process.",
         "related": [
           "procedure_tasks.list",
@@ -8471,11 +8471,7 @@
         ]
       },
       "compact": "ProcedureWithTasks",
-      "resolution": {
-        "basis": "composite",
-        "maxScanRecords": 500,
-        "maxScanPages": 4
-      },
+      "resolution": null,
       "staleCheck": null,
       "redaction": "none",
       "errors": [

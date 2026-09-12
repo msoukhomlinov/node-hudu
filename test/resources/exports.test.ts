@@ -252,3 +252,24 @@ describe('ExportsResource — the stale option outside update', () => {
     expect(spy.calls).toHaveLength(0);
   });
 });
+
+describe('ExportsResource — dry-run impact equals the executed audit impact', () => {
+  afterEach(() => clearFetch());
+
+  it('exports.create: the executed audit event reports the same impact as the dry-run', async () => {
+    const events: AuditEvent[] = [];
+    const client = makeClient((event) => events.push(event));
+    stubFetch(() => empty(200));
+    const request = { format: 'pdf' as const, company_id: 1, include_passwords: false, include_websites: true };
+    const dry = (await client.exports.create(request, { dryRun: true })) as DryRunResult<void>;
+    await client.exports.create(request);
+    // The dry-run path builds its result locally and never reaches the transport, so only the
+    // EXECUTED call emits an audit event. Its impact must equal the dry-run's for the same input.
+    expect(events).toHaveLength(1);
+    expect(events[0]!.dryRun).toBe(false);
+    expect(events[0]!.impact).toEqual(dry.impact);
+    // /exports has no DELETE and no cancel: the executed claim must not say "reversible".
+    expect(dry.impact).toEqual({ affected: 1, scope: 'single', reversible: false });
+    expect(events[0]!.impact?.reversible).toBe(false);
+  });
+});

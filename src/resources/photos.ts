@@ -14,7 +14,14 @@ import type { HttpClient } from '../http.js';
 import { BaseResource } from './base.js';
 import type { ListParams, Page } from '../pagination.js';
 import { HuduConfigError, ResolutionError } from '../errors.js';
-import type { DryRunCheck, DryRunResult, HelperOptions, MutationOptions, Resolution } from '../types/common.js';
+import type {
+  DryRunCheck,
+  DryRunResult,
+  HelperOptions,
+  MutationOptions,
+  OperationImpact,
+  Resolution,
+} from '../types/common.js';
 import type { Photo, PhotoCreate, PhotoUpdate } from '../types/photo.js';
 import type { PhotoSummary } from '../types/photo.js';
 
@@ -335,15 +342,16 @@ export class PhotosResource extends BaseResource<Photo> {
   async create(data: PhotoCreate, opts?: MutationOptions): Promise<Photo | DryRunResult<Photo>> {
     const operation = 'photos.create';
     this.refuseGuardOutsideUpdate(operation, opts);
+    // One impact statement in both channels: the dry-run result AND the audit event of the
+    // executed call (policy §7.3).
+    const impact: OperationImpact = { affected: 1, scope: 'single', reversible: true };
     if (opts?.dryRun) {
       return this.buildDryRunResult<Photo>({
         operation,
         method: 'POST',
         path: '/photos',
         checks: [this.fileCheck(data), this.captionCheck(data), this.photoablePairCheck(data)],
-        affected: 1,
-        scope: 'single',
-        reversible: true,
+        ...impact,
         warnings: [
           'dry-run validates the multipart inputs without building or sending the body, so the server-computed ' +
             'photo record (id, url, created_at, updated_at) cannot be promised',
@@ -363,6 +371,7 @@ export class PhotosResource extends BaseResource<Photo> {
       formData: fd,
       operation,
       ...(typeof data.photoable_id === 'number' ? { resourceIds: [data.photoable_id] } : {}),
+      impact,
     });
     return this.unwrapSingle<Photo>(body);
   }

@@ -190,3 +190,38 @@ pre-existing warning-count assertions were updated from 1 to 2 warnings.
 Post-fix commands: `npx vitest run <my 5 test files>` -> **exit 0, 119 tests passed** (photos 39,
 uploads 28, public_photos 25, exports 22, s3_exports 5). `npx eslint <my 13 files>` -> **exit 0**.
 `npx tsc --noEmit` filtered to my files -> no errors.
+
+## Final gate fix — `AuditEvent.impact` parity with the dry-run (cross-model safety gate, branch head ca011f1)
+
+`AuditEvent.impact` falls back to the transport's per-verb guess when a request carries no explicit `impact`.
+Every HAND-ROLLED mutating method of mine passed none, so the executed call could contradict its own dry-run
+(it did for the three irreversible creates). Fix: each hand-rolled mutating method now declares ONE
+`const impact: OperationImpact = {...}` and threads it into BOTH `buildDryRunResult({ ...impact })` and
+`http.request({ ..., impact })` — the exact `src/resources/base.ts` pattern (`createOne`/`updateOne`/
+`deleteOne`/`setArchived`, whose paths `photos.update`, `photos.delete` and `uploads.delete` already use).
+
+Files changed for this fix: `src/resources/uploads.ts`, `src/resources/photos.ts`,
+`src/resources/public_photos.ts`, `src/resources/exports.ts`, `src/resources/s3_exports.ts`
+(plus `OperationImpact` imports from `../types/common.js`). `impact.exact` deliberately unused (no bulk path,
+`affected` is exactly 1 everywhere).
+
+| Operation | dry-run impact | executed audit impact |
+|---|---|---|
+| `photos.create` | `{1, single, true}` | `{1, single, true}` — now passed explicitly (DELETE /photos/{id} is the undo path) |
+| `photos.update` | `{1, single, true}` | `{1, single, true}` — base path (prior values re-writable) |
+| `photos.delete` | `{1, single, false}` | `{1, single, false}` — base path (destructive, no undelete) |
+| `public_photos.create` | `{1, single, false}` | `{1, single, false}` — WAS `true` from the verb guess: fixed (no DELETE for public photos) |
+| `public_photos.update` | `{1, single, true}` | `{1, single, true}` — now passed explicitly (prior association re-writable) |
+| `uploads.upload` | `{1, single, true}` | `{1, single, true}` — now passed explicitly (DELETE /uploads/{id}) |
+| `uploads.delete` | `{1, single, false}` | `{1, single, false}` — base path (destructive) |
+| `exports.create` | `{1, single, false}` | `{1, single, false}` — WAS `true`: fixed (no cancel/delete) |
+| `s3_exports.create` | `{1, single, false}` | `{1, single, false}` — WAS `true`: fixed (POST only) |
+
+Tests: one extra (non-plan) test per operation asserting the EXECUTED audit event's `impact` deep-equals the
+dry-run's impact for the same input, and asserting the reversibility value itself. Note found while writing
+them: the dry-run path builds its result locally and never reaches the transport, so a dry-run emits NO audit
+event — the parity test compares the single executed event against the dry-run result.
+
+Post-fix commands: `npx tsc --noEmit` (project-wide) -> **exit 0, clean**; `npx eslint <my 13 files>` ->
+**exit 0**; `npx vitest run <my 5 test files>` -> **exit 0, 128 tests passed** (photos 42, uploads 30,
+public_photos 27, exports 23, s3_exports 6).

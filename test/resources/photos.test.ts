@@ -437,3 +437,44 @@ describe('PhotosResource — the stale option outside update', () => {
     expect(spy.calls).toHaveLength(0);
   });
 });
+
+describe('PhotosResource — dry-run impact equals the executed audit impact', () => {
+  afterEach(() => clearFetch());
+
+  it('photos.create: the executed audit event reports the same impact as the dry-run', async () => {
+    const events: AuditEvent[] = [];
+    const client = makeClient((event) => events.push(event));
+    stubFetch(() => json({ photo }, 201));
+    const dry = (await client.photos.create({ file: new Blob(['x']), caption: 'cap' }, { dryRun: true })) as DryRunResult<Photo>;
+    await client.photos.create({ file: new Blob(['x']), caption: 'cap' });
+    // The dry-run path builds its result locally and never reaches the transport, so only the
+    // EXECUTED call emits an audit event. Its impact must equal the dry-run's for the same input.
+    expect(events).toHaveLength(1);
+    expect(events[0]!.dryRun).toBe(false);
+    expect(events[0]!.impact).toEqual(dry.impact);
+    // Honest either way: DELETE /photos/{id} exists, so the created row can be removed.
+    expect(dry.impact).toEqual({ affected: 1, scope: 'single', reversible: true });
+  });
+
+  it('photos.update: the executed audit event reports the same impact as the dry-run', async () => {
+    const events: AuditEvent[] = [];
+    const client = makeClient((event) => events.push(event));
+    stubFetch(() => json({ photo }));
+    const dry = (await client.photos.update(3, { caption: 'New' }, { dryRun: true })) as DryRunResult<Photo>;
+    await client.photos.update(3, { caption: 'New' });
+    expect(events[0]!.impact).toEqual(dry.impact);
+    // Reversible: the prior field values can be written back with another PUT.
+    expect(dry.impact).toEqual({ affected: 1, scope: 'single', reversible: true });
+  });
+
+  it('photos.delete: the executed audit event reports the same impact as the dry-run', async () => {
+    const events: AuditEvent[] = [];
+    const client = makeClient((event) => events.push(event));
+    stubFetch(() => empty(204));
+    const dry = (await client.photos.delete(3, { dryRun: true })) as DryRunResult<void>;
+    await client.photos.delete(3);
+    expect(events[0]!.impact).toEqual(dry.impact);
+    // Destructive, and photos expose no undelete/restore endpoint.
+    expect(dry.impact).toEqual({ affected: 1, scope: 'single', reversible: false });
+  });
+});

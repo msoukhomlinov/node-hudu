@@ -9,7 +9,7 @@
 import type { HttpClient } from '../http.js';
 import { BaseResource } from './base.js';
 import { HuduConfigError } from '../errors.js';
-import type { DryRunResult, MutationOptions } from '../types/common.js';
+import type { DryRunResult, MutationOptions, OperationImpact } from '../types/common.js';
 import type { S3ExportCreate } from '../types/s3_export.js';
 
 export class S3ExportsResource extends BaseResource<unknown> {
@@ -33,16 +33,16 @@ export class S3ExportsResource extends BaseResource<unknown> {
     const operation = 's3_exports.create';
     this.refuseGuardOutsideUpdate(operation, opts);
     const payload = data ?? {};
+    // One impact statement in both channels: the dry-run result AND the audit event of the
+    // executed call (policy §7.3). No compensating undo exists: /s3_exports has POST only.
+    const impact: OperationImpact = { affected: 1, scope: 'single', reversible: false };
     if (opts?.dryRun) {
       return this.buildDryRunResult<void>({
         operation,
         method: 'POST',
         path: '/s3_exports',
         checks: [this.payloadCheck(payload)],
-        affected: 1,
-        scope: 'single',
-        // No compensating undo exists: /s3_exports has POST only (no DELETE, no cancel).
-        reversible: false,
+        ...impact,
         warnings: [
           'POST /s3_exports returns an empty 200 body, so there is no server-computed result to promise: the export ' +
             'runs asynchronously and dry-run cannot describe its outcome',
@@ -50,7 +50,7 @@ export class S3ExportsResource extends BaseResource<unknown> {
         ],
       });
     }
-    await this.http.request<unknown>({ method: 'POST', path: '/s3_exports', body: payload, operation });
+    await this.http.request<unknown>({ method: 'POST', path: '/s3_exports', body: payload, operation, impact });
   }
   /**
    * The `expectedUpdatedAt` guard reads the CURRENT record and compares its `updated_at`,

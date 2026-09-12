@@ -27,8 +27,15 @@
 //   7. MCP_TOOL_OVERRIDES.json (repo root, [{tool, field, newValue, reason}]) is applied to the
 //      projection when present. An override that names an unknown tool or field is reported and
 //      exits non-zero — silent divergence is a defect.
+//   8. An override record with field "exclude" and newValue true DROPS the tool from the projection
+//      (curation, not a rule): a tools/list where two tools do the same job is worse than a shorter
+//      one, so curation keeps exactly one tool per distinct outcome. Dropped tools are still
+//      reported — the manifest lists them under "Excluded by curation" with the override's reason.
 //
 // Flags: --registry <path> (default capabilities.json)  --out <path> (default MCP_TOOL_MANIFEST.md)
+//        --check-example [--example <path>] (default examples/mcp-server.ts) — fail when the example
+//        drifts from the curated projection: an unknown tool name, an unbounded read, a mutating
+//        tool with no dry-run affordance, or a description that is not the curated one.
 // Exit codes: 0 ok, 1 registry missing/unreadable or an unresolved override.
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
@@ -46,6 +53,8 @@ const TOOL_PREFIX = 'hudu_';
 const NEVER_METHODS = new Set(['listAll', 'listPages']);            // unbounded reads
 const BINARY_RESOURCES = new Set(['photos', 'public_photos', 'uploads', 'exports', 's3_exports']); // binary / download surfaces
 const HELPER_TIER_METHODS = /^(resolve|findBy[A-Za-z0-9_]*|search|getContext)$/;
+// Registry records identify themselves; the regex is a fallback only.
+const isHelperRecord = (rec) => rec.kind === 'helper' || (rec.kind === undefined && HELPER_TIER_METHODS.test(methodOf(rec.name)));
 const LIST_METHODS = new Set(['list']);
 
 if (!existsSync(REGISTRY)) {
@@ -78,7 +87,13 @@ for (const rec of records) {
     sensitive: (rec.flags ?? []).includes('sensitive'),
     requiresApproval: (rec.flags ?? []).includes('requiresApproval'),
     dryRunAffordance: rec.effect !== 'read' ? 'dry_run' : null,
-    tier: HELPER_TIER_METHODS.test(method) ? 'helper' : rec.effect === 'read' ? 'primitive-read' : 'primitive-write',
+    // The registry answers this exactly: `kind` is authored by the generator (helper vs primitive).
+    // The method-name regex is only a fallback for a record that carries no kind, so a composite
+    // helper (`procedures.getWithTasks`) or a cross-resource one (`operations.resolveAny`) is not
+    // mislabelled by its name shape.
+    tier: (rec.kind === 'helper' || (rec.kind === undefined && HELPER_TIER_METHODS.test(method)))
+      ? 'helper'
+      : rec.effect === 'read' ? 'primitive-read' : 'primitive-write',
   };
   if (rec.resolution && rec.resolution.maxScanRecords) {
     annotations.bounded = `client scan capped at ${rec.resolution.maxScanRecords} records / ${rec.resolution.maxScanPages} pages`;
@@ -90,18 +105,21 @@ for (const rec of records) {
   }
   if (annotations.sensitive) annotations.sensitiveNotice = 'returns credential-shaped fields; SDK logs/audit payloads redact them by default';
   const HELPER_TIER_OK = annotations.tier === 'helper';
-  if (!HELPER_TIER_OK) {
+  const IS_READ = rec.effect === 'read';
+  if (!HELPER_TIER_OK && IS_READ) {
     // Read tools must be backed by the helper tier; while curation is still open, name the
     // registry's helper-tier alternatives for the same resource so the worklist is precise.
     const alternatives = records
-      .filter((h) => h.resource === rec.resource && HELPER_TIER_METHODS.test(methodOf(h.name)))
+      .filter((h) => h.resource === rec.resource && isHelperRecord(h))
       .map((h) => h.name);
     annotations.helperTierAlternatives = alternatives;
     annotations.helperTierBacked = false;
-  } else {
+  } else if (HELPER_TIER_OK) {
     annotations.helperTierBacked = true;
     annotations.helperTierBacking = rec.name;
   }
+  // A mutation is neither helper-backed nor a primitive READ: the `helperTier*` keys are read-tier
+  // vocabulary, so a mutation carries only `tier` (its effect/flags already say what it is).
   const inputSchema = { ...(rec.inputSchema ?? {}) };
   if (rec.effect !== 'read') {
     inputSchema.dry_run = { type: 'boolean', required: false, description: 'Validate without issuing the write. Returns DryRunResult with simulated: true.' };
@@ -114,6 +132,7 @@ for (const rec of records) {
     outputSchema: rec.outputSchema ?? {},
     annotations,
     effect: rec.effect,
+    registryKind: rec.kind ?? null,
     flags: rec.flags ?? [],
     permissions: rec.permissions,
     dryRun: rec.dryRun,
@@ -126,6 +145,8 @@ tools.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 // ---------------------------------------------------------------- overrides
 const overrideLog = [];
 const unresolvedOverrides = [];
+// Tools dropped by a curation `exclude` override (reported in the manifest, never silently gone).
+const curationExcluded = [];
 if (existsSync(OVERRIDES_PATH)) {
   let overrides;
   try {
@@ -148,6 +169,21 @@ if (existsSync(OVERRIDES_PATH)) {
     for (const key of parts.slice(0, -1)) {
       if (target[key] === undefined || typeof target[key] !== 'object') { ok = false; break; }
       target = target[key];
+    }
+    if (ov.field === 'exclude') {
+      // Curation, not a rule: drop the tool from the projection. Kept one-per-outcome so no two
+      // tools in the curated list do the same job; the drop is reported, never silent.
+      if (ov.newValue !== true) { unresolvedOverrides.push({ ov, why: 'exclude expects newValue: true' }); continue; }
+      curationExcluded.push({
+        name: tool.name,
+        backingOperation: tool.backingOperation,
+        effect: tool.effect,
+        tier: tool.annotations.tier,
+        reason: ov.reason ?? '',
+      });
+      tools.splice(tools.indexOf(tool), 1);
+      overrideLog.push(ov);
+      continue;
     }
     if (!ok) { unresolvedOverrides.push({ ov, why: `field path "${ov.field}" does not exist on ${ov.tool}` }); continue; }
     if (parts[0] === 'name' && parts.length === 1) {
@@ -185,6 +221,7 @@ lines.push('');
 lines.push(`- registry records: ${records.length}`);
 lines.push(`- tools projected: ${tools.length} (helper-tier ${helperTierTools.length}, read primitives ${primitiveBackedReadTools.length}, mutations ${tools.filter((t) => t.effect !== 'read').length})`);
 lines.push(`- excluded by rule: ${excluded.length}`);
+lines.push(`- excluded by curation: ${curationExcluded.length} (dropped through \`MCP_TOOL_OVERRIDES.json\` — one tool kept per distinct outcome)`);
 lines.push(`- overrides applied: ${overrideLog.length}${existsSync(OVERRIDES_PATH) ? '' : ' (no MCP_TOOL_OVERRIDES.json present)'}`);
 lines.push(`- projection timestamp: ${new Date().toISOString()}`);
 lines.push('');
@@ -203,6 +240,8 @@ lines.push('4. Mutating tools expose a `dry_run` input affordance.');
 lines.push('5. `sensitive` / `requiresApproval` are stated on the tool.');
 lines.push('6. No binary/download tool (resources ' + [...BINARY_RESOURCES].join(', ') + ') is projected.');
 lines.push('7. `MCP_TOOL_OVERRIDES.json` is the only place a description may change; this script never re-derives one.');
+lines.push('8. A curation `exclude` override (`{tool, field: "exclude", newValue: true, reason}`) drops a projected');
+lines.push('   tool: one tool per distinct outcome, so no two tools in the curated list do the same job.');
 lines.push('');
 lines.push(`## Helper-tier backing`);
 lines.push('');
@@ -249,6 +288,22 @@ lines.push('| operation | reason |');
 lines.push('| --- | --- |');
 for (const e of excluded) lines.push(`| ${e.name} | ${e.why} |`);
 lines.push('');
+lines.push('## Excluded by curation (dropped through `MCP_TOOL_OVERRIDES.json`)');
+lines.push('');
+if (curationExcluded.length) {
+  lines.push('Dropped from the projection by Toolsmith curation, not by a rule: each one shared its');
+  lines.push('outcome (`backingOperation`) with a better-named tool that survives, or was otherwise');
+  lines.push('redundant. The reason column is the override\'s `reason`.');
+  lines.push('');
+  lines.push('| tool | backingOperation | effect | projected tier | reason |');
+  lines.push('| --- | --- | --- | --- | --- |');
+  for (const e of curationExcluded) lines.push(`| ${e.name} | ${e.backingOperation} | ${e.effect} | ${e.tier} | ${e.reason} |`);
+  lines.push('');
+  lines.push('Restore one by deleting its `exclude` override record and re-running `npm run mcp:project`.');
+} else {
+  lines.push('- none');
+}
+lines.push('');
 lines.push('## Tools');
 lines.push('');
 for (const t of tools) {
@@ -278,6 +333,14 @@ console.log(`mcp:project — registry ${path.relative(ROOT, REGISTRY)} planHash=
 console.log(`mcp:project — tools projected=${tools.length}; excluded=${excluded.length}; overrides applied=${overrideLog.length}`);
 console.log(`mcp:project — wrote ${path.relative(ROOT, OUT)}`);
 console.log(`mcp:project — read tools missing helper-tier backing: ${readToolsMissingHelperBacking.length}${readToolsMissingHelperBacking.length ? ' (first 10: ' + readToolsMissingHelperBacking.slice(0, 10).join(', ') + ')' : ''}`);
+// Two different things, reported separately (never conflated):
+//   re-pointed — a PRIMITIVE registry record the curation backs with a helper operation (curation);
+//   mislabelled — a HELPER registry record the projection failed to classify as helper (a defect).
+const rePointedByCuration = tools.filter((t) => t.registryKind !== 'helper' && t.annotations.tier === 'helper');
+const mislabelled = tools.filter((t) => t.registryKind === 'helper' && t.annotations.tier !== 'helper');
+console.log(`mcp:project — classification by registry kind: helper-tier tools=${helperTierTools.length}, primitive-read=${primitiveBackedReadTools.length}, primitive-write=${tools.filter((t) => t.effect !== 'read' && t.annotations.tier !== 'helper').length}; re-pointed-by-curation=${rePointedByCuration.length}; mislabelled=${mislabelled.length}${mislabelled.length ? ' (' + mislabelled.map((t) => t.backingOperation).join(', ') + ')' : ''}`);
+console.log(`mcp:project — curation exclusions: ${curationExcluded.length} tool(s) dropped through MCP_TOOL_OVERRIDES.json (listed under "Excluded by curation" in the manifest); no two curated read tools share a backingOperation=${(() => { const seen = new Map(); for (const t of tools) if (t.effect === 'read') { if (seen.has(t.backingOperation)) return false; seen.set(t.backingOperation, t.name); } return true; })()}`);
+console.log(`mcp:project — read tools missing helper-tier backing (resource has no helper record): ${readToolsMissingHelperBacking.length}`);
 console.log(`mcp:project — WARNING: ${primitiveBackedReadTools.length} read tool(s) are still backed by a plain primitive (${primitiveReadWithHelperAlternative.length} have a helper-tier alternative in the registry); listAll/listPages are never projected`);
 console.log(`mcp:project — helper-tier backing stated for every tool; curation worklist in the manifest`);
 if (missingPurpose.length) console.log(`mcp:project — tools with no projected description (missing purpose): ${missingPurpose.join(', ')}`);
@@ -285,4 +348,79 @@ if (unresolvedOverrides.length) {
   console.error(`mcp:project — UNRESOLVED OVERRIDES (${unresolvedOverrides.length}):`);
   for (const u of unresolvedOverrides) console.error(`  ✗ ${JSON.stringify(u.ov)}: ${u.why}`);
   process.exit(1);
+}
+
+// ---------------------------------------------------------------- --check-example
+// The example MCP server is a REFERENCE CONSUMER generated from the curated projection. This gate
+// keeps it honest and fails on exactly four kinds of drift:
+//   1. a registered tool name that is not a tool of the curated manifest;
+//   2. an unbounded read anywhere in the example (`listAll` / `listPages` / a streaming `.list(`) —
+//      read tools call the helper tier (`search` / `findBy*` / `resolve` / `getContext`);
+//   3. a mutating tool that does not declare a `dry_run` input affordance, or whose handler never
+//      calls the SDK's `{ dryRun: true }` path;
+//   4. a description that is not the curated description, verbatim.
+// Comments and string literals are stripped before the call scan and the config scan, because the
+// curated descriptions (and the example's own prose) legitimately mention `listAll` and `dry_run`
+// without calling or declaring anything. Structure (positional handler arguments, zod shape,
+// formatting) is the example's own. The example is expected to cover a SUBSET of the projection:
+// it is a reference consumer, not the tool surface.
+if (argv.includes('--check-example')) {
+  const EXAMPLE = path.resolve(ROOT, argValue('--example', 'examples/mcp-server.ts'));
+  const rel = path.relative(ROOT, EXAMPLE);
+  const failures = [];
+  const byName = new Map(tools.map((t) => [t.name, t]));
+  const registered = [];
+  let readTools = 0;
+  let writeTools = 0;
+  const stripLiterals = (text) =>
+    text
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')
+      .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ')
+      .replace(/'(?:[^'\\]|\\.)*'/g, "''")
+      .replace(/"(?:[^"\\]|\\.)*"/g, '""');
+  if (!existsSync(EXAMPLE)) {
+    failures.push(`${rel} not found`);
+  } else {
+    const source = readFileSync(EXAMPLE, 'utf8');
+    const unbounded = [...new Set((stripLiterals(source).match(/\b(?:listAll|listPages)\s*\(|\.list\s*\(/g) ?? []).map((s) => s.trim()))];
+    if (unbounded.length) {
+      failures.push(`the example uses an unbounded read (${unbounded.join(', ')}) — a read tool must call the helper tier (search / findBy* / resolve / getContext / operations.*)`);
+    }
+    const starts = [...source.matchAll(/registerTool\(\s*'([^']+)'/g)];
+    for (let i = 0; i < starts.length; i += 1) {
+      const name = starts[i][1];
+      const body = source.slice(starts[i].index, i + 1 < starts.length ? starts[i + 1].index : source.length);
+      registered.push(name);
+      const tool = byName.get(name);
+      if (!tool) {
+        failures.push(`${name}: not a tool in the curated manifest (fix the name here, or curate it in MCP_TOOL_OVERRIDES.json)`);
+        continue;
+      }
+      if (tool.effect === 'read') {
+        readTools += 1;
+        if (tool.annotations.tier !== 'helper') {
+          failures.push(`${name}: the manifest backs this read with ${tool.backingOperation} (tier ${tool.annotations.tier}) — re-point it in MCP_TOOL_OVERRIDES.json`);
+        }
+      } else {
+        writeTools += 1;
+        const handlerAt = body.search(/async\s*\(\s*args\s*\)\s*=>/);
+        const configCode = stripLiterals(handlerAt === -1 ? body : body.slice(0, handlerAt));
+        const handlerCode = handlerAt === -1 ? '' : stripLiterals(body.slice(handlerAt));
+        if (!/\bdry_run\b/.test(configCode)) failures.push(`${name}: mutating tool with no dry_run input affordance`);
+        if (!/dryRun:\s*true/.test(handlerCode)) failures.push(`${name}: mutating tool never calls the SDK's { dryRun: true } path`);
+      }
+      const described = /description:\s*'((?:[^'\\]|\\.)*)'/.exec(body);
+      const text = described ? described[1].replace(/\\(['\\])/g, '$1') : null;
+      if (text === null) failures.push(`${name}: no description`);
+      else if (text !== tool.description) failures.push(`${name}: description drifts from the curated manifest (re-run mcp:project and regenerate the example from it)`);
+    }
+  }
+  const excluded = tools.length - registered.length;
+  console.log(`mcp:project --check-example — ${rel}: ${registered.length} tool(s) registered (${readTools} read, ${writeTools} mutating); manifest projects ${tools.length}; ${excluded} deliberately excluded (reference consumer, not the surface)`);
+  if (failures.length) {
+    console.error(`mcp:project --check-example — FAILED (${failures.length}):`);
+    for (const f of failures) console.error(`  ✗ ${f}`);
+    process.exit(1);
+  }
+  console.log('mcp:project --check-example — OK: every tool name is in the curated manifest, no unbounded read is used, every mutating tool declares dry_run and calls the SDK dry-run path, every description matches.');
 }

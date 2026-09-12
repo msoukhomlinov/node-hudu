@@ -94,3 +94,21 @@ describe('S3ExportsResource — the stale option outside update', () => {
     expect(spy.calls).toHaveLength(0);
   });
 });
+
+describe('S3ExportsResource — dry-run impact equals the executed audit impact', () => {
+  afterEach(() => clearFetch());
+
+  it('s3_exports.create: the executed audit event reports the same impact as the dry-run', async () => {
+    const events: AuditEvent[] = [];
+    const client = makeClient((event) => events.push(event));
+    stubFetch(() => empty(200));
+    const dry = (await client.s3Exports.create({ bucket: 'b' }, { dryRun: true })) as DryRunResult<void>;
+    await client.s3Exports.create({ bucket: 'b' });
+    expect(events).toHaveLength(1);
+    expect(events[0]!.dryRun).toBe(false);
+    expect(events[0]!.impact).toEqual(dry.impact);
+    // POST-only endpoint with no cancel: the executed claim must not say "reversible".
+    expect(dry.impact).toEqual({ affected: 1, scope: 'single', reversible: false });
+    expect(events[0]!.impact?.reversible).toBe(false);
+  });
+});

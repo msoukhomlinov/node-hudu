@@ -774,7 +774,7 @@ r.jump(params: { integration_type: string; integration_slug: string; integration
 | photos | photo | photos | wrapped | yes | yes | create is multipart |
 | procedure_tasks | procedure_task | procedure_tasks | wrapped | no | yes | |
 | procedures | procedure | procedures | raw | yes | yes | + duplicate/create_from_template/kickoff |
-| public_photos | – | public_photos | raw | yes | no | create/update multipart |
+| public_photos | public_photo | public_photos | raw | yes | no | create/update multipart |
 | rack_storage_items | – | – | – | no | yes | |
 | rack_storages | – | – | raw | no | yes | |
 | relations | relation | relations | wrapped | yes | yes | no get/update |

@@ -337,3 +337,35 @@ describe('UploadsResource — the stale option outside update', () => {
     expect(spy.calls).toHaveLength(0);
   });
 });
+
+describe('UploadsResource — dry-run impact equals the executed audit impact', () => {
+  afterEach(() => clearFetch());
+
+  it('uploads.upload: the executed audit event reports the same impact as the dry-run', async () => {
+    const events: AuditEvent[] = [];
+    const client = makeAuditedClient(events);
+    stubFetch(() => json(upload, 201));
+    const dry = (await client.uploads.upload(
+      new Blob(['x']),
+      { uploadable_id: 5, uploadable_type: 'Article' },
+      { dryRun: true },
+    )) as DryRunResult<Upload>;
+    await client.uploads.upload(new Blob(['x']), { uploadable_id: 5, uploadable_type: 'Article' });
+    expect(events).toHaveLength(1);
+    expect(events[0]!.dryRun).toBe(false);
+    expect(events[0]!.impact).toEqual(dry.impact);
+    // Honest: DELETE /uploads/{id} exists, so the uploaded file can be removed.
+    expect(dry.impact).toEqual({ affected: 1, scope: 'single', reversible: true });
+  });
+
+  it('uploads.delete: the executed audit event reports the same impact as the dry-run', async () => {
+    const events: AuditEvent[] = [];
+    const client = makeAuditedClient(events);
+    stubFetch(() => empty(204));
+    const dry = (await client.uploads.delete(3, { dryRun: true })) as DryRunResult<void>;
+    await client.uploads.delete(3);
+    expect(events[0]!.impact).toEqual(dry.impact);
+    // Destructive, and uploads expose no archive/restore endpoint.
+    expect(dry.impact).toEqual({ affected: 1, scope: 'single', reversible: false });
+  });
+});

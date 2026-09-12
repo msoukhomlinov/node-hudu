@@ -12,7 +12,14 @@ import type { HttpClient } from '../http.js';
 import { BaseResource } from './base.js';
 import type { ListParams, Page } from '../pagination.js';
 import { HuduConfigError } from '../errors.js';
-import type { DryRunCheck, DryRunResult, HelperOptions, MutationOptions, Resolution } from '../types/common.js';
+import type {
+  DryRunCheck,
+  DryRunResult,
+  HelperOptions,
+  MutationOptions,
+  OperationImpact,
+  Resolution,
+} from '../types/common.js';
 import type { Upload } from '../types/upload.js';
 import type { UploadSummary } from '../types/upload.js';
 
@@ -168,15 +175,16 @@ export class UploadsResource extends BaseResource<Upload> {
   ): Promise<Upload | DryRunResult<Upload>> {
     const operation = 'uploads.upload';
     this.refuseGuardOutsideUpdate(operation, opts);
+    // One impact statement in both channels: the dry-run result AND the audit event of the
+    // executed call (policy §7.3) — an agent must not read two different reversibility claims.
+    const impact: OperationImpact = { affected: 1, scope: 'single', reversible: true };
     if (opts?.dryRun) {
       return this.buildDryRunResult<Upload>({
         operation,
         method: 'POST',
         path: '/uploads',
         checks: [this.fileCheck(file), this.uploadTargetCheck(data)],
-        affected: 1,
-        scope: 'single',
-        reversible: true,
+        ...impact,
         warnings: [
           'dry-run describes the multipart upload without building or sending the body, so the server-computed ' +
             'upload record (id, url, size, created_date) cannot be promised',
@@ -194,6 +202,7 @@ export class UploadsResource extends BaseResource<Upload> {
       formData: fd,
       operation,
       resourceIds: [data.uploadable_id],
+      impact,
     });
     return body as Upload;
   }
