@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { HuduClient } from '../../src/client.js';
 import { stubFetch, json, empty, clearFetch } from '../helpers.js';
+import { HuduConfigError } from '../../src/errors.js';
+import type { AssetsResource } from '../../src/resources/assets.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const asset = JSON.parse(readFileSync(join(__dirname, '../__fixtures__/asset.json'), 'utf8'));
@@ -712,4 +714,118 @@ describe('AssetsResource helper edge branches and validation', () => {
     await expect(makeClient().assets.resolve('Laptop')).rejects.toMatchObject({ code: 'RESOLUTION_AMBIGUOUS', resourceIds: [91, 92] });
   });
 
+});
+
+
+describe('AssetsResource — company id guard (validated before any IO)', () => {
+  afterEach(() => clearFetch());
+
+  type Call = (assets: AssetsResource, companyId: number) => unknown;
+  const VALID = 13;
+
+  const scopedEntryPoints: Array<[string, Call]> = [
+    ['assets.get', (a, c) => a.get(c, 10)],
+    ['assets.list', (a, c) => a.list(c, {})],
+    ['assets.listAll', (a, c) => a.listAll(c, {})],
+    ['assets.listPages', (a, c) => a.listPages(c, {})],
+    ['assets.create', (a, c) => a.create(c, { name: 'Laptop-001' })],
+    ['assets.update', (a, c) => a.update(c, 10, { name: 'Laptop-002' })],
+    ['assets.delete', (a, c) => a.delete(c, 10)],
+    ['assets.archive', (a, c) => a.archive(c, 10)],
+    ['assets.unarchive', (a, c) => a.unarchive(c, 10)],
+    ['assets.moveLayout', (a, c) => a.moveLayout(c, 10, { asset_layout_id: 2 })],
+    ['assets.resolve', (a, c) => a.resolve({ companyId: c, id: 10 })],
+    ['assets.getContext', (a, c) => a.getContext({ companyId: c, id: 10 })],
+    ['assets.listAllAcrossCompanies', (a, c) => a.listAllAcrossCompanies({ company_id: c })],
+  ];
+
+  const malformed: Array<[string, unknown]> = [
+    ['undefined', undefined],
+    ['NaN', Number.NaN],
+    ['zero', 0],
+    ['negative', -1],
+    ['float', 2.5],
+  ];
+
+  /** Runs the entry point and returns the rejection reason (or an Error when it resolved). */
+  async function reason(call: Call, companyId: unknown): Promise<Error> {
+    try {
+      await call(makeClient().assets, companyId as number);
+      return new Error('the entry point resolved instead of throwing');
+    } catch (err) {
+      return err as Error;
+    }
+  }
+
+  for (const [entry, call] of scopedEntryPoints) {
+    it(`${entry} rejects undefined/NaN/zero/negative/float without issuing a request`, async () => {
+      const spy = stubFetch(() => json({ asset, assets: [asset] }));
+      for (const [label, value] of malformed) {
+        const err = await reason(call, value);
+        expect(err, `${entry} accepted the ${label} company id`).toBeInstanceOf(HuduConfigError);
+        expect((err as HuduConfigError).code).toBe('CONFIG_ERROR');
+        expect(err.message).toBe(`${entry} requires a positive integer companyId, got "${String(value)}"`);
+      }
+      expect(spy.calls).toHaveLength(0);
+    });
+  }
+
+  const validCases: Array<[string, Call, string]> = [
+    ['assets.get', (a, c) => a.get(c, 10), '/companies/13/assets/10'],
+    ['assets.list', (a, c) => a.list(c, {}), '/companies/13/assets?'],
+    ['assets.listAll', (a, c) => a.listAll(c, {}), '/companies/13/assets?'],
+    ['assets.listPages', (a, c) => a.listPages(c, {}), '/companies/13/assets?'],
+    ['assets.create', (a, c) => a.create(c, { name: 'Laptop-001' }), '/companies/13/assets'],
+    ['assets.update', (a, c) => a.update(c, 10, { name: 'Laptop-002' }), '/companies/13/assets/10'],
+    ['assets.delete', (a, c) => a.delete(c, 10), '/companies/13/assets/10'],
+    ['assets.archive', (a, c) => a.archive(c, 10), '/companies/13/assets/10/archive'],
+    ['assets.unarchive', (a, c) => a.unarchive(c, 10), '/companies/13/assets/10/unarchive'],
+    ['assets.moveLayout', (a, c) => a.moveLayout(c, 10, { asset_layout_id: 2 }), '/companies/13/assets/10/move_layout'],
+    ['assets.resolve', (a, c) => a.resolve({ companyId: c, id: 10 }), '/companies/13/assets/10'],
+    ['assets.getContext', (a, c) => a.getContext({ companyId: c, id: 10 }), '/companies/13/assets/10'],
+    ['assets.listAllAcrossCompanies', (a, c) => a.listAllAcrossCompanies({ company_id: c }), '/assets?'],
+  ];
+
+  /**
+   * Runs the entry point so its request is actually made, draining a streaming
+   * result. Errors are swallowed: this suite asserts the REQUEST, and the stub
+   * serves a single body shape that only some entry points can unwrap.
+   */
+  async function run(call: Call, companyId: number): Promise<void> {
+    try {
+      const result = (await call(makeClient().assets, companyId)) as AsyncIterable<unknown> | undefined;
+      if (result !== null && typeof result === 'object' && Symbol.asyncIterator in result) {
+        const iterator = (result as AsyncIterable<unknown>)[Symbol.asyncIterator]();
+        await iterator.next();
+      }
+    } catch {
+      // The request itself is the assertion (see the caller).
+    }
+  }
+
+  for (const [entry, call, expectedPath] of validCases) {
+    it(`${entry} still issues the normal request for a valid company id`, async () => {
+      const spy = stubFetch(() => json({ asset, assets: [asset] }));
+      await run(call, VALID);
+      expect(spy.calls.length, `${entry} issued no request`).toBeGreaterThan(0);
+      expect(spy.calls[0].url).toContain(expectedPath);
+      expect(spy.calls.every((c) => !c.url.includes('/companies/undefined'))).toBe(true);
+    });
+  }
+
+  it('names the operation and the missing value — the live 500 repro', async () => {
+    const spy = stubFetch(() => json({ assets: [] }));
+    await expect(makeClient().assets.listAll(undefined as unknown as number)).rejects.toThrow(
+      'assets.listAll requires a positive integer companyId, got "undefined"',
+    );
+    expect(spy.calls).toHaveLength(0);
+  });
+
+  it('leaves an explicit account-wide scope untouched (companyId omitted)', async () => {
+    const spy = stubFetch(() => json({ assets: [asset] }));
+    await expect(makeClient().assets.listAllAcrossCompanies({})).resolves.toEqual([asset]);
+    const resolution = await makeClient().assets.resolve({ id: 10 });
+    expect(asRecord(resolution).id).toBe(10);
+    expect(spy.calls.some((c) => c.url.includes('/api/v1/assets?'))).toBe(true);
+  });
 });

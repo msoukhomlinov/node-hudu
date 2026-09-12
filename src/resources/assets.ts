@@ -57,6 +57,21 @@ function helperLimit(limit: number | undefined): number {
   return limit;
 }
 
+/**
+ * A company-scoped entry point's `companyId`, checked BEFORE any IO.
+ *
+ * `assets` is the one company-scoped resource and its methods interpolate the id
+ * straight into the request path, so an absent or malformed id used to reach the
+ * vendor as a literal `undefined` segment (`/companies/undefined/assets`) and come
+ * back as an opaque vendor 500. This names the operation and the value instead.
+ */
+function requireCompanyId(companyId: number | undefined, method: string): number {
+  if (typeof companyId !== 'number' || !Number.isInteger(companyId) || companyId < 1) {
+    throw new HuduConfigError(`${method} requires a positive integer companyId, got "${String(companyId)}"`);
+  }
+  return companyId;
+}
+
 /** Case-insensitive, whitespace-trimmed equality — the exact compare applied to a vendor filter. */
 function sameText(a: string | null | undefined, b: string | null | undefined): boolean {
   return typeof a === 'string' && typeof b === 'string' && a.trim().toLowerCase() === b.trim().toLowerCase();
@@ -144,19 +159,23 @@ export class AssetsResource extends BaseResource<Asset> {
   }
 
   async get(companyId: number, id: number): Promise<Asset> {
-    const body = await this.http.request<unknown>({ method: 'GET', path: `/companies/${companyId}/assets/${id}`, operation: 'assets.get', resourceIds: [id] });
+    const company = requireCompanyId(companyId, 'assets.get');
+    const body = await this.http.request<unknown>({ method: 'GET', path: `/companies/${company}/assets/${id}`, operation: 'assets.get', resourceIds: [id] });
     return this.unwrapSingle<Asset>(body);
   }
 
   list(companyId: number, params?: CompanyAssetsListParams): AsyncIterable<Asset> {
+    requireCompanyId(companyId, 'assets.list');
     return paginateItems<Asset>((page, pageSize) => this.fetchScopedPage(companyId, params ?? {}, page, pageSize), this.companyPaginationOpts(params));
   }
 
   async listAll(companyId: number, params?: CompanyAssetsListParams): Promise<Asset[]> {
+    requireCompanyId(companyId, 'assets.listAll');
     return collectAll<Asset>((page, pageSize) => this.fetchScopedPage(companyId, params ?? {}, page, pageSize), this.companyPaginationOpts(params));
   }
 
   listPages(companyId: number, params?: CompanyAssetsListParams): AsyncIterable<Page<Asset>> {
+    requireCompanyId(companyId, 'assets.listPages');
     return paginate<Asset>((page, pageSize) => this.fetchScopedPage(companyId, params ?? {}, page, pageSize), this.companyPaginationOpts(params));
   }
 
@@ -173,7 +192,8 @@ export class AssetsResource extends BaseResource<Asset> {
    */
   async create(companyId: number, data: AssetCreate, opts?: AssetWriteOptions): Promise<Asset | DryRunResult<Asset>> {
     const operation = 'assets.create';
-    const path = `/companies/${companyId}/assets`;
+    const company = requireCompanyId(companyId, operation);
+    const path = `/companies/${company}/assets`;
     if (opts?.dryRun === true) {
       return this.buildDryRunResult<Asset>({
         operation,
@@ -202,7 +222,8 @@ export class AssetsResource extends BaseResource<Asset> {
    */
   async update(companyId: number, id: number, data: AssetUpdate, opts?: AssetWriteOptions): Promise<Asset | DryRunResult<Asset>> {
     const operation = 'assets.update';
-    const path = `/companies/${companyId}/assets/${id}`;
+    const company = requireCompanyId(companyId, operation);
+    const path = `/companies/${company}/assets/${id}`;
     if (opts?.dryRun === true) {
       return this.buildDryRunResult<Asset>({
         operation,
@@ -225,7 +246,8 @@ export class AssetsResource extends BaseResource<Asset> {
   async delete(companyId: number, id: number, opts?: AssetWriteOptions): Promise<void | DryRunResult<void>>;
   async delete(companyId: number, id: number, opts?: AssetWriteOptions): Promise<void | DryRunResult<void>> {
     const operation = 'assets.delete';
-    const path = `/companies/${companyId}/assets/${id}`;
+    const company = requireCompanyId(companyId, operation);
+    const path = `/companies/${company}/assets/${id}`;
     if (opts?.dryRun === true) {
       return this.buildDryRunResult<void>({
         operation,
@@ -264,7 +286,8 @@ export class AssetsResource extends BaseResource<Asset> {
   async moveLayout(companyId: number, id: number, data: { asset_layout_id: number }, opts?: AssetWriteOptions): Promise<Asset | DryRunResult<Asset>>;
   async moveLayout(companyId: number, id: number, data: { asset_layout_id: number }, opts?: AssetWriteOptions): Promise<Asset | DryRunResult<Asset>> {
     const operation = 'assets.moveLayout';
-    const path = `/companies/${companyId}/assets/${id}/move_layout`;
+    const company = requireCompanyId(companyId, operation);
+    const path = `/companies/${company}/assets/${id}/move_layout`;
     if (opts?.dryRun === true) {
       return this.buildDryRunResult<Asset>({
         operation,
@@ -283,6 +306,11 @@ export class AssetsResource extends BaseResource<Asset> {
   }
 
   async listAllAcrossCompanies(params?: AccountAssetsListParams): Promise<Asset[]> {
+    // The account-wide list accepts a `company_id` narrowing; a supplied one is
+    // validated like a company-scoped path segment so a caller bug is named here.
+    if (params !== undefined && 'company_id' in params) {
+      requireCompanyId(params.company_id, 'assets.listAllAcrossCompanies');
+    }
     return collectAll<Asset>((page, pageSize) => this.fetchAccountPage(params ?? {}, page, pageSize), this.accountPaginationOpts(params));
   }
 
@@ -389,6 +417,9 @@ export class AssetsResource extends BaseResource<Asset> {
     opts?: { limit?: number; expand?: boolean },
   ): Promise<AssetContext | AssetContextExpand> {
     const size = helperLimit(opts?.limit);
+    if (typeof identifier === 'object' && identifier !== null && 'companyId' in identifier) {
+      requireCompanyId(identifier.companyId, 'assets.getContext');
+    }
     const resolution = await this.resolveRecord(identifier, opts);
     const asset = resolution.value;
     if (asset === null) {
@@ -424,6 +455,10 @@ export class AssetsResource extends BaseResource<Asset> {
     }
     if (identifier === null || typeof identifier !== 'object') throw new HuduConfigError(ASSET_IDENTIFIER_KINDS);
     const companyId = typeof identifier.companyId === 'number' ? identifier.companyId : undefined;
+    // A supplied company scope is validated before it can reach a request path. The
+    // key's PRESENCE is what counts: an explicitly supplied `undefined` is a caller
+    // bug, while an omitted key means the account-wide identifiers below.
+    if ('companyId' in identifier) requireCompanyId(identifier.companyId, 'assets.resolve');
     if (typeof identifier.id === 'number') {
       if (companyId !== undefined) return this.byIdScoped(companyId, identifier.id);
       return this.byIdAccountWide(identifier.id);
@@ -549,7 +584,8 @@ export class AssetsResource extends BaseResource<Asset> {
   ): Promise<void | DryRunResult<void>> {
     const action = archive ? 'archive' : 'unarchive';
     const operation = `assets.${action}`;
-    const path = `/companies/${companyId}/assets/${id}/${action}`;
+    const company = requireCompanyId(companyId, operation);
+    const path = `/companies/${company}/assets/${id}/${action}`;
     if (opts?.dryRun === true) {
       return this.buildDryRunResult<void>({
         operation,
