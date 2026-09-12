@@ -95,13 +95,20 @@ const NON_PAGINATED = ['/ip_addresses', '/lists', '/networks', '/procedure_tasks
  * 3. Errors: the SCREAMING_SNAKE codes the SDK actually throws for a
  *    documented HTTP status. Mirrors src/errors.ts (errorFromStatus).
  * ------------------------------------------------------------------ */
+/** Bulk-shaped mutations that must refuse to run unconfirmed (SCOPING decision 4). */
+const EXTRA_ERRORS = {
+  'DELETE /activity_logs': ['POLICY_DENIED'],
+  'DELETE /magic_dash': ['POLICY_DENIED'],
+  'PUT /magic_dash/update_positions': ['POLICY_DENIED'],
+};
+
 const STATUS_CODES = {
   400: 'BAD_REQUEST', 401: 'UNAUTHORIZED', 403: 'FORBIDDEN', 404: 'NOT_FOUND',
   405: 'METHOD_NOT_ALLOWED', 406: 'NOT_ACCEPTABLE', 409: 'CONFLICT', 412: 'STALE_OBJECT',
   422: 'UNPROCESSABLE_ENTITY', 429: 'RATE_LIMIT',
 };
-function errorsFor(op) {
-  const out = new Set(['NETWORK_ERROR']);
+function errorsFor(op, endpoint) {
+  const out = new Set(['NETWORK_ERROR', ...(EXTRA_ERRORS[endpoint] ?? [])]);
   for (const st of Object.keys(op.responses || {})) {
     const n = Number(st);
     if (Number.isNaN(n)) continue;
@@ -214,7 +221,7 @@ for (const [path, item] of Object.entries(spec.paths)) {
       resolution: null,
       staleCheck: null,
       redaction: 'none',
-      errors: errorsFor(op),
+      errors: errorsFor(op, key),
       tests: testsSkeleton(resource, `${resource}.${primitive}`, shape, file),
       group: GROUP_OF[resource] ?? null,
       status: METHODS[resource].has(primitive) ? 'implemented' : 'planned',
@@ -313,10 +320,10 @@ for (const r of RES_ORDER) {
 }
 
 const head = { spec: { source: 'api-docs.json', version: SPEC_VERSION }, generatedAt: null, resources, operations };
-const contentHash = createHash('sha256').update(JSON.stringify(head)).digest('hex');
-const priorHash = prior
-  ? createHash('sha256').update(JSON.stringify({ ...head, generatedAt: prior.generatedAt })).digest('hex')
-  : null;
+/** Hash the content with generatedAt neutralised on BOTH sides, so a re-run is a no-op in git. */
+const strip = (o) => JSON.stringify({ ...o, generatedAt: null });
+const contentHash = createHash('sha256').update(strip(head)).digest('hex');
+const priorHash = prior ? createHash('sha256').update(strip(prior)).digest('hex') : null;
 // Keep generatedAt stable when nothing else changed: a re-run must be a no-op in git.
 head.generatedAt = contentHash === priorHash && prior?.generatedAt ? prior.generatedAt : new Date().toISOString();
 const out = `${JSON.stringify(head, null, 2)}\n`;

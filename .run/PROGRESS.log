@@ -1,3 +1,4 @@
 2026-09-12T23:12:54.635891+10:00 preflight running — branch feat/agent-execution-layer, backup /tmp/node-hudu-backup-20260912-230817, SCOPING.md written (H=3, total 38/40), 4 npm scripts wired
 2026-09-12T23:12:54.635897+10:00 plan_derive done — scripts/derive-plan.mjs -> capabilities.plan.json, 158 rows, A=52 B=43 C=29 D=34, 158/158 status=implemented, re-run byte-identical
 2026-09-12T23:19:15.857305+10:00 A.design done — plan now 183 rows (158 primitives + 25 group-A helper rows); spawned core-plumbing (sub-e37b6897)
+2026-09-12T23:26:45.325046+10:00 B/C/D.design done — plan now 223 rows (158 primitives + 65 helper rows: A=25 B=14 C=13 D=13); design docs .run/design/A-D.md

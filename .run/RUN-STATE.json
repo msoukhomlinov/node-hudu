@@ -15,17 +15,17 @@
     "A.tests": "pending",
     "A.qa": "pending",
     "A.fix": "pending",
-    "B.design": "pending",
+    "B.design": "done",
     "B.implement": "pending",
     "B.tests": "pending",
     "B.qa": "pending",
     "B.fix": "pending",
-    "C.design": "pending",
+    "C.design": "done",
     "C.implement": "pending",
     "C.tests": "pending",
     "C.qa": "pending",
     "C.fix": "pending",
-    "D.design": "pending",
+    "D.design": "done",
     "D.implement": "pending",
     "D.tests": "pending",
     "D.qa": "pending",
@@ -56,7 +56,10 @@
   ],
   "gates": {
     "plan_derive": "pass (158 rows, groups populated, 158/158 implemented, re-run byte-stable)",
-    "A.design": "pass (52 primitive rows + 25 helper rows have every judgement column answered; helperRationale on every helper; preferredWhen where siblings overlap; plan:derive preserves them, 183 rows)"
+    "A.design": "pass (52 primitive rows + 25 helper rows have every judgement column answered; helperRationale on every helper; preferredWhen where siblings overlap; plan:derive preserves them, 183 rows)",
+    "B.design": "pass (every judgement column answered on every row; helperRationale + preferredWhen + resolution + compact recorded)",
+    "C.design": "pass (every judgement column answered on every row; helperRationale + preferredWhen + resolution + compact recorded)",
+    "D.design": "pass (every judgement column answered on every row; helperRationale + preferredWhen + resolution + compact recorded)"
   },
   "blockers": [
     {
@@ -77,7 +80,7 @@
   ],
   "metrics": {
     "spawns": 2,
-    "commits": 2,
+    "commits": 3,
     "gateRuns": 0,
     "qaFindings": 0,
     "qaFixed": 0
