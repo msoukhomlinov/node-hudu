@@ -1,0 +1,67 @@
+{
+  "runId": "node-hudu-backfill-20260912",
+  "startedAt": "2026-09-12T23:12:54.635461+10:00",
+  "stopBy": "2026-09-13T06:30:00+10:00",
+  "branch": "feat/agent-execution-layer",
+  "codingModel": null,
+  "qaModel": "openrouter/deepseek/deepseek-v4.1-flash",
+  "qaThinking": "xhigh",
+  "step": "preflight",
+  "steps": {
+    "preflight": "running",
+    "plan_derive": "done",
+    "A.design": "pending",
+    "A.implement": "pending",
+    "A.tests": "pending",
+    "A.qa": "pending",
+    "A.fix": "pending",
+    "B.design": "pending",
+    "B.implement": "pending",
+    "B.tests": "pending",
+    "B.qa": "pending",
+    "B.fix": "pending",
+    "C.design": "pending",
+    "C.implement": "pending",
+    "C.tests": "pending",
+    "C.qa": "pending",
+    "C.fix": "pending",
+    "D.design": "pending",
+    "D.implement": "pending",
+    "D.tests": "pending",
+    "D.qa": "pending",
+    "D.fix": "pending",
+    "operations": "pending",
+    "mcp_project": "pending",
+    "release": "pending",
+    "qa_final": "pending",
+    "finalise": "pending"
+  },
+  "children": [
+    {
+      "name": "tooling-scripts",
+      "id": "sub-f393c463",
+      "step": "preflight",
+      "startedAt": "2026-09-12T23:12:54.635479+10:00",
+      "budget": "60 grounding calls",
+      "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-f393c463"
+    }
+  ],
+  "gates": {
+    "plan_derive": "pass (158 rows, groups populated, 158/158 implemented, re-run byte-stable)"
+  },
+  "blockers": [],
+  "autonomousDecisions": [
+    {
+      "what": "codingModel left as inherit (no user answer to the model question at preflight)",
+      "why": "handover \u00a74 step 1 makes the model the user's choice; 'inherit the coordinator's model' is an explicitly valid answer and the user was asleep. Coordinator is on openrouter/deepseek/deepseek-v4.1-flash (high thinking).",
+      "reversal": "edit .run/RUN-STATE.json codingModel to a selector from await rlm.find_models('<provider>') and SCOPING.md Section H, then re-dispatch the affected step"
+    }
+  ],
+  "metrics": {
+    "spawns": 1,
+    "commits": 1,
+    "gateRuns": 0,
+    "qaFindings": 0,
+    "qaFixed": 0
+  }
+}

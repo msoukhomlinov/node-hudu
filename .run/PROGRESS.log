@@ -1,0 +1,2 @@
+2026-09-12T23:12:54.635891+10:00 preflight running — branch feat/agent-execution-layer, backup /tmp/node-hudu-backup-20260912-230817, SCOPING.md written (H=3, total 38/40), 4 npm scripts wired
+2026-09-12T23:12:54.635897+10:00 plan_derive done — scripts/derive-plan.mjs -> capabilities.plan.json, 158 rows, A=52 B=43 C=29 D=34, 158/158 status=implemented, re-run byte-identical
