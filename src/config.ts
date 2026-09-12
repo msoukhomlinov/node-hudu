@@ -4,12 +4,21 @@
 import { HuduConfigError } from './errors.js';
 import type { Logger } from './logger.js';
 import { NOOP_LOGGER } from './logger.js';
+import type { AuditEvent } from './types/common.js';
 
 export interface RateLimitConfig {
   /** Max requests per minute. Default 300 (Hudu's documented limit). Must be > 0. */
   perMinute?: number;
   /** Optional max burst beyond steady rate. Default equals perMinute. */
   burst?: number;
+}
+
+/** Bounds for an exact-match client scan (policy §6). */
+export interface ResolutionConfig {
+  /** Hard record cap for one client scan. Default 500. Must be >= 1. */
+  maxScanRecords?: number;
+  /** Hard page cap for one client scan. Default 4. Must be >= 1. */
+  maxScanPages?: number;
 }
 
 export interface HuduConfig {
@@ -27,6 +36,12 @@ export interface HuduConfig {
   logger?: Logger;
   /** Optional client-side rate limiter (token bucket). Off by default. */
   rateLimit?: RateLimitConfig;
+  /** Bounds for exact-match client scans. Defaults: 500 records / 4 pages. */
+  resolution?: ResolutionConfig;
+  /** Optional audit hook. Called once per request on the success and error paths. Off by default. */
+  onAudit?: (event: AuditEvent) => void;
+  /** Bounded parallelism for bulk helpers. Default 4. Must be an integer >= 1. */
+  concurrency?: number;
 }
 
 export interface ResolvedConfig {
@@ -37,6 +52,9 @@ export interface ResolvedConfig {
   maxRetries: number;
   logger: Logger;
   rateLimit?: Required<RateLimitConfig>;
+  resolution: Required<ResolutionConfig>;
+  concurrency: number;
+  onAudit?: (event: AuditEvent) => void;
 }
 
 export const DEFAULT_BASE_PATH = '/api/v1';
@@ -44,6 +62,9 @@ export const DEFAULT_TIMEOUT_MS = 30_000;
 export const DEFAULT_RATE_LIMIT_PER_MINUTE = 300;
 export const DEFAULT_MAX_RETRIES = 3;
 export const DEFAULT_PAGE_SIZE = 25;
+export const DEFAULT_MAX_SCAN_RECORDS = 500;
+export const DEFAULT_MAX_SCAN_PAGES = 4;
+export const DEFAULT_CONCURRENCY = 4;
 
 /** Validate a baseUrl origin and strip trailing slashes. */
 function normalizeBaseUrl(raw: string): string {
@@ -96,6 +117,34 @@ export function resolveConfig(config: HuduConfig): ResolvedConfig {
     rateLimit = { perMinute, burst };
   }
 
+  // Client-scan caps (policy §6): a scan that cannot be bounded is a defect, so a
+  // non-integer/zero cap is rejected instead of silently becoming unbounded.
+  let resolution: Required<ResolutionConfig> = {
+    maxScanRecords: DEFAULT_MAX_SCAN_RECORDS,
+    maxScanPages: DEFAULT_MAX_SCAN_PAGES,
+  };
+  if (config.resolution) {
+    const maxScanRecords = config.resolution.maxScanRecords ?? DEFAULT_MAX_SCAN_RECORDS;
+    if (!Number.isInteger(maxScanRecords) || maxScanRecords < 1) {
+      throw new HuduConfigError('resolution.maxScanRecords must be a positive integer');
+    }
+    const maxScanPages = config.resolution.maxScanPages ?? DEFAULT_MAX_SCAN_PAGES;
+    if (!Number.isInteger(maxScanPages) || maxScanPages < 1) {
+      throw new HuduConfigError('resolution.maxScanPages must be a positive integer');
+    }
+    resolution = { maxScanRecords, maxScanPages };
+  }
+
+  if (
+    config.concurrency !== undefined &&
+    (typeof config.concurrency !== 'number' || !Number.isInteger(config.concurrency) || config.concurrency < 1)
+  ) {
+    throw new HuduConfigError('concurrency must be an integer >= 1');
+  }
+  if (config.onAudit !== undefined && typeof config.onAudit !== 'function') {
+    throw new HuduConfigError('onAudit must be a function');
+  }
+
   return {
     baseUrl: normalizeBaseUrl(config.baseUrl),
     apiKey: config.apiKey.trim(),
@@ -104,5 +153,8 @@ export function resolveConfig(config: HuduConfig): ResolvedConfig {
     maxRetries: config.maxRetries ?? DEFAULT_MAX_RETRIES,
     logger: config.logger ?? NOOP_LOGGER,
     rateLimit,
+    resolution,
+    concurrency: config.concurrency ?? DEFAULT_CONCURRENCY,
+    onAudit: config.onAudit,
   };
 }

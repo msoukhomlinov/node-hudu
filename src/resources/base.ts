@@ -5,7 +5,52 @@ import type { HttpClient, RequestOptions } from '../http.js';
 import { unwrapByKey, unwrapList } from '../http.js';
 import type { ListParams, Page } from '../pagination.js';
 import { collectAll, paginate, paginateItems } from '../pagination.js';
-import { HuduConfigError } from '../errors.js';
+import { HuduConfigError, ResolutionError, StaleObjectError } from '../errors.js';
+import type {
+  DryRunCheck,
+  DryRunResult,
+  FieldDiff,
+  Identifier,
+  MutationOptions,
+  Resolution,
+  ResolutionCost,
+} from '../types/common.js';
+
+/** Page size requested by a client scan. */
+const SCAN_PAGE_SIZE = 25;
+
+/** Numeric ids for one identifier, used for audit events and structured errors. */
+function identifierIds(id: Identifier | undefined): number[] | undefined {
+  if (id === undefined) return undefined;
+  if (typeof id === 'number') return [id];
+  if (typeof id === 'string') return /^\d+$/.test(id) ? [Number(id)] : undefined;
+  return typeof id.id === 'number' ? [id.id] : undefined;
+}
+
+/** A mutation description handed to `buildDryRunResult`. */
+export interface DryRunOperation {
+  operation: string;
+  method: string;
+  path: string;
+  ids?: number[];
+  checks?: DryRunCheck[];
+  diff?: FieldDiff[];
+  affected?: number;
+  scope?: 'single' | 'bulk';
+  reversible?: boolean;
+  warnings?: string[];
+}
+
+/**
+ * True when an object looks like a mutation-options bag rather than a query bag.
+ * `updateOne(id, data, query, opts)` keeps `query` in the third position for
+ * backwards compatibility, so passing options there would silently send them as
+ * query parameters (a real write). It is rejected instead.
+ */
+function looksLikeMutationOptions(value: Record<string, unknown>): boolean {
+  const keys = Object.keys(value);
+  return keys.length > 0 && keys.every((key) => key === 'dryRun' || key === 'expectedUpdatedAt');
+}
 
 export interface BaseResourceConfig {
   /** Plural URL path under basePath, e.g. 'companies'. */
@@ -60,6 +105,7 @@ export abstract class BaseResource<T = unknown> {
           method: 'GET',
           path: `/${this.resourcePath}`,
           query,
+          operation: `${this.resourcePath}.list`,
         });
         const items = this.unwrapList<T>(body);
         // C12: non-paginated pages report the real item count (0 for empty), never a fabricated value.
@@ -71,6 +117,7 @@ export abstract class BaseResource<T = unknown> {
         method: 'GET',
         path: `/${this.resourcePath}`,
         query: { ...query, page, page_size: pageSize },
+        operation: `${this.resourcePath}.list`,
       });
       const items = this.unwrapList<T>(body);
       return { items, page, page_size: pageSize, hasMore: items.length === pageSize };
@@ -150,42 +197,337 @@ export abstract class BaseResource<T = unknown> {
       method: 'GET',
       path: `/${this.resourcePath}/${id}`,
       query,
+      operation: `${this.resourcePath}.get`,
+      resourceIds: identifierIds(id),
     }));
   }
 
   /** POST create, normalised by createType. */
-  protected async createOne<U = T>(data: unknown, query?: Record<string, unknown>): Promise<U> {
+  protected async createOne<U = T>(data: unknown, query?: Record<string, unknown>): Promise<U>;
+  /** Dry-run: describe the create without issuing it. */
+  protected async createOne<U = T>(data: unknown, query: Record<string, unknown> | undefined, opts: MutationOptions & { dryRun: true }): Promise<DryRunResult<U>>;
+  protected async createOne<U = T>(data: unknown, query: Record<string, unknown> | undefined, opts: MutationOptions & { dryRun?: false }): Promise<U>;
+  protected async createOne<U = T>(data: unknown, query: Record<string, unknown> | undefined, opts: MutationOptions | undefined): Promise<U | DryRunResult<U>>;
+  protected async createOne<U = T>(data: unknown, query?: Record<string, unknown>, opts?: MutationOptions): Promise<U | DryRunResult<U>> {
+    const operation = `${this.resourcePath}.create`;
+    if (opts?.dryRun) {
+      return this.buildDryRunResult<U>({
+        operation,
+        method: 'POST',
+        path: `/${this.resourcePath}`,
+        checks: [this.payloadCheck(data)],
+        affected: 1,
+        scope: 'single',
+        reversible: true,
+      });
+    }
     const body = await this.http.request<unknown>({
       method: 'POST',
       path: `/${this.resourcePath}`,
       body: data,
       query,
+      operation,
     });
     return this.createType === 'wrapped' ? this.unwrapSingle<U>(body) : (body as U);
   }
 
-  /** PUT update, envelope-normalised. PUT responses are ALWAYS wrapped by singleKey (when set). */
-  protected async updateOne<U = T>(id: number | string, data: unknown, query?: Record<string, unknown>): Promise<U> {
+  /**
+   * PUT update, envelope-normalised. PUT responses are ALWAYS wrapped by singleKey (when set).
+   *
+   * Options are the FOURTH argument: `updateOne(id, data, query, { dryRun: true })` or
+   * `updateOne(id, data, query, { expectedUpdatedAt })`. The third argument stays `query`
+   * for backwards compatibility, and options passed there are rejected rather than sent
+   * as query parameters.
+   */
+  protected async updateOne<U = T>(id: number | string, data: unknown, query?: Record<string, unknown>): Promise<U>;
+  /** Dry-run: describe the update without issuing it. */
+  protected async updateOne<U = T>(id: number | string, data: unknown, query: Record<string, unknown> | undefined, opts: MutationOptions & { dryRun: true }): Promise<DryRunResult<U>>;
+  /** Live update, optionally with the opt-in stale guard. */
+  protected async updateOne<U = T>(id: number | string, data: unknown, query: Record<string, unknown> | undefined, opts: MutationOptions & { dryRun?: false }): Promise<U>;
+  /** Options held in a variable: the caller must narrow the result. */
+  protected async updateOne<U = T>(id: number | string, data: unknown, query: Record<string, unknown> | undefined, opts: MutationOptions | undefined): Promise<U | DryRunResult<U>>;
+  protected async updateOne<U = T>(id: number | string, data: unknown, query?: Record<string, unknown>, opts?: MutationOptions): Promise<U | DryRunResult<U>> {
+    const operation = `${this.resourcePath}.update`;
+    const ids = identifierIds(id);
+    if (opts === undefined && query !== undefined && looksLikeMutationOptions(query)) {
+      throw new HuduConfigError(
+        'Mutation options must be the 4th argument: updateOne(id, data, query, { dryRun: true })',
+      );
+    }
+    if (opts?.dryRun) {
+      return this.buildDryRunResult<U>({
+        operation,
+        method: 'PUT',
+        path: `/${this.resourcePath}/${id}`,
+        ids,
+        checks: [this.targetCheck(id), this.payloadCheck(data)],
+        affected: 1,
+        scope: 'single',
+        reversible: true,
+      });
+    }
+    if (opts?.expectedUpdatedAt !== undefined) {
+      await this.assertNotStale(operation, this.resourcePath, id, opts.expectedUpdatedAt, () =>
+        this.getOne<{ updated_at?: string }>(id),
+      );
+    }
     const body = await this.http.request<unknown>({
       method: 'PUT',
       path: `/${this.resourcePath}/${id}`,
       body: data,
       query,
+      operation,
+      resourceIds: ids,
     });
     // Always unwrap by singleKey on PUT; when singleKey is undefined this is a pass-through.
     return this.unwrapSingle<U>(body);
   }
 
   /** DELETE returning void. */
-  protected async deleteOne(id: number | string): Promise<void> {
-    await this.http.request<unknown>({ method: 'DELETE', path: `/${this.resourcePath}/${id}` });
+  protected async deleteOne(id: number | string): Promise<void>;
+  /** Dry-run: describe the delete without issuing it. */
+  protected async deleteOne(id: number | string, opts: MutationOptions & { dryRun: true }): Promise<DryRunResult<void>>;
+  protected async deleteOne(id: number | string, opts: MutationOptions & { dryRun?: false }): Promise<void>;
+  protected async deleteOne(id: number | string, opts: MutationOptions | undefined): Promise<void | DryRunResult<void>>;
+  protected async deleteOne(id: number | string, opts?: MutationOptions): Promise<void | DryRunResult<void>> {
+    const operation = `${this.resourcePath}.delete`;
+    const ids = identifierIds(id);
+    if (opts?.dryRun) {
+      return this.buildDryRunResult<void>({
+        operation,
+        method: 'DELETE',
+        path: `/${this.resourcePath}/${id}`,
+        ids,
+        checks: [this.targetCheck(id)],
+        affected: 1,
+        scope: 'single',
+        reversible: false,
+        warnings: ['dry-run does not inspect dependent records'],
+      });
+    }
+    await this.http.request<unknown>({
+      method: 'DELETE',
+      path: `/${this.resourcePath}/${id}`,
+      operation,
+      resourceIds: ids,
+    });
   }
 
   /** PUT archive/unarchive, side-effect (void). */
-  protected async setArchived(id: number | string, archive: boolean): Promise<void> {
+  protected async setArchived(id: number | string, archive: boolean): Promise<void>;
+  /** Dry-run: describe the archive/unarchive without issuing it. */
+  protected async setArchived(id: number | string, archive: boolean, opts: MutationOptions & { dryRun: true }): Promise<DryRunResult<void>>;
+  protected async setArchived(id: number | string, archive: boolean, opts: MutationOptions & { dryRun?: false }): Promise<void>;
+  protected async setArchived(id: number | string, archive: boolean, opts: MutationOptions | undefined): Promise<void | DryRunResult<void>>;
+  protected async setArchived(id: number | string, archive: boolean, opts?: MutationOptions): Promise<void | DryRunResult<void>> {
+    const action = archive ? 'archive' : 'unarchive';
+    const operation = `${this.resourcePath}.${action}`;
+    const ids = identifierIds(id);
+    if (opts?.dryRun) {
+      return this.buildDryRunResult<void>({
+        operation,
+        method: 'PUT',
+        path: `/${this.resourcePath}/${id}/${action}`,
+        ids,
+        checks: [this.targetCheck(id)],
+        affected: 1,
+        scope: 'single',
+        // Archiving is reversible: the unarchive endpoint exists for the same id.
+        reversible: true,
+      });
+    }
     await this.http.request<unknown>({
       method: 'PUT',
-      path: `/${this.resourcePath}/${id}/${archive ? 'archive' : 'unarchive'}`,
+      path: `/${this.resourcePath}/${id}/${action}`,
+      operation,
+      resourceIds: ids,
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Agent-execution-layer plumbing shared by all 35 resources (policy §6-§10).
+  // ---------------------------------------------------------------------------
+
+  /** Bounded parallelism for bulk helpers (client `concurrency`, default 4). */
+  protected get concurrency(): number {
+    return this.http.concurrency;
+  }
+
+  /**
+   * Build a `DryRunResult` (policy §7.2). `simulated: true` is mandatory because the
+   * server's computed result cannot be promised; `impact` defaults to a single-record,
+   * non-reversible change unless the caller says otherwise.
+   */
+  protected buildDryRunResult<U = T>(op: DryRunOperation): DryRunResult<U> {
+    const ids = op.ids ?? [];
+    const result: DryRunResult<U> = {
+      operation: op.operation,
+      wouldApply: true,
+      target: { resource: this.resourcePath, ids },
+      request: { method: op.method, path: op.path },
+      checks: op.checks ?? [],
+      impact: {
+        affected: op.affected ?? (ids.length > 0 ? ids.length : 1),
+        scope: op.scope ?? 'single',
+        reversible: op.reversible ?? false,
+      },
+      simulated: true,
+      warnings: op.warnings ?? ['server-computed fields are not guaranteed by dry-run'],
+    };
+    if (op.diff !== undefined) result.diff = op.diff;
+    return result;
+  }
+
+  /** Dry-run check: a create/update carried a request body. */
+  protected payloadCheck(data: unknown): DryRunCheck {
+    const ok = data !== undefined && data !== null;
+    return { name: 'payload-present', ok, detail: ok ? 'request body supplied' : 'no request body was supplied' };
+  }
+
+  /** Dry-run check: an update/delete/archive named a target. */
+  protected targetCheck(id: number | string): DryRunCheck {
+    const text = id === undefined || id === null ? '' : String(id);
+    const ok = text.length > 0;
+    return { name: 'target-identifier', ok, detail: ok ? `target ${text}` : 'no target identifier was supplied' };
+  }
+
+  /**
+   * Exact-match client scan (policy §6), always bounded.
+   *
+   * - Pages through at most `maxScanPages` pages (default from `config.resolution`)
+   *   and stops once `maxScanRecords` records have been examined.
+   * - Returns the FIRST exact match as `resolutionCost: 'client-scan'`.
+   * - A fetched page is fully examined — nothing already fetched is left unread — so
+   *   `scanTruncated` is true only when a cap stopped the scan while the fetcher still
+   *   reported `hasMore: true`. A NON-paginated fetcher (single page, `hasMore: false`)
+   *   therefore never reports truncation, however many records it returned.
+   * - `value: null` with `scanTruncated: false` is a complete scan that found nothing.
+   *   `value: null` with `scanTruncated: true` means "undecided" — the caller must turn
+   *   that into a `RESOLUTION_TRUNCATED` error, never into `null`.
+   *
+   * Never unbounded, and never `Promise.all` across pages.
+   */
+  protected async boundedScan<T>(
+    fetchPage: (page: number, pageSize: number) => Promise<Page<T>>,
+    opts: {
+      match: (item: T) => boolean;
+      maxScanRecords?: number;
+      maxScanPages?: number;
+      label: (item: T) => string;
+      /** Optional id accessor; when present, a match reports itself as a candidate. */
+      idOf?: (item: T) => number;
+      /** Override the reported cost, e.g. 'server-filter' when the caller used a vendor filter. */
+      resolutionCost?: ResolutionCost;
+    },
+  ): Promise<Resolution<T>> {
+    const maxScanRecords = opts.maxScanRecords ?? this.http.resolution.maxScanRecords;
+    const maxScanPages = opts.maxScanPages ?? this.http.resolution.maxScanPages;
+    const cost: ResolutionCost = opts.resolutionCost ?? 'client-scan';
+    let scanned = 0;
+    for (let page = 1; ; page++) {
+      const result = await fetchPage(page, SCAN_PAGE_SIZE);
+      for (const item of result.items) {
+        scanned++;
+        if (opts.match(item)) {
+          const resolution: Resolution<T> = {
+            value: item,
+            resolutionCost: cost,
+            scanned,
+            scanTruncated: false,
+          };
+          if (opts.idOf) resolution.candidates = [{ id: opts.idOf(item), label: opts.label(item) }];
+          return resolution;
+        }
+      }
+      // The whole fetched page was examined: a complete scan is decided here, and a
+      // cap only matters when the fetcher still has pages left to read.
+      if (!result.hasMore) return { value: null, resolutionCost: cost, scanned, scanTruncated: false };
+      if (scanned >= maxScanRecords || page >= maxScanPages) {
+        return { value: null, resolutionCost: cost, scanned, scanTruncated: true };
+      }
+    }
+  }
+
+  /**
+   * Turn an undecided (truncated) scan into the structured `RESOLUTION_TRUNCATED`
+   * error the policy requires, and pass a resolved value or a complete-scan `null`
+   * straight through. Returning `null` for a truncated scan would be a lie.
+   */
+  protected static requireResolved<T>(
+    resolution: Resolution<T>,
+    opts: { resource: string; operation?: string; identifier?: Identifier },
+  ): T | null {
+    if (resolution.value !== null) return resolution.value;
+    if (resolution.scanTruncated) {
+      throw ResolutionError.truncated(
+        `Client scan for ${opts.resource} was truncated after ${resolution.scanned} record(s); ` +
+          'the record may exist beyond the scan cap and cannot be decided.',
+        {
+          operation: opts.operation,
+          resourceIds: identifierIds(opts.identifier),
+          suggestedAction:
+            'Resolve by { id }, use a vendor-side filter, or raise resolution.maxScanRecords/maxScanPages.',
+        },
+      );
+    }
+    return null;
+  }
+
+  /**
+   * Opt-in stale-object guard (policy §7.3). Hudu exposes no ETag/If-Match, so the
+   * caller passes the `updated_at` it last read: the current record is fetched,
+   * compared, and a mismatch throws `StaleObjectError` (code STALE_OBJECT, category
+   * conflict, retryable false) BEFORE the mutation is issued.
+   *
+   * When `expectedUpdatedAt` is undefined this returns immediately — it must not cost
+   * a request, and `updateOne` does not call it at all in that case.
+   */
+  protected async assertNotStale(
+    op: string,
+    resource: string,
+    id: number | string,
+    expectedUpdatedAt: string | undefined,
+    fetchCurrent: () => Promise<{ updated_at?: string } | undefined>,
+  ): Promise<void> {
+    if (expectedUpdatedAt === undefined) return;
+    const current = await fetchCurrent();
+    const actual = current === undefined ? undefined : current.updated_at;
+    if (actual !== expectedUpdatedAt) {
+      throw new StaleObjectError(
+        `Stale object: ${resource} ${String(id)} was not at the expected revision for ${op} ` +
+          `(expected updated_at ${expectedUpdatedAt}, found ${actual ?? 'none'})`,
+        undefined,
+        undefined,
+        {
+          operation: op,
+          resourceIds: identifierIds(id),
+          suggestedAction: 'Re-read the record, then retry the change against its current updated_at.',
+        },
+      );
+    }
+  }
+
+  /**
+   * Bounded-parallelism map for bulk work (policy §10): at most `concurrency`
+   * promises in flight, order preserved, never an unbounded `Promise.all` over ids.
+   */
+  protected async mapConcurrent<X, Y>(
+    items: readonly X[],
+    fn: (item: X, index: number) => Promise<Y>,
+    concurrency?: number,
+  ): Promise<Y[]> {
+    const limit = Math.max(1, Math.min(concurrency ?? this.http.concurrency, items.length));
+    const results = new Array<Y>(items.length);
+    let next = 0;
+    const worker = async (): Promise<void> => {
+      for (;;) {
+        const index = next++;
+        if (index >= items.length) return;
+        // noUncheckedIndexedAccess: `index` is always < items.length here.
+        results[index] = await fn(items[index] as X, index);
+      }
+    };
+    await Promise.all(Array.from({ length: limit }, worker));
+    return results;
   }
 }

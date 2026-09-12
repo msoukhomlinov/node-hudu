@@ -1,13 +1,19 @@
 /**
  * HTTP transport using native fetch (Node >= 18). Zero runtime dependencies.
  */
+import { randomUUID } from 'node:crypto';
 import { withAuth } from './auth.js';
-import type { ResolvedConfig } from './config.js';
+import type { ResolutionConfig, ResolvedConfig } from './config.js';
 import { errorFromStatus, HuduError, HuduNetworkError, RateLimitError } from './errors.js';
+import { redact } from './logger.js';
+import type { AuditEvent, OperationEffect } from './types/common.js';
 import { isRecord } from './utils.js';
 
 /** Hard cap on any single retry/backoff sleep (B6). */
 const MAX_RETRY_DELAY_MS = 30_000;
+
+/** Every abort caused by the whole-call deadline is a timeout, and timeouts are retryable (policy §10). */
+const TIMEOUT = { category: 'timeout', retryable: true } as const;
 
 export interface RequestOptions {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE';
@@ -33,6 +39,58 @@ export interface RequestOptions {
    * into an absolute URL. Used by redirect endpoints (e.g. /companies/jump).
    */
   manualRedirect?: boolean;
+  /** Registry-style operation name (e.g. 'companies.create'); used for audit events and errors. */
+  operation?: string;
+  /** Target resource ids; used for audit events and structured errors. Derived from numeric path segments when absent. */
+  resourceIds?: number[];
+  /**
+   * Describe the call instead of performing it. The transport does NOT call fetch;
+   * it returns a `DryRunRequest` marker and audits the event with `dryRun: true`.
+   */
+  dryRun?: boolean;
+}
+
+/** Marker returned instead of a server response when `{ dryRun: true }` short-circuits the transport. */
+export interface DryRunRequest {
+  readonly __dryRun: true;
+  readonly simulated: true;
+  readonly method: string;
+  readonly path: string;
+  readonly url: string;
+}
+
+/** Audit effect for an HTTP verb (policy §7.1). */
+function effectForMethod(method: string): OperationEffect {
+  if (method === 'GET') return 'read';
+  if (method === 'DELETE') return 'destructive';
+  return 'write';
+}
+
+/** Numeric path segments, used as the resource ids when the caller does not name them. */
+function deriveResourceIds(path: string): number[] | undefined {
+  const ids: number[] = [];
+  for (const segment of path.split('/')) {
+    if (/^\d+$/.test(segment)) ids.push(Number(segment));
+  }
+  return ids.length > 0 ? ids : undefined;
+}
+
+function resourceIdsFor(opts: RequestOptions): number[] | undefined {
+  return opts.resourceIds ?? deriveResourceIds(opts.path);
+}
+
+/** Fallback operation name when a raw transport caller does not pass one. */
+function deriveOperation(method: string, path: string): string {
+  const segments = path.split('/').filter((segment) => segment.length > 0);
+  const named = segments.filter((segment) => !/^\d+$/.test(segment));
+  const resource = named[0] ?? 'hudu';
+  const hasId = named.length !== segments.length;
+  const last = segments[segments.length - 1] ?? '';
+  if (named.length > 1 && !/^\d+$/.test(last)) return `${resource}.${last}`;
+  if (method === 'GET') return hasId ? `${resource}.get` : `${resource}.list`;
+  if (method === 'POST') return `${resource}.create`;
+  if (method === 'PUT') return `${resource}.update`;
+  return `${resource}.delete`;
 }
 
 /** Parse a Retry-After header. Returns undefined when absent or not finite. */
@@ -135,7 +193,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  */
 function catchBodyError(err: unknown, method: string, url: string, timeoutMs: number): never {
   if (err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError')) {
-    throw new HuduNetworkError(`Request timed out after ${timeoutMs}ms: ${method} ${url}`, url);
+    throw new HuduNetworkError(`Request timed out after ${timeoutMs}ms: ${method} ${url}`, url, TIMEOUT);
   }
   const detail = err instanceof Error ? err.message : String(err);
   throw new HuduNetworkError(`Network error while reading response body: ${detail}`, url);
@@ -150,12 +208,18 @@ interface TokenBucket {
 
 export class HttpClient {
   private readonly config: ResolvedConfig;
+  /** Client-scan caps shared with BaseResource.boundedScan (policy §6). */
+  readonly resolution: Required<ResolutionConfig>;
+  /** Bounded parallelism for bulk helpers (policy §10). */
+  readonly concurrency: number;
   private bucket?: TokenBucket;
   /** Serialises concurrent token acquisitions so the configured burst is really enforced (B11). */
   private consumeTail: Promise<void> = Promise.resolve();
 
   constructor(config: ResolvedConfig) {
     this.config = config;
+    this.resolution = config.resolution;
+    this.concurrency = config.concurrency;
     if (config.rateLimit) {
       this.bucket = {
         tokens: config.rateLimit.burst,
@@ -166,7 +230,76 @@ export class HttpClient {
     }
   }
 
+  /**
+   * Issue one request through the single transport.
+   *
+   * - One correlation id per call, generated BEFORE the first attempt and reused
+   *   across retries; it is attached to every thrown HuduError and to the audit event.
+   * - Calls `config.onAudit` once per call (success or error path) with a redacted event.
+   *   Nothing is logged by default.
+   * - With `{ dryRun: true }` it never calls fetch: it returns a `DryRunRequest` marker
+   *   and fires the audit event with `dryRun: true`.
+   */
   async request<T>(opts: RequestOptions): Promise<T> {
+    const correlationId = randomUUID();
+    if (opts.dryRun === true) {
+      const marker: DryRunRequest = {
+        __dryRun: true,
+        simulated: true,
+        method: opts.method,
+        path: opts.path,
+        url: this.buildUrl(opts),
+      };
+      this.emitAudit(correlationId, opts, 'success', undefined);
+      return marker as unknown as T;
+    }
+    try {
+      const result = await this.execute<T>(opts);
+      this.emitAudit(correlationId, opts, 'success', undefined);
+      return result;
+    } catch (err) {
+      if (err instanceof HuduError) {
+        err.correlationId = correlationId;
+        if (opts.operation !== undefined) err.operation = opts.operation;
+        if (err.resourceIds === undefined) err.resourceIds = resourceIdsFor(opts);
+      }
+      this.emitAudit(correlationId, opts, 'error', err instanceof HuduError ? err.httpStatus : undefined);
+      throw err;
+    }
+  }
+
+  /**
+   * Build and hand the audit event to `config.onAudit`. The event is redacted with
+   * the SAME `redact()` used for logging payloads — one redactor for the SDK.
+   * Returns immediately (no allocation, no hook call) when no hook is configured.
+   */
+  private emitAudit(
+    correlationId: string,
+    opts: RequestOptions,
+    outcome: 'success' | 'error',
+    httpStatus: number | undefined,
+  ): void {
+    const hook = this.config.onAudit;
+    if (!hook) return;
+    const event: AuditEvent = {
+      correlationId,
+      operation: opts.operation ?? deriveOperation(opts.method, opts.path),
+      method: opts.method,
+      path: opts.path,
+      effect: effectForMethod(opts.method),
+      dryRun: opts.dryRun === true,
+      outcome,
+      timestamp: new Date().toISOString(),
+    };
+    if (httpStatus !== undefined) event.httpStatus = httpStatus;
+    const ids = resourceIdsFor(opts);
+    if (ids !== undefined) event.resourceIds = ids;
+    if (opts.query !== undefined) event.query = opts.query;
+    hook(redact(event) as AuditEvent);
+  }
+
+  /** The transport proper: retries, deadline, error wrapping. Always reached through `request`. */
+  private async execute<T>(opts: RequestOptions): Promise<T> {
     const method = opts.method;
     const url = this.buildUrl(opts);
     const headers: Record<string, string> = {
@@ -197,7 +330,7 @@ export class HttpClient {
 
       const remaining = deadline - Date.now();
       if (remaining <= 0) {
-        throw new HuduNetworkError(`Request timed out after ${this.config.timeoutMs}ms: ${method} ${url}`, url);
+        throw new HuduNetworkError(`Request timed out after ${this.config.timeoutMs}ms: ${method} ${url}`, url, TIMEOUT);
       }
 
       const init: RequestInit = {
@@ -224,7 +357,7 @@ export class HttpClient {
         response = await fetch(url, init);
       } catch (err) {
         if (err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError')) {
-          throw new HuduNetworkError(`Request timed out after ${this.config.timeoutMs}ms: ${method} ${url}`, url);
+          throw new HuduNetworkError(`Request timed out after ${this.config.timeoutMs}ms: ${method} ${url}`, url, TIMEOUT);
         }
         throw new HuduNetworkError(`Network error: ${err instanceof Error ? err.message : String(err)}`, url);
       }
@@ -331,7 +464,7 @@ export class HttpClient {
     // subsequent callers are not corrupted.
     if (deadline - Date.now() <= 0) {
       return Promise.reject(
-        new HuduNetworkError(`Request timed out after ${this.config.timeoutMs}ms: rate limit queue held past deadline`),
+        new HuduNetworkError(`Request timed out after ${this.config.timeoutMs}ms: rate limit queue held past deadline`, undefined, TIMEOUT),
       );
     }
     // Bound the time spent WAITING FOR OUR TURN in the queue by the caller's own
@@ -342,7 +475,7 @@ export class HttpClient {
     return new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => {
         reject(
-          new HuduNetworkError(`Request timed out after ${this.config.timeoutMs}ms: rate limit queue held past deadline`),
+          new HuduNetworkError(`Request timed out after ${this.config.timeoutMs}ms: rate limit queue held past deadline`, undefined, TIMEOUT),
         );
       }, deadline - Date.now());
       attempt.then(
@@ -373,7 +506,7 @@ export class HttpClient {
       // the deadline throws a timeout instead of spinning/fetching late.
       const remaining = deadline - Date.now();
       if (remaining <= 0) {
-        throw new HuduNetworkError(`Request timed out after ${this.config.timeoutMs}ms: rate limit held past deadline`);
+        throw new HuduNetworkError(`Request timed out after ${this.config.timeoutMs}ms: rate limit held past deadline`, undefined, TIMEOUT);
       }
       const wait = Math.min(Math.ceil((1 - this.bucket.tokens) / this.bucket.refillPerMs), remaining);
       this.config.logger.debug(`Client rate limit reached; sleeping ${wait}ms`);
@@ -381,7 +514,7 @@ export class HttpClient {
     }
     // Acquired a token; if the deadline elapsed while obtaining it, don't fetch late.
     if (Date.now() >= deadline) {
-      throw new HuduNetworkError(`Request timed out after ${this.config.timeoutMs}ms: rate limit held past deadline`);
+      throw new HuduNetworkError(`Request timed out after ${this.config.timeoutMs}ms: rate limit held past deadline`, undefined, TIMEOUT);
     }
     this.bucket.tokens -= 1;
   }
