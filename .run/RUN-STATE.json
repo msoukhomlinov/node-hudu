@@ -156,6 +156,14 @@
       "startedAt": "2026-09-13T01:36:01.685971+10:00",
       "budget": "55 grounding calls",
       "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-7e6efb19"
+    },
+    {
+      "name": "qa-final-registry-2",
+      "id": "sub-0254b8aa",
+      "step": "qa_final",
+      "startedAt": "2026-09-13T01:55:46.928056+10:00",
+      "budget": "35 grounding calls",
+      "log": "/Users/maxs/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-0254b8aa"
     }
   ],
   "gates": {
@@ -233,7 +241,7 @@
     }
   ],
   "metrics": {
-    "spawns": 19,
+    "spawns": 20,
     "commits": 28,
     "gateRuns": 6,
     "qaFindings": 33,
