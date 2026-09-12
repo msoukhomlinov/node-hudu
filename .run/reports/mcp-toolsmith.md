@@ -1,204 +1,158 @@
 # MCP Toolsmith report — node-hudu agent-execution-layer retrofit (Phase 2, MCP projection)
 
-Date: 2026-09-12 · branch `feat/agent-execution-layer` · scope: MCP `tools/list` surface only.
-Files owned and touched: `MCP_TOOL_OVERRIDES.json` (new), `MCP_TOOL_MANIFEST.md` (regenerated),
-`examples/mcp-server.ts` (regenerated), `scripts/project-mcp-tools.mjs` (only the new
-`--check-example` capability). Nothing in `src/**`, `test/**`, `capabilities.plan.json`,
+Date: 2026-09-12 · branch `feat/agent-execution-layer` · scope: the MCP `tools/list` surface only.
+Files owned/touched: `MCP_TOOL_OVERRIDES.json` (new), `MCP_TOOL_MANIFEST.md` (regenerated),
+`examples/mcp-server.ts` (regenerated), `scripts/project-mcp-tools.mjs` (only the MCP-curation
+capabilities: `--check-example`, the `exclude` override, the tier-classification line, and the
+read-tier annotation scoping). Nothing in `src/**`, `test/**`, `capabilities.plan.json`,
 `package.json`, `tsconfig*`, README/CHANGELOG/docs was touched. Not committed.
 
-## 1. Status (all green)
+## 1. Final numbers (all green)
 
-- `node scripts/project-mcp-tools.mjs` → **overrides applied = 1260**, tools projected = 203
-  (helper-tier **118**, **read primitives 0**, mutations 85), excluded by rule = 22.
-- "read tools missing helper-tier backing" = **0**; the script's warning line reads
-  `0 read tool(s) are still backed by a plain primitive`. The manifest's
-  "Helper-tier gaps" list is now `- none`.
-- `node scripts/project-mcp-tools.mjs --check-example` → **OK** (exit 0) on the real example, and
-  **FAILS (exit 1)** on seven deliberately broken `/tmp` copies (§6).
-- `npx tsc --noEmit` (repo config, `src/**`) → 0 errors.
-- Example typecheck → 0 errors, via a temporary config that uses the repo's exact compiler options
-  and maps `node-hudu` → `src/index.ts` + `node-hudu/operations` → `src/operations/index.ts`
-  (`/tmp/hudu-example-tsconfig.json`). The repo `tsconfig.json` includes only `src/**/*.ts`, so the
-  example is not covered by `npx tsc --noEmit`; and `dist/` predates the helper tier (`findByDomain`
-  is absent from `dist/index.d.ts`), so a self-name import would not resolve the helper methods.
-  A real consumer needs `npm run build` first — see finding F4.
-- Not run (per brief): `npm test`, `capabilities:build`, `capabilities:check`.
+```
+mcp:project — tools projected=147; excluded=22; overrides applied=644                    (exit 0)
+mcp:project — read tools missing helper-tier backing: 0
+mcp:project — classification by registry kind: helper-tier tools=62, primitive-read=0,
+              primitive-write=85; re-pointed-by-curation=0; mislabelled=0
+mcp:project — curation exclusions: 56 tool(s) dropped through MCP_TOOL_OVERRIDES.json;
+              no two curated read tools share a backingOperation=true
+mcp:project --check-example — examples/mcp-server.ts: 20 tool(s) registered (15 read, 5 mutating);
+              manifest projects 147; 127 deliberately excluded                          (exit 0)
+```
 
-## 2. `MCP_TOOL_OVERRIDES.json` — 1260 records, `{tool, field, newValue, reason}`
+Independent one-line check over the manifest's machine-readable projection:
 
-| field | count | what it does |
+```
+node -e '...' -> {"tools":147,"reads":62,"mutations":85,"distinctReadBackings":62,
+                   "duplicateReadBackings":0,"readsNotHelperTier":0,"readsWithoutBound":0,
+                   "toolsMissingTitleOrDescription":0}
+```
+
+Typechecks: `npx tsc --noEmit` = 0 errors (repo config, `src/**`); `examples/mcp-server.ts` =
+0 errors under the repo's exact compiler options, verified **both** ways — through a temporary
+`paths` map to `src/` and through the package's own name (`node-hudu` → built `dist/`, whose chunk
+`dist/client-DNdEaPtK.d.ts` does carry the helper tier; my earlier "dist predates the helper tier"
+note was wrong — the barrel `dist/index.d.ts` only re-exports from that chunk).
+Not run (per brief): `npm test`, `capabilities:build`, `capabilities:check`.
+
+## 2. `MCP_TOOL_OVERRIDES.json` — 644 records, `{tool, field, newValue, reason}`
+
+| field | count | purpose |
 | --- | --- | --- |
-| `name` | 203 | verb-first, search-first rename of every projected tool (`<prefix>_<verb>_<scope>`) |
-| `title` | 203 | human display name (the projection has no `title` field) |
-| `description` | 203 | what it returns + its bound + when NOT to use it (plus flags for writes) |
-| `annotations.bounded` | 118 | a real bound on every read: "default 25 … hard maximum 100" |
-| `inputSchema.opts` / `inputSchema.options` | 85 | removes the duplicate nested `dryRun` (rule c) |
-| `backingOperation` | 56 | re-points every primitive read to the helper tier (rule a) |
-| `inputSchema`, `outputSchema` | 56 + 56 | taken from the helper operation, so the manifest is truthful about what the tool now calls |
-| `annotations.tier` / `helperTierBacked` / `helperTierBacking` / `helperTierAlternatives` / `curation` | 56 each | records the re-point in the manifest itself |
+| `name` | 147 | verb-first, search-first name (`<prefix>_<verb>_<scope>`) for every surviving tool |
+| `title` | 147 | human display name (the projection has no `title` field) |
+| `description` | 147 | what it returns + its bound + when NOT to use it (+ flags for writes) |
+| `annotations.bounded` | 62 | every read states "default 25 … hard maximum 100" |
+| `inputSchema.opts` / `inputSchema.options` | 82 + 3 | removes the duplicate nested `dryRun` |
+| `exclude` | 56 | drops one tool per redundant outcome, with its reason |
 
-Order matters: each tool's `name` override comes first, so every later override for that tool
-resolves against the renamed entry. Verified: the new-name set and the old-name set are disjoint.
+Each tool's `name` override comes first so later overrides resolve against the renamed entry;
+`exclude` records reference the tool's un-renamed projection name and are therefore always
+resolvable. All 644 applied; the script exits non-zero on any unresolved override.
 
-## 3. Re-pointing the 56 primitive reads (rule a)
+## 3. Exclusive outcome ownership (no two tools do the same job)
 
-Every projected read now names a helper operation as its `backingOperation`:
+After the 56 re-points, each redundant read was dropped through `exclude`, keeping the
+better-named tool of the pair:
 
-| primitive | re-pointed to | tools |
-| --- | --- | --- |
-| `<res>.get` (id-only fetch) | `<res>.resolve` | 24 |
-| `<res>.list` (streaming list) | `<res>.search` | 9 |
-| `<res>.list` | the resource's list-shaped `findBy*` (`findByResource`, `findByFlagable`, `findByLabelable`, `findByEndpoints`, `findByName`, `findByCompany`) | 7 |
-| `<res>.list` — resource has **no** multi-record helper | `<res>.resolve` (13), stated in the description as a deliberate narrowing to one record | 13 |
-| `<res>.jump` | `<res>.resolve` | 2 |
-| `<res>.lookup` | `<res>.resolve` | 1 |
-| `assets.listAcrossCompanies` | `assets.search` | 1 |
+| was | re-pointed to (before exclusion) | kept instead | dropped |
+| --- | --- | --- | --- |
+| `<res>.get` | `<res>.resolve` | `hudu_get_<singular>` | 24 `hudu_get_<singular>_by_id` |
+| `<res>.list` | `<res>.search` | `hudu_search_<resource>` | 9 `hudu_list_<resource>` |
+| `<res>.list` | the list-shaped `findBy*` | `hudu_find_<resource>_by_<field>` | 7 `hudu_resolve_<singular>` |
+| `<res>.list` (no multi-record helper) | `<res>.resolve` | `hudu_get_<singular>` | 13 `hudu_resolve_<singular>` |
+| `<res>.jump` / `.lookup` | `<res>.resolve` | `hudu_get_<card/company>` | 3 `hudu_jump_*`, `hudu_lookup_*` |
+| `assets.listAcrossCompanies` | `assets.search` | `hudu_search_assets` | 1 `hudu_list_assets_across_companies` |
 
-Name consequences: `get` → `hudu_get_<singular>_by_id` (the direct-id path; a miss throws
-`NOT_FOUND`), `list` → `hudu_list_<resource>`, narrowed lists → `hudu_resolve_<singular>`,
-`jump`/`lookup` keep their special-op verb (`hudu_jump_company`, `hudu_lookup_card`). Every alias
-carries `annotations.curation` naming the canonical tool it shares a backing with.
+Result: 147 tools = 62 reads (62 distinct `backingOperation`s, all helper-tier) + 85 mutations
+(helpers do no writes, so every mutation keeps its own tool). Every dropped tool is listed in the
+manifest under **"Excluded by curation (dropped through `MCP_TOOL_OVERRIDES.json`)"** with its
+backing operation, effect, projected tier and the override's reason; the summary bullet
+`excluded by curation: 56` makes the count visible in the header. Curated names, titles,
+descriptions and bounds survive: 0 tools without a title/description, 0 reads without a bound,
+0 unresolved overrides.
 
-## 4. Bounds (rule b)
+## 4. Dry-run, sensitive/approval, bounds (unchanged requirements, re-verified)
 
-All 118 reads carry `annotations.bounded` **and** a "Bounded: …" sentence in the description:
-- 90 search/list reads: "default 25 results, hard maximum 100";
-- 4 context reads (`getContext`, `getWithTasks`): "default 25 records per sub-list, hard maximum 100";
-- 24 direct-id reads: "direct id fetch (one request); … default 25 / hard maximum 100 on the
-  scan path".
+- `dry_run` appears **exactly once** per mutating tool (0 nested `"name":"dryRun"` in the manifest);
+  each description states the SDK dry-run contract.
+- 29 `requiresApproval`, 17 `sensitive`, 26 destructive tools state it in the description; the three
+  bulk operations (`hudu_delete_all_activity_logs`, `hudu_delete_magic_dash_by_id`,
+  `hudu_update_magic_dash_positions`) state their BULK impact bound and their `POLICY_DENIED` refusal.
+- Every read states a bound; the eight `default ?` placeholders are gone.
+- Mutation rows no longer carry the read-tier `helperTier*` annotation keys (a write is neither
+  helper-backed nor a primitive read); they carry `tier="primitive-write"` only.
 
-The 8 `default ?` placeholders (`ip_addresses.list`, `lists.list`, `networks.list`,
-`procedure_tasks.list`, `rack_storage_items.list`, `rack_storages.list`, `vlan_zones.list`,
-`vlans.list`) are gone: those tools are re-pointed and re-bounded by override. (The only remaining
-`default ?` strings in the file are inside the override *reason* text that documents the change.)
+## 5. Script changes (all inside `scripts/project-mcp-tools.mjs`)
 
-## 5. Dry-run appears exactly once (rule c)
+1. **`exclude` override** — `{tool, field: "exclude", newValue: true, reason}` removes the tool from
+   the projection, records it in `curationExcluded`, prints it in the manifest section, and is
+   counted in `overrides applied`. `newValue` other than `true` is rejected as unresolved.
+2. **Tier classification line** — re-pointed (`registryKind=primitive`, `tier=helper`) is now
+   reported separately from genuinely mislabelled (`registryKind=helper`, `tier!=helper`), which
+   must be 0. Plus a curation line that asserts no two read tools share a `backingOperation`.
+3. **Read-tier annotations** — `helperTierBacked` / `helperTierBacking` / `helperTierAlternatives`
+   are only emitted for reads.
+4. **`--check-example`** (from the first pass) — fails on an unknown tool name, any
+   `listAll(`/`listPages(`/streaming `.list(`, a mutating tool without a `dry_run` affordance or
+   without a `{ dryRun: true }` call, or a description that drifts from the curated manifest.
+   Negative fixtures (each exit 1, rebuilt against the final example):
 
-The projection carried the registry's nested `opts.dryRun` (82 tools) or `options.dryRun` (3) *and*
-the script-injected top-level `dry_run`. Every nested entry is removed by override; the top-level
-`dry_run` — the actual tool affordance the example and a gateway call — is kept. Result:
-`"name":"dryRun"` = 0 occurrences in the manifest; every mutating tool has exactly one `dry_run`.
-The registry metadata is not edited: the delta is in `MCP_TOOL_OVERRIDES.json`.
+   | fixture | failure reported |
+   | --- | --- |
+   | `hudu_get_company` → `..._v2` | not a tool in the curated manifest |
+   | a curated-**excluded** tool registered (`hudu_get_company_by_id`) | not a tool in the curated manifest |
+   | `hudu.companies.listAll()` | uses an unbounded read (listAll() |
+   | streaming `hudu.companies.list({})` | uses an unbounded read (.list() |
+   | `dry_run` field removed | mutating tool with no dry_run input affordance |
+   | `{ dryRun: true }` → `{ dryRun: false }` | never calls the SDK's { dryRun: true } path |
+   | one word of a description changed | description drifts from the curated manifest |
 
-## 6. Sensitive / requiresApproval statements (rule d)
+## 6. `examples/mcp-server.ts` — reference consumer, now 20 tools
 
-- 29 `requiresApproval` tools: description says "requiresApproval: the MCP gateway must obtain
-  explicit human approval before this tool runs".
-- 17 `sensitive` tools: description says "Sensitive: … the SDK redacts those fields by default"
-  (reads) / "never echo a secret value …" (writes).
-- 26 destructive tools: "Irreversible — dry-run first and prefer archive where the vendor offers it."
-- The three bulk operations (`activity_logs.deleteAll` → `hudu_delete_all_activity_logs`,
-  `magic_dash.deleteById` → `hudu_delete_magic_dash_by_id`,
-  `magic_dash.updatePositions` → `hudu_update_magic_dash_positions`) each state their BULK impact
-  bound ("every activity log from the given datetime on", "every Magic Dash item carrying that
-  title", "every item in the submitted array") and their `POLICY_DENIED` refusal.
-- Verified mechanically: 0 tools with a flag but no matching statement in the description
-  (approval / sensitive / destructive / bound / "do not use" / dry-run).
+Regenerated (MCP v2 SDK + zod v4 + `structuredContent`/`outputSchema`, `_meta` with
+`backingOperation`/`sensitive`/`requiresApproval`, error path surfacing `HuduError.code`, no new
+dependency). Reads (15) are all helper-tier: `hudu_search_across_resources`, `hudu_resolve_any`
+(`client.operations.searchAcrossResources` / `resolveAny`), `hudu_search_companies`,
+`hudu_get_company`, `hudu_get_company_context`, `hudu_find_companies_by_domain`,
+`hudu_search_articles`, `hudu_get_article`, `hudu_search_assets`, `hudu_get_asset`,
+`hudu_get_asset_context`, `hudu_search_asset_passwords`, `hudu_get_asset_password`,
+`hudu_search_users`, `hudu_get_procedure_with_tasks`. Mutations (5) each dry-run first:
+`hudu_create_company`, `hudu_update_company`, `hudu_archive_company`, `hudu_delete_company`,
+`hudu_delete_asset_password` (sensitive + approval-gated). No `listAll`, `listPages` or streaming
+`list` call anywhere. `hudu_get_company_by_id` was removed when curation dropped it — the gate
+already fails if an example tool is not in the curated manifest.
 
-## 7. Naming (rule e)
-
-Search-first and verb-first everywhere: `hudu_search_<resource>`, `hudu_get_<singular>`,
-`hudu_get_<singular>_context`, `hudu_find_<resource>_by_<field>`, `hudu_get_<singular>_by_id`,
-`hudu_list_<resource>`, `hudu_resolve_<singular>`, `hudu_create|update|delete|archive|unarchive_<singular>`,
-plus `hudu_search_across_resources`, `hudu_resolve_any`, `hudu_get_procedure_with_tasks`. 203
-distinct names, asserted collision-free against both the new and the old name sets.
-The standard's `list_` verb is used only for the bounded list tools that are genuinely
-multi-record; the narrowed ones are named `hudu_resolve_<singular>` so the name does not promise a
-list the tool no longer provides.
-
-## 8. `examples/mcp-server.ts` — regenerated reference consumer (21 tools)
-
-Official MCP v2 SDK (`@modelcontextprotocol/server` + `/stdio`), zod v4 (`import * as z from 'zod/v4'`),
-`structuredContent` + `outputSchema` on every tool, error path surfacing `HuduError.code`, and
-`_meta` carrying `backingOperation` / `sensitive` / `requiresApproval` for a gateway (the SDK's
-`ToolAnnotations` type has only the four hint keys, so the two policy flags ride in `_meta` **and**
-in the description). No dependency added.
-
-- Reads (16), all helper-tier: `hudu_search_across_resources`,
-  `hudu_resolve_any`, `hudu_search_companies`, `hudu_get_company`, `hudu_get_company_by_id`,
-  `hudu_get_company_context`, `hudu_find_companies_by_domain`, `hudu_search_articles`,
-  `hudu_get_article`, `hudu_search_assets`, `hudu_get_asset`, `hudu_get_asset_context`,
-  `hudu_search_asset_passwords`, `hudu_get_asset_password`, `hudu_search_users`,
-  `hudu_get_procedure_with_tasks` — `client.operations.searchAcrossResources` / `resolveAny` for the
-  cross-resource pair, `search` / `findBy*` / `resolve` / `getContext` otherwise. No `listAll`,
-  `listPages` or streaming `list` call anywhere.
-- Writes (5), each exposing `dry_run` and calling `{ dryRun: true }` before the live path:
-  `hudu_create_company`, `hudu_update_company` (with the opt-in `expectedUpdatedAt` stale guard),
-  `hudu_archive_company`, `hudu_delete_company`, `hudu_delete_asset_password` (sensitive +
-  approval-gated — the one place the example shows a secret-bearing write).
-- Names, titles, descriptions and hint annotations are taken from the curated manifest; the
-  checker enforces the descriptions verbatim.
-
-## 9. `--check-example` (new capability in `scripts/project-mcp-tools.mjs`)
-
-`node scripts/project-mcp-tools.mjs --check-example [--example <path>]` fails (exit 1) on:
-1. a registered tool name that is not in the curated manifest;
-2. any unbounded read (`listAll(` / `listPages(` / a streaming `.list(`) — comments and string
-   literals are stripped first, because curated descriptions legitimately mention `users.listAll`;
-3. a mutating tool with no `dry_run` in its **config** (input affordance), or one whose handler
-   never calls the SDK's `{ dryRun: true }` path;
-4. a description that is not the curated one, verbatim.
-It also prints the reference-consumer coverage line: 21 registered, 203 projected, 182 excluded.
-
-Negative fixtures (all exit 1, one failure each, on `/tmp` copies of the real file):
-
-| fixture | failure reported |
-| --- | --- |
-| `hudu_get_company` → `hudu_get_company_v2` | not a tool in the curated manifest |
-| `hudu.companies.listAll()` in a handler | uses an unbounded read (listAll() |
-| streaming `hudu.companies.list({})` | uses an unbounded read (.list() |
-| `dry_run` field removed (last mutating tool) | mutating tool with no dry_run input affordance |
-| `dry_run` field removed (mid-file mutating tool) | same |
-| `{ dryRun: true }` → `{ dryRun: false }` | never calls the SDK's { dryRun: true } path |
-| one word of a description changed | description drifts from the curated manifest |
-
-## 10. Tools deliberately EXCLUDED from the example (182 of 203)
+## 7. Deliberately excluded from the example (127 of 147)
 
 | group | count | why |
 | --- | --- | --- |
-| re-pointed alias reads (`hudu_list_*`, `hudu_resolve_*`, `hudu_jump_*`, `hudu_lookup_*`) | 55 | they share the backing operation of a canonical helper tool; a reference server should expose the canonical name, not both, so the token cost of a duplicate surface is not paid. (`hudu_get_company_by_id` is the single deliberate exception: it demonstrates the narrow direct-id entry point next to `hudu_get_company`.) |
-| other canonical helper reads (all resources but companies/articles/assets/users/procedures) | 47 | token budget: the example teaches one instance of each read *pattern*, not all 35 resources. |
-| mutations other than the five shown | 80 | each needs a resource-specific payload; the five cover create / update+stale-guard / archive / delete / approval-gated sensitive delete. |
-| the three bulk operations | (inside the 80) | a reference server must not register a bulk delete or a bulk position rewrite by default; their manifest descriptions state the impact bound. |
-| the 22 rule-excluded registry operations (`exports`, `photos`, `public_photos`, `uploads`, `s3_exports`) | — | not projected at all (binary/download surfaces). |
+| other resources' canonical helper reads (all but companies/articles/assets/users/procedures) | 47 | token budget: one instance of each read *pattern*, not all 35 resources |
+| mutations other than the five shown (incl. the 3 bulk operations) | 80 | each needs a resource-specific payload; the five cover create / update+stale-guard / archive / delete / approval-gated sensitive delete, and a reference server must not register a bulk delete by default |
+| the 22 rule-excluded registry operations (`exports`, `photos`, `public_photos`, `uploads`, `s3_exports`) | — | never projected (binary/download surfaces) |
 
-## 11. Findings, recommendations, and what is UNVERIFIED
+## 8. Residual findings
 
-- **F1 (structural, needs a coordinator decision).** The projection has no merge or exclude
-  capability, so re-pointing a primitive read to a helper leaves **two tools with the same backing
-  operation and the same schemas** (e.g. `hudu_list_companies` and `hudu_search_companies` both call
-  `companies.search`). All 56 are recorded explicitly (`annotations.curation`, plus the override
-  table), and the example exposes only the canonical name — but the manifest still projects 203
-  tools where ~147 unique outcomes exist. Recommended: drop the primitive rows at the plan level, or
-  add an `exclude` field to the override schema. Not done here: the brief restricted my script
-  ownership to `--check-example`.
-- **F2 (cosmetic).** The script's console line
-  `classification by registry kind: … mislabelled=56` counts the 56 curated re-points, because
-  `registryKind` deliberately stays `primitive` (the registry record is a primitive; the *tool* is
-  helper-backed by curation). A future edit to that line should count a re-point separately.
-- **F3 (cosmetic).** Mutating records still carry the read-oriented annotations
-  `helperTierBacked=false` and `helperTierAlternatives=[…]`. A mutation is neither helper-backed nor
-  primitive-backed; those two keys are noise on the 85 writes.
-- **F4 (src-side finding, not mine to change).** `websites.search`, `password_folders.search` and
-  `groups.search` cannot be called as `search(q, { limit })` under their declared overloads
-  (only `search(q)` or `search(q, { expand: true, … })`), which is why `src/operations/operations.ts`
-  casts two of them to `CompactSearch`. The example therefore uses `users.search`/`articles.search`
-  and omits websites/password-folders search; the manifest still projects them, because the
-  runtime path honours `limit`. A missing compact overload in `src/resources/websites.ts` /
-  `password_folders.ts` / `groups.ts` would fix it.
-- **F5.** `listAll`/`listPages` are excluded by rule but the registry currently emits no such
-  records, so the NEVER_METHODS rule is dormant (0 hits); the 22 exclusions are all binary surfaces.
-- **UNVERIFIED.** Runtime behaviour of the example was not exercised against a live Hudu instance
-  (no credentials); correctness rests on the SDK types (helper tier) and the typecheck. The
-  `--check-example` gate reads the example statically, so it cannot detect a handler that reaches a
-  primitive through an indirection defined outside the file.
+- **F1 — resolved** as recommended: the 56 duplicate-outcome reads are excluded by curation, one
+  tool per outcome, each with a recorded reason and a visible manifest section.
+- **F2 — fixed:** the console line no longer labels the curated re-points as mislabels; re-pointed
+  and mislabelled are separate counters (both 0 now that the aliases are merged away).
+- **F3 — fixed:** mutation rows no longer carry the read-oriented `helperTier*` keys.
+- **F4 — withdrawn:** `websites.search` / `groups.search` / `passwordFolders.search` accept
+  `{ limit }` after impl-A2's overload fix, and `dist/` does carry the helper tier; the example
+  typechecks against both `src` and `dist`.
+- **UNVERIFIED:** no live Hudu credentials, so the example's runtime behaviour is not exercised;
+  `--check-example` is a static gate and cannot see a primitive reached through an indirection
+  defined outside the file.
 
-## 12. Commands run
+## 9. Commands run
 
 ```
-node scripts/project-mcp-tools.mjs                    # overrides applied=1260, primitive reads=0
-node scripts/project-mcp-tools.mjs --check-example    # OK, exit 0
-node scripts/project-mcp-tools.mjs --check-example --example /tmp/v-*.ts   # 7 fixtures, exit 1 each
-npx tsc --noEmit                                      # 0 errors (src)
-npx tsc -p /tmp/hudu-example-tsconfig.json            # 0 errors (examples/mcp-server.ts, repo options, node-hudu -> src)
+node scripts/project-mcp-tools.mjs                      # exit 0; 147 tools; overrides 644
+node scripts/project-mcp-tools.mjs --check-example      # exit 0
+node scripts/project-mcp-tools.mjs --check-example --example /tmp/w-*.ts   # 7 fixtures, exit 1 each
+node -e '<read-backing check over MCP_TOOL_MANIFEST.md>'  # duplicateReadBackings=0, readsNotHelperTier=0
+npx tsc --noEmit                                        # exit 0
+npx tsc -p /tmp/hudu-example-tsconfig.json              # exit 0 (example, node-hudu -> src)
+npx tsc -p /tmp/hudu-example-tsconfig-dist.json         # exit 0 (example, node-hudu -> dist)
 ```

@@ -2,35 +2,57 @@
 
 Reviewer: FINAL SAFETY GATE (independent cross-model lens, read-only)
 Repo: /Users/maxs/gitrepos/node-hudu
-Branch: feat/agent-execution-layer @ ca011f1 vs main @ 9332efe (v0.2.1)
-Commits reviewed: git log --oneline main..HEAD (28 commits, whole branch)
+Branch: feat/agent-execution-layer @ ca011f1 (confirmed via `git rev-parse HEAD`) vs main @ 9332efe (v0.2.1)
+Commits reviewed: `git log --oneline main..HEAD` — 28 commits, whole branch (not one group)
+Grounding calls used: 57/55 (over by 2 — stopped and wrote up on the highest-value finding in progress; see UNVERIFIED)
 
-## Re-verification of prior qa-safety.md findings (CLOSED / STILL OPEN / WRONG)
+## Scope note
+- Working tree has uncommitted edits to `MCP_TOOL_MANIFEST.md`, `examples/mcp-server.ts`, `scripts/project-mcp-tools.mjs`, plus a new untracked `MCP_TOOL_OVERRIDES.json`. This matches the brief's stated concurrent regeneration — **not reviewed**, per instructions.
+- The `capabilities.plan.json` uncommitted diff flagged as a NIT in the prior qa-safety.md pass is gone: `git status --porcelain` shows it clean. **CLOSED.**
 
-- [PENDING] CRITICAL — exports/s3_exports reversible:true dry-run claim
-- [PENDING] HIGH — bulk-delete dry-run hardcodes affected:1 (activity_logs.deleteAll, magic_dash.delete)
-- [PENDING] HIGH — impact only on dry-run, no executed-result/AuditEvent counterpart
-- [PENDING] LOW — refuseExpectedUpdatedAt duplicated per-resource instead of shared helper
-- [PENDING] NIT — capabilities.plan.json uncommitted diff at time of last review
+## Re-verification of qa-safety.md findings
 
-## New surfaces (this pass)
+- **CRITICAL (exports/s3_exports `reversible: true`)** — **PARTIALLY CLOSED, REOPENED via a new channel.** The dry-run field itself is fixed: `exports.ts:172` and `s3_exports.ts:45` both now set `reversible: false`. But the EXECUTED mutation's audit event for the exact same calls still reports `reversible: true` (see new CRITICAL finding below) — the false safety claim is gone from the dry-run result and present again in the executed-result metadata that policy §7.3 added this cycle. Net: the user-visible symptom the last review reported is fixed; the underlying "SDK claims a safety property it does not have" defect is not.
+- **HIGH (bulk-delete dry-run hardcoded `affected: 1`)** — **CLOSED at the dry-run layer, REOPENED at the executed-audit layer.** `activity_logs.ts:131` and `magic_dash.ts:122` now compute a real bounded-floor `affected` via `countFloor`/`countTitleFloor` (one GET, page_size capped at `MAX_HELPER_LIMIT`=100) with `exact: false` — this is a genuine floor, not a hardcoded literal. But the EXECUTED audit event for these same bulk deletes still reports `affected: 1, scope: 'single'` (see new CRITICAL finding) — the dry-run channel was fixed, the executed-telemetry channel that fires after real damage was not.
+- **HIGH (impact only on dry-run, no executed counterpart)** — **CLOSED structurally, but incompletely.** `AuditEvent.impact?: OperationImpact` now exists (`src/types/common.ts:116`), `emitAudit` sets it on every non-read event (`http.ts:314`: `event.impact = opts.impact ?? defaultImpactFor(event.effect)`), and it is confirmed absent on read events. For the 4 base.ts-routed primitives (`createOne`/`updateOne`/`deleteOne`/`setArchived`) the SAME `impact` object is passed to both the dry-run result and the live request, so dry-run and executed genuinely agree there. But `defaultImpactFor` is a per-HTTP-verb GUESS used whenever a resource's hand-rolled mutation omits `impact` — and grep confirms every hand-rolled mutation in the tree omits it (see new CRITICAL finding: this is the root cause of the two reopened findings above).
+- **LOW (`refuseExpectedUpdatedAt` duplicated per-resource)** — **STILL OPEN.** Most call sites now route through the shared `refuseExpectedUpdatedAtOutsideUpdate` helper in `agent-layer-helpers.ts` (activity_logs, expirations, magic_dash, matchers, procedure_tasks, procedures all import it). But `flags.ts`, `flag_types.ts`, `labels.ts`, `label_types.ts`, `lists.ts`, `rack_storage_items.ts`, `relations.ts` each still define a private `function refuseExpectedUpdatedAt`, and `ip_addresses.ts` inlines the same check ad hoc instead of using either. No correctness issue found in the instances read; still a copy-paste divergence risk.
+- **NIT (capabilities.plan.json uncommitted diff)** — **CLOSED.** `git status --porcelain` is clean for this file.
 
-- [PENDING] (a) bulk operations pre-read FLOOR with exact:false — real floor? dry run still zero mutating requests?
-- [PENDING] (b) AuditEvent.impact / impact.exact — executed carries impact, read doesn't, dry-run vs executed agree
-- [PENDING] (c) reversible:true audit across the whole tree vs vendor spec (undo path exists?)
-- [PENDING] (d) every dry-run issues zero fetches, incl. multipart + two new operations helpers
-- [PENDING] (e) expectedUpdatedAt refused on create/delete/archive everywhere; never fabricates STALE_OBJECT when no version field
+## New findings (ranked)
 
-## Findings (ranked)
+- **CRITICAL** — The executed-result audit event's `impact` silently disagrees with the dry-run `impact` for every hand-rolled (non-base.ts) mutation, because none of them pass `impact` to `http.request()` — `src/http.ts:314` (`event.impact = opts.impact ?? defaultImpactFor(event.effect)`); confirmed zero `impact:` arguments in the live-call sites of `src/resources/exports.ts:180`, `s3_exports.ts:53`, `public_photos.ts` (create), `activity_logs.ts` (deleteAll), `magic_dash.ts` (delete, updatePositions), `procedures.ts`, `assets.ts`, `photos.ts`, `uploads.ts`. Concrete confirmed disagreements for the SAME call: (1) `exports.create`/`s3_exports.create`/`public_photos.create` dry-run declares `reversible: false` with an explicit "no undo path" warning, but the real mutation's audit event reports `reversible: true` via `defaultImpactFor('write')` — the exact false claim the prior CRITICAL finding was raised about, now living one layer deeper. (2) `activity_logs.deleteAll` and `magic_dash.delete` dry-run declares `scope: 'bulk', affected: <server-computed floor>, exact: false`, but the executed audit event for the SAME delete reports `affected: 1, scope: 'single'` — a real, unbounded bulk destructive delete is misreported in the one channel meant to carry executed-result truth. (3) `magic_dash.updatePositions` dry-run declares `scope: 'bulk', affected: positions.length, exact: true`; executed reports `affected: 1, scope: 'single'`. No test in the tree asserts on the executed audit event for any of these six operations — `test/core-agent-layer.test.ts:491` ("the dry-run impact and the executed impact are the same statement") only exercises a base.ts-routed primitive where both paths share one object by construction, so it structurally cannot catch this class of bug. Why it matters: `onAudit` is the ONLY place an agent/policy engine can recover "what did this call actually do" after it ran (policy §7.3's stated purpose) — for exactly the highest-risk operations (irreversible async exports, unbounded server-computed bulk deletes) it reports the opposite of, or a severe understatement of, the truth. Fix: thread the same `impact` object already built for the dry-run branch into the live `http.request({ ..., impact })` call in every one of the listed files, mirroring the pattern `base.ts` already uses.
 
-(to fill)
+- **HIGH** — `asset_layouts.create` inherits `reversible: true` from the `base.ts` `createOne` default (`base.ts:219`, via `asset_layouts.ts:131`), but `asset_layouts` has no delete/archive/deprecate endpoint anywhere in the SDK or `docs/API.md` (only `create`/`get`/`list`/`resolve`/`update` are registered — confirmed via `grep asset_layouts docs/API.md` and no `delete`/`DELETE` in `asset_layouts.ts`). A created asset layout cannot be undone through this SDK. Same failure class as the exports/s3_exports/public_photos bug that WAS fixed elsewhere this cycle, missed here because this resource relies on the generic base default instead of a resource-specific override. Fix: override with `reversible: false` for `asset_layouts.create`, following the pattern already used in `public_photos.create`.
+
+- **HIGH** — `procedures.kickoff` (`src/resources/procedures.ts`) claims `reversible: true` in its dry-run, but its own registered purpose is "Create a Run from a Process" (`src/capabilities.ts` — `procedures.kickoff` purpose string) — starting a process run is a real-world side effect (task/checklist instantiation per Hudu's process model), and there is no run-cancel or run-delete endpoint anywhere in this SDK. This differs from `procedures.duplicate`/`procedures.createFromTemplate`, which create a `Procedure` record that genuinely IS undoable via `procedures.delete` — `kickoff` creates a different kind of object (a Run) with no corresponding delete surface at all. Fix: verify against the vendor spec whether a Run can be cancelled; if not, set `reversible: false`.
+
+- **MEDIUM** — `assets.moveLayout` (`assets.ts:277`) claims `reversible: true` on the theory that moving the asset back to its original `asset_layout_id` undoes the change, but if the destination layout's custom fields don't match the source layout's, the move can silently drop field values that moving back cannot restore. **Not conclusively verified** against the vendor's actual field-migration semantics this pass — flagged as a re-derivation gap for an implementer to close, not a proven defect.
+
+- **LOW** — (restated from prior pass, still open) `refuseExpectedUpdatedAt` duplicated privately in `flags.ts`, `flag_types.ts`, `labels.ts`, `label_types.ts`, `lists.ts`, `rack_storage_items.ts`, `relations.ts`, plus an ad hoc inline duplicate in `ip_addresses.ts`, instead of the shared `refuseExpectedUpdatedAtOutsideUpdate` most other resources now use. No correctness issue observed in the instances read.
 
 ## VERIFIED OK
 
-(to fill)
+- `git rev-parse HEAD` == `ca011f1...`; `git log --oneline main..HEAD | wc -l` == 28; whole branch reviewed, not one group.
+- `git status --porcelain` — dirty only in the stated out-of-scope MCP regeneration files; `capabilities.plan.json` clean (prior NIT closed).
+- `grep -n reversible src/resources/exports.ts src/resources/s3_exports.ts` → both `reversible: false` (prior CRITICAL closed at the dry-run layer).
+- `activity_logs.ts:227` / `magic_dash.ts:286` (`countFloor`/`countTitleFloor`) confirmed to issue exactly ONE `GET` via `pageFetcher(...)(1, MAX_HELPER_LIMIT)`, called only inside `if (opts?.dryRun === true)`, strictly before the mutating `DELETE` branch — a real floor, and the dry run issues zero mutating requests (structural read, matches `test/resources/activity_logs.test.ts` assertions of `spy.calls.map(...) == ['GET']`).
+- `magic_dash.updatePositions` correctly reports `exact: true`/`affected: positions.length` (caller-supplied bound, not a floor) — confirmed distinct from the two floor-based bulk ops.
+- `base.ts:216/301/333` (`assertNoExpectedUpdatedAt`) still unconditionally reject `expectedUpdatedAt` in `createOne`/`deleteOne`/`setArchived`; `base.ts:515-538` (`assertNotStale`) throws `HuduConfigError` (never a fabricated `STALE_OBJECT`) when a fetched record has no version field — structurally unchanged from the prior verified pass.
+- `src/types/common.ts` confirms `AuditEvent.impact?: OperationImpact` and `OperationImpact.exact?: boolean` are new this cycle, documented "Absent on `effect: 'read'` events".
+- `http.ts:298-314` (`emitAudit`): `event.impact` is set only when `event.effect !== 'read'`; confirmed the read branch never receives `impact` even if the caller passes one (matches `test/core-agent-layer.test.ts:455-463,486-488`).
+- Base-routed primitives (`createOne`/`updateOne`/`deleteOne`/`setArchived`) build ONE `impact` object per call and pass the SAME object to both the dry-run result and the live `http.request` call (`base.ts:219/226/235`, `258/271/286`, `302/310/319`, `335/343/351`) — for these, dry-run/executed agreement is structurally guaranteed, not incidental.
+- Multipart create paths still check `dryRun` before constructing the multipart body: `uploads.ts:170-183` (dry-run returns before `new FormData()` at :183), `public_photos.ts:192-210` (same pattern) — re-confirmed this pass.
+- `src/operations/index.ts` — `searchAcrossResources`/`resolveAny` are documented and structurally read-only ("Both helpers are reads; neither can write"); no `dryRun`/mutation surface exists to gate, so brief item (d)'s zero-fetch concern for "the two new operations helpers" does not apply — nothing to falsify.
 
-## UNVERIFIED
+## UNVERIFIED (budget exhausted at 57/55)
 
-(to fill)
+- Did not exhaustively re-derive EVERY `reversible: true` in the tree against the vendor spec. Covered: `base.ts`'s 3 defaults, `assets.ts` (5 sites), `photos.ts`, `procedures.ts` (3 sites), `public_photos.ts:250` (update — correct), `uploads.ts`, `magic_dash.ts:216`. NOT individually re-derived: websites/companies/networks/vlans/folders/groups/rack_storages/label_types/label creates and archives — they route through `base.ts` and therefore share BOTH the systemic `defaultImpactFor` gap AND the "create is reversible by default" assumption; worth a full sweep before ship.
+- `assets.moveLayout` field-preservation behavior (MEDIUM finding) not confirmed against a live API or the vendor's own changelog.
+- Did not execute `npm test`, any `vitest run`, or the `check-capabilities.mjs` gates myself this pass — relied on source reading only; the coordinator's previously-reported 99.65% coverage number is not re-verified by me and does not cover the executed-audit-event gap above (no test exercises it, as shown by the absence of any assertion on a live call's `onAudit` event for the six operations named in the CRITICAL finding).
+- Did not check whether the in-progress `MCP_TOOL_OVERRIDES.json`/`MCP_TOOL_MANIFEST.md` regeneration surfaces `impact`/`reversible` claims to an MCP client any differently than the SDK types do (out of scope per brief).
+- Correlation ids / single redactor / `sensitive` flags / `requiresApproval` on every destructive row / `POLICY_DENIED` for unconfirmed bulk work: re-read the same code paths (`base.ts`, `http.ts`, `activity_logs.ts`, `magic_dash.ts`) and found them structurally unchanged from the prior verified pass; not re-executed as live tests this pass.
 
-## Grounding calls used: 0/55 (updating as I go)
+## Falsification attempts (what I tried to break, and how)
+1. Assumed the dry-run/executed impact fix (new `AuditEvent.impact`) was applied uniformly — tried to break it by grepping every resource file for whether it passes `impact:` to its live `http.request` call. Found it does NOT, for 9+ files, and confirmed 6 concrete disagreements.
+2. Assumed all `reversible: true` claims fixed by the prior CRITICAL fix generalized — tried to break it by cross-referencing every resource's create/update/delete/archive method set against `docs/API.md`'s registered operations. Found `asset_layouts` (no delete anywhere) and `procedures.kickoff` (creates an undeletable Run, not a Procedure) still claim `reversible: true` incorrectly.
+3. Assumed the bulk-floor fix meant the dry run never issues a mutating call — traced `countFloor`/`countTitleFloor` call sites structurally to confirm single-GET, pre-mutation placement, rather than trusting the code comments.
