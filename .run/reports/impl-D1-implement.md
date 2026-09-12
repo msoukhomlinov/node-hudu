@@ -150,3 +150,43 @@ reachable, the bounded cap asserted by HTTP-call count, and compact-vs-expand fi
    flips them at the batch gate. All 77 titles already exist, which is what the flip asserts.
 6. **Plan-text noise, no code impact** — `uploads.delete.metadata.preferredWhen` points at `uploads.archive`,
    which has no plan row and no endpoint in `api-docs.json` (uploads expose upload/get/list/delete only).
+
+## QA fix — false safety claim in dry-run `impact.reversible` (independent reviewer, 2026-09-12)
+
+`exports.create` and `s3_exports.create` claimed `reversible: true` in their dry-run results, but
+`api-docs.json` gives `/exports` GET+POST, `/exports/{id}` GET, and `/s3_exports` POST only — there is no
+DELETE and no cancel. An agent reading `reversible === true` was told the opposite of the truth.
+
+Fixed: `reversible: false` plus an explicit warning on both — "an export runs asynchronously and the API
+exposes no cancel or delete path for it, so this cannot be undone". The existing "no server-computed result
+to promise" warning is kept (the results now carry two warnings).
+
+**Same class found by my own re-audit of every dry-run in my five files and fixed:**
+`public_photos.create` also claimed `reversible: true`, but `/public_photos` is GET+POST and
+`/public_photos/{id}` is GET+PUT only — no DELETE. It is now `reversible: false` with the warning "the API
+exposes no delete path for a public photo, so this create cannot be undone (it can only be re-associated with
+public_photos.update)".
+
+**Audited and left as they are (each `reversible` claim now has a named compensating path):**
+
+| Dry-run | `reversible` | Why that is honest |
+|---|---|---|
+| `photos.create` | `true` | `DELETE /photos/{id}` exists, so the created row can be removed |
+| `photos.update` | `true` | the prior field values can be written back with another PUT |
+| `photos.delete` | `false` | destructive, and no undelete/restore endpoint exists |
+| `public_photos.update` | `true` | the prior `record_type`/`record_id` association can be written back |
+| `uploads.upload` | `true` | `DELETE /uploads/{id}` exists, so the uploaded file can be removed |
+| `uploads.delete` | `false` | destructive; uploads have no archive/restore endpoint |
+
+`impact.affected` is `1` with `scope: 'single'` on every path of mine — none of them touches a
+server-computed set, so no `exact: false` (floor) claim is needed and the new optional `impact.exact` flag is
+deliberately unused.
+
+Tests added (extra, non-plan): `exports.test.ts` and `s3_exports.test.ts` each assert the create dry-run's
+`impact` is exactly `{ affected: 1, scope: 'single', reversible: false }`, that the undo warning is present and
+that ZERO requests are issued; `public_photos.test.ts` asserts the same for `public_photos.create`. The two
+pre-existing warning-count assertions were updated from 1 to 2 warnings.
+
+Post-fix commands: `npx vitest run <my 5 test files>` -> **exit 0, 119 tests passed** (photos 39,
+uploads 28, public_photos 25, exports 22, s3_exports 5). `npx eslint <my 13 files>` -> **exit 0**.
+`npx tsc --noEmit` filtered to my files -> no errors.

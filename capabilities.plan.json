@@ -6779,7 +6779,7 @@
       "dryRun": false,
       "metadata": {
         "purpose": "Resolve a rack storage item from an id.",
-        "usage": "Rack items have no name in the vendor API, so the only identifier kind is a numeric id (fetched directly through GET /rack_storage_items/{id}); any other kind throws a validation error naming the accepted kind. Use rack_storage_items.listAll with asset_id or rack_storage_role_id to enumerate positions.",
+        "usage": "Rack items have no name in the vendor API, so the only identifier kind is a numeric id (fetched directly through GET /rack_storage_items/{id}); any other kind throws a validation error naming the accepted kind. Use rack_storage_items.listAll with asset_id or rack_storage_role_id to enumerate positions. Only an id is accepted, so this helper never scans and never raises a resolution error.",
         "preferredWhen": "Use when the item id is known; rack_storage_items.listAll is the enumeration path.",
         "related": [
           "rack_storage_items.get",
@@ -6787,19 +6787,13 @@
         ]
       },
       "compact": "RackStorageItemSummary",
-      "resolution": {
-        "basis": "server-filter",
-        "maxScanRecords": 500,
-        "maxScanPages": 1
-      },
+      "resolution": null,
       "staleCheck": null,
       "redaction": "none",
       "errors": [
         "CONFIG_ERROR",
         "NETWORK_ERROR",
-        "NOT_FOUND",
-        "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED"
+        "NOT_FOUND"
       ],
       "tests": [
         {
@@ -7396,7 +7390,7 @@
       "dryRun": false,
       "metadata": {
         "purpose": "Resolve a flag by its id.",
-        "usage": "Flags are identified by id (GET /flags/{id}); their text lives in `description`, and there is no name filter, so the accepted kind is id. Use flags.findByFlagable to list the flags on a record.",
+        "usage": "Flags are identified by id (GET /flags/{id}); their text lives in `description`, and there is no name filter, so the accepted kind is id. Use flags.findByFlagable to list the flags on a record. Only an id is accepted, so this helper never scans and never raises a resolution error.",
         "preferredWhen": "Prefer flags.findByFlagable when the flagged record is known; resolve is for a known flag id.",
         "related": [
           "flags.get",
@@ -7404,19 +7398,13 @@
         ]
       },
       "compact": "FlagSummary",
-      "resolution": {
-        "basis": "server-filter",
-        "maxScanRecords": 500,
-        "maxScanPages": 4
-      },
+      "resolution": null,
       "staleCheck": null,
       "redaction": "none",
       "errors": [
         "CONFIG_ERROR",
         "NETWORK_ERROR",
-        "NOT_FOUND",
-        "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED"
+        "NOT_FOUND"
       ],
       "tests": [
         {
@@ -10203,26 +10191,20 @@
       "dryRun": false,
       "metadata": {
         "purpose": "Return the API information document.",
-        "usage": "DEGENERATE CASE, documented deliberately: GET /api_info is a singleton with no identifier (version + date). This resolve ignores any identifier, performs one bounded read and returns the singleton, so the SDK's floor ('resolve everywhere') holds without inventing a lookup the vendor cannot support. Unsupported identifier kinds are ignored rather than throwing.",
+        "usage": "DEGENERATE CASE, documented deliberately: GET /api_info is a singleton with no identifier (version + date). This resolve ignores any identifier, performs one bounded read and returns the singleton, so the SDK's floor ('resolve everywhere') holds without inventing a lookup the vendor cannot support. Unsupported identifier kinds are ignored rather than throwing. No scan is performed and no resolution error can be raised.",
         "preferredWhen": "Prefer api_info.get; this exists so every resource satisfies the same floor.",
         "related": [
           "api_info.get"
         ]
       },
       "compact": null,
-      "resolution": {
-        "basis": "server-filter",
-        "maxScanRecords": 500,
-        "maxScanPages": 4
-      },
+      "resolution": null,
       "staleCheck": null,
       "redaction": "none",
       "errors": [
         "CONFIG_ERROR",
         "NETWORK_ERROR",
-        "NOT_FOUND",
-        "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED"
+        "NOT_FOUND"
       ],
       "tests": [
         {
@@ -10450,7 +10432,7 @@
       "dryRun": false,
       "metadata": {
         "purpose": "Resolve an upload by its id.",
-        "usage": "Uploads carry no name filter and their only identity is the id, so the accepted kind is id (fetched directly through GET /uploads/{id}); any other kind throws a validation error rather than scanning. Use uploads.listAll to enumerate.",
+        "usage": "Uploads carry no name filter and their only identity is the id, so the accepted kind is id (fetched directly through GET /uploads/{id}); any other kind throws a validation error rather than scanning. Use uploads.listAll to enumerate. Only an id is accepted, so this helper never scans and never raises a resolution error.",
         "preferredWhen": "Use when the upload id is known; uploads.listAll is the enumeration path.",
         "related": [
           "uploads.get",
@@ -10458,19 +10440,13 @@
         ]
       },
       "compact": "UploadSummary",
-      "resolution": {
-        "basis": "server-filter",
-        "maxScanRecords": 500,
-        "maxScanPages": 4
-      },
+      "resolution": null,
       "staleCheck": null,
       "redaction": "none",
       "errors": [
         "CONFIG_ERROR",
         "NETWORK_ERROR",
-        "NOT_FOUND",
-        "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED"
+        "NOT_FOUND"
       ],
       "tests": [
         {

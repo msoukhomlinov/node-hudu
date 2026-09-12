@@ -113,3 +113,48 @@ the pre-fix silent no-op and now fail on FIX 1:
 `HuduConfigError` there instead (one line per file). Every other test file passes, including
 `test/public-surface.test.ts` (6) and the 116 tests of
 `public-surface/errors/config/base/http/logger`.
+
+---
+
+## 8. QA follow-up (independent safety-lens finding): impact in EXECUTED-result metadata
+
+**FIX A — the impact statement now reaches executed results.** Policy §7.2/§7.3 requires
+`{ affected, scope, reversible }` in both the dry-run result and the executed-result metadata.
+Primitive return shapes are frozen, so the audit event is that channel:
+
+- `src/types/common.ts`: new **`OperationImpact`** interface (`affected`, `scope`, `reversible`,
+  optional `exact`) — one shape for both channels; `DryRunResult.impact` now uses it (its three
+  required fields are unchanged); new field **`AuditEvent.impact?: OperationImpact`**.
+- `src/http.ts`: new **`RequestOptions.impact?: OperationImpact`**; `emitAudit` sets
+  `event.impact` for every `effect !== 'read'` event on BOTH the success and the error path,
+  using the caller's impact when supplied and otherwise `defaultImpactFor(effect)`
+  (`{ affected: 1, scope: 'single', reversible: effect !== 'destructive' }`). A READ event never
+  carries `impact`, even if one is passed.
+- `src/resources/base.ts`: `createOne`/`updateOne`/`setArchived` pass
+  `{ affected: 1, scope: 'single', reversible: true }`, `deleteOne` passes
+  `{ affected: 1, scope: 'single', reversible: false }` — the same object spread into the
+  dry-run result, so the two channels are provably the same statement (asserted by a test).
+  Bulk callers pass their own `{ affected, scope: 'bulk', exact: false }` straight through to
+  the transport.
+- `src/index.ts`: `OperationImpact` added to the explicit `types/common.js` re-export list.
+
+**FIX B — `affected` can say "this is a floor".** `OperationImpact.exact?: boolean` and
+`DryRunOperation.exact?: boolean` added; `buildDryRunResult` copies `exact` onto
+`result.impact.exact` only when the caller supplies it, so an absent `exact` keeps exactly
+today's meaning (an exact count) and no required field changed.
+
+**Tests added (7, now 48 in the file):** successful update impact; successful delete impact
+(`reversible: false`); READ event has no impact (`'impact' in event` is false); error-path
+mutation keeps the best-effort impact; caller-supplied bulk impact with `exact: false` reaches
+the event while a READ with an impact stays clean; dry-run impact equals the executed impact;
+`buildDryRunResult` carries `exact: false` and omits `exact` by default.
+
+**Verification after the fix**
+
+| Command | Exit | Result |
+|---------|------|--------|
+| `npx tsc --noEmit` | **0** | clean |
+| `npx vitest run test/core-agent-layer.test.ts` | **0** | 48 passed |
+| `npx eslint src/resources/base.ts src/http.ts src/errors.ts src/config.ts src/logger.ts src/types/common.ts test/core-agent-layer.test.ts` | **0** | clean |
+| `npm test` | **0** | **48 files, 1457 tests, all passed** — the 4 §7 collateral failures were fixed by their owners |
+| `npx vitest run --coverage` | **0** | All files 99.24 stmts / 91.96 branch / 99.88 funcs / 99.63 lines (thresholds 97/83/94/97) |
