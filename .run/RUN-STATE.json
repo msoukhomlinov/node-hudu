@@ -6,7 +6,7 @@
   "codingModel": null,
   "qaModel": "openrouter/deepseek/deepseek-v4.1-flash",
   "qaThinking": "xhigh",
-  "step": "mcp_project",
+  "step": "qa_final",
   "steps": {
     "preflight": "done",
     "plan_derive": "done",
@@ -33,7 +33,7 @@
     "operations": "in_progress",
     "mcp_project": "in_progress",
     "release": "in_progress",
-    "qa_final": "pending",
+    "qa_final": "in_progress",
     "finalise": "pending"
   },
   "children": [
@@ -124,6 +124,38 @@
       "startedAt": "2026-09-13T01:24:57.256748+10:00",
       "budget": "60 grounding calls",
       "log": "/Users/maxs/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-e1cba848"
+    },
+    {
+      "name": "qa-final-contract",
+      "id": "sub-a5f77a1b",
+      "step": "qa_final",
+      "startedAt": "2026-09-13T01:36:01.685971+10:00",
+      "budget": "55 grounding calls",
+      "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-a5f77a1b"
+    },
+    {
+      "name": "qa-final-agent-layer",
+      "id": "sub-32ed418e",
+      "step": "qa_final",
+      "startedAt": "2026-09-13T01:36:01.685971+10:00",
+      "budget": "55 grounding calls",
+      "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-32ed418e"
+    },
+    {
+      "name": "qa-final-registry",
+      "id": "sub-b6d329de",
+      "step": "qa_final",
+      "startedAt": "2026-09-13T01:36:01.685971+10:00",
+      "budget": "55 grounding calls",
+      "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-b6d329de"
+    },
+    {
+      "name": "qa-final-safety",
+      "id": "sub-7e6efb19",
+      "step": "qa_final",
+      "startedAt": "2026-09-13T01:36:01.685971+10:00",
+      "budget": "55 grounding calls",
+      "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-7e6efb19"
     }
   ],
   "gates": {
@@ -201,8 +233,8 @@
     }
   ],
   "metrics": {
-    "spawns": 15,
-    "commits": 25,
+    "spawns": 19,
+    "commits": 28,
     "gateRuns": 6,
     "qaFindings": 33,
     "qaFixed": 26
