@@ -30,7 +30,7 @@
     "D.tests": "done",
     "D.qa": "in_progress",
     "D.fix": "pending",
-    "operations": "pending",
+    "operations": "in_progress",
     "mcp_project": "pending",
     "release": "pending",
     "qa_final": "pending",
@@ -108,6 +108,14 @@
       "budget": "80 grounding calls (used ~60)",
       "log": "~/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-e37b6897",
       "state": "done"
+    },
+    {
+      "name": "impl-operations",
+      "id": "sub-617dfdba",
+      "step": "operations",
+      "startedAt": "2026-09-13T00:26:26.849556+10:00",
+      "budget": "60 grounding calls",
+      "log": "/Users/maxs/.prime/agent/session-artifacts/01a095ad-b7cb-7109-839c-4bf1b4238cfb/sub-617dfdba"
     }
   ],
   "gates": {
@@ -155,7 +163,7 @@
     }
   ],
   "metrics": {
-    "spawns": 9,
+    "spawns": 14,
     "commits": 17,
     "gateRuns": 6,
     "qaFindings": 0,

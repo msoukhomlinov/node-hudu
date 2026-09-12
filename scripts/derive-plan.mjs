@@ -164,7 +164,9 @@ function sourceMethods(resource) {
   if (!existsSync(p)) return new Set();
   const src = readFileSync(p, 'utf8');
   const out = new Set();
-  for (const m of src.matchAll(/^\s{2}(?:async\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*(?:<[^>]*>)?\s*\(/gm)) out.add(m[1]);
+  // Accept declaration modifiers the implementers may add (public/protected/override/static/async)
+  // in any order: a bare `async name(` regex silently misses `override async name(`.
+  for (const m of src.matchAll(/^\s{2}(?:(?:public|protected|private|override|static|async)\s+)*([A-Za-z_][A-Za-z0-9_]*)\s*(?:<[^>]*>)?\s*\(/gm)) out.add(m[1]);
   return out;
 }
 const METHODS = {};
@@ -332,7 +334,10 @@ writeFileSync(PLAN_PATH, out);
 /* ------------------------------------------------------------------ *
  * 9. Report
  * ------------------------------------------------------------------ */
-const notFound = derived.filter((r) => r.status !== 'implemented');
+/** Counted AFTER preserve(), so a row already promoted to "tested" is not mislabelled as planned. */
+const byStatus = { planned: 0, implemented: 0, tested: 0 };
+for (const r of rows) byStatus[r.status] = (byStatus[r.status] ?? 0) + 1;
+const notFound = rows.filter((r) => r.status === 'planned');
 const perGroup = {};
 for (const r of derived) perGroup[r.group] = (perGroup[r.group] ?? 0) + 1;
 const preserved = preservedCount;
@@ -341,8 +346,9 @@ console.log(`  spec                 : ${SPEC_PATH} (swagger ${spec.swagger}, ${O
 console.log(`  operations           : ${operations.length} rows (${derived.length} derived from the spec, ${operations.filter((r) => r.helper).length} authored helper rows preserved)`);
 console.log(`  per group           : ${Object.entries(perGroup).map(([g, n]) => `${g}=${n}`).join(' ')}`);
 console.log(`  resources           : ${RES_ORDER.length}`);
-console.log(`  status implemented  : ${derived.length - notFound.length}`);
-console.log(`  status planned      : ${notFound.length}${notFound.length ? ' -> ' + notFound.map((r) => r.primitive).join(', ') : ''}`);
+console.log(`  status tested       : ${byStatus.tested ?? 0}`);
+console.log(`  status implemented  : ${byStatus.implemented ?? 0}`);
+console.log(`  status planned      : ${byStatus.planned ?? 0}${notFound.length ? ' -> ' + notFound.slice(0, 8).map((r) => r.primitive).join(', ') : ''}`);
 console.log(`  rows re-derived     : ${selected.length} (judgement columns preserved on ${preserved})`);
 console.log(`  plan bytes          : ${Buffer.byteLength(out)}  sha256 ${createHash('sha256').update(out).digest('hex').slice(0, 16)}`);
 const dupes = derived.map((r) => r.primitive).filter((p, i, a) => a.indexOf(p) !== i);

@@ -12832,6 +12832,135 @@
       ],
       "group": "D",
       "status": "tested"
+    },
+    {
+      "endpoint": null,
+      "primitive": null,
+      "specialOp": null,
+      "vendorFilters": [],
+      "search": null,
+      "helper": "operations.searchAcrossResources",
+      "helperBasis": "composite",
+      "helperRationale": "Removes an agent's own fan-out across the eight searchable resources and its reasoning about which of them expose text search, and bounds the fan-out at the client's concurrency (default 4) instead of an unbounded Promise.all.",
+      "effect": "read",
+      "flags": [],
+      "dryRun": false,
+      "metadata": {
+        "purpose": "Search several Hudu resources for one query in a single bounded call.",
+        "usage": "Runs each resource's own helper-tier `search` (vendor text search, never listAll) across the requested resources, at most `concurrency` requests in flight (default 4, from client config). limit defaults to 25 per resource and is capped at 100; an unknown resource name is rejected with CONFIG_ERROR. Results are compact summaries.",
+        "preferredWhen": "Preferred over calling several resources' search methods yourself whenever the caller does not know which resource holds the record.",
+        "related": [
+          "companies.search",
+          "articles.search",
+          "assets.search",
+          "websites.search",
+          "asset_passwords.search",
+          "password_folders.search",
+          "groups.search",
+          "users.search"
+        ]
+      },
+      "compact": "SearchHit",
+      "resolution": {
+        "basis": "server-filter",
+        "maxScanRecords": 500,
+        "maxScanPages": 4
+      },
+      "staleCheck": null,
+      "redaction": "none",
+      "errors": [
+        "BAD_REQUEST",
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "RATE_LIMIT"
+      ],
+      "tests": [
+        {
+          "id": "operations.searchAcrossResources.hits",
+          "file": "test/operations.test.ts",
+          "title": "returns hits from every searched resource"
+        },
+        {
+          "id": "operations.searchAcrossResources.filter",
+          "file": "test/operations.test.ts",
+          "title": "searches only the resources asked for"
+        },
+        {
+          "id": "operations.searchAcrossResources.limit",
+          "file": "test/operations.test.ts",
+          "title": "honours limit and never exceeds the maximum of 100"
+        },
+        {
+          "id": "operations.searchAcrossResources.concurrency",
+          "file": "test/operations.test.ts",
+          "title": "bounds the fan-out to the configured concurrency"
+        }
+      ],
+      "group": "operations",
+      "status": "planned"
+    },
+    {
+      "endpoint": null,
+      "primitive": null,
+      "specialOp": null,
+      "vendorFilters": [],
+      "search": null,
+      "helper": "operations.resolveAny",
+      "helperBasis": "composite",
+      "helperRationale": "Removes the agent's own sequence of guessing which resource a name, domain or serial belongs to, and turns several bounded per-resource resolution attempts into one call that returns honest candidates instead of a guess.",
+      "effect": "read",
+      "flags": [],
+      "dryRun": false,
+      "metadata": {
+        "purpose": "Resolve an identifier against several resources and return the candidates that match.",
+        "usage": "Calls each requested resource's `resolve` with the same identifier. Unlike a single-resource resolve it never throws RESOLUTION_AMBIGUOUS across the set: it returns every match as a candidate, so the caller can decide. A per-resource complete miss contributes nothing; a per-resource truncated scan is reported in `truncated` rather than silently dropped. Unsupported resource names are rejected with CONFIG_ERROR.",
+        "preferredWhen": "Preferred when the caller has an identifier but not the resource type; use the resource's own resolve when the type is known.",
+        "related": [
+          "companies.resolve",
+          "assets.resolve",
+          "articles.resolve",
+          "websites.resolve",
+          "users.resolve"
+        ]
+      },
+      "compact": "ResolutionCandidateHit",
+      "resolution": {
+        "basis": "server-filter",
+        "maxScanRecords": 500,
+        "maxScanPages": 4
+      },
+      "staleCheck": null,
+      "redaction": "none",
+      "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "NOT_FOUND",
+        "RESOLUTION_TRUNCATED"
+      ],
+      "tests": [
+        {
+          "id": "operations.resolveAny.match",
+          "file": "test/operations.test.ts",
+          "title": "resolves a domain to a company and a serial to an asset in one call"
+        },
+        {
+          "id": "operations.resolveAny.candidates",
+          "file": "test/operations.test.ts",
+          "title": "returns candidates instead of throwing when several resources match"
+        },
+        {
+          "id": "operations.resolveAny.empty",
+          "file": "test/operations.test.ts",
+          "title": "returns an empty result after a complete bounded search"
+        },
+        {
+          "id": "operations.resolveAny.unsupported",
+          "file": "test/operations.test.ts",
+          "title": "rejects an unsupported resource name with CONFIG_ERROR"
+        }
+      ],
+      "group": "operations",
+      "status": "planned"
     }
   ]
 }
