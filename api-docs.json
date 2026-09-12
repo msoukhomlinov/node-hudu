@@ -45,13 +45,13 @@
                         "name": "resource_id",
                         "type": "number",
                         "in": "query",
-                        "description": "Filter logs by resource ID; must be used in conjunction with resource_type"
+                        "description": "Filter logs by resource ID; optional and narrows results within resource_type"
                     },
                     {
                         "name": "resource_type",
                         "type": "string",
                         "in": "query",
-                        "description": "Filter logs by resource type (Asset, AssetPassword, Company, Article, etc.); must be used in conjunction with resource_id"
+                        "description": "Filter logs by resource type (Asset, AssetPassword, Company, Article, etc.); can be used alone or with resource_id"
                     },
                     {
                         "name": "action_message",
@@ -12302,7 +12302,7 @@
             "APIKeyHeader": []
         }
     ],
-    "host": "hudu.yourserver.com",
+    "host": "hudu.example.com",
     "info": {
         "title": "Hudu API Documentation",
         "description": "\u003ch1\u003eWelcome to the Hudu REST API\u003c/h1\u003e\n\u003cp\u003eThe Hudu REST API enables seamless automation of your IT documentation. It's organized into various resources, each with its own specific endpoint.\u003c/p\u003e\n\n\u003ch2\u003eAuthentication\u003c/h2\u003e\n\u003cp\u003eAll API requests require authentication using an API key. To obtain a key, go to \u003cstrong\u003eHudu Admin → Basic Information → API Keys\u003c/strong\u003e.\u003c/p\u003e\n\u003cp\u003eInclude your API key in the request header, like so:\u003c/p\u003e\n\u003cpre\u003e\u003ccode\u003ecurl https://[YOUR_DOMAIN]/api/v1/companies?page=1 \\\n  -H \"x-api-key: YOUR_API_KEY_HERE\"\u003c/code\u003e\u003c/pre\u003e\n\u003cp\u003eYou can create and delete API keys at any time.\u003c/p\u003e\n\n\u003ch2\u003eScoping API Keys\u003c/h2\u003e\n\u003cp\u003eWhen creating an API key, you can configure the following permissions:\u003c/p\u003e\n\u003cul\u003e\n  \u003cli\u003eAccess to passwords (all REST actions)\u003c/li\u003e\n  \u003cli\u003eDestructive actions (DELETE)\u003c/li\u003e\n  \u003cli\u003eExport capabilities\u003c/li\u003e\n  \u003cli\u003eWhitelisted IPs\u003c/li\u003e\n  \u003cli\u003eCompany-specific access\u003c/li\u003e\n\u003c/ul\u003e\n\u003cp\u003eWe recommend only granting the minimum required access for each application.\u003c/p\u003e\n\n\u003ch2\u003eFormat\u003c/h2\u003e\n\u003cp\u003eAll API requests must use \u003cstrong\u003eJSON\u003c/strong\u003e format unless otherwise specified.\u003c/p\u003e\n\n\u003ch2\u003eTerminology\u003c/h2\u003e\n\u003cp\u003eSome names in the API differ from those in the Hudu UI:\u003c/p\u003e\n\u003ctable\u003e\n  \u003cthead\u003e\n    \u003ctr\u003e\n      \u003cth\u003eName in Hudu\u003c/th\u003e\n      \u003cth\u003eName in API\u003c/th\u003e\n    \u003c/tr\u003e\n  \u003c/thead\u003e\n  \u003ctbody\u003e\n    \u003ctr\u003e\n      \u003ctd\u003eCompany (customizable)\u003c/td\u003e\n      \u003ctd\u003eCompany\u003c/td\u003e\n    \u003c/tr\u003e\n    \u003ctr\u003e\n      \u003ctd\u003ePassword\u003c/td\u003e\n      \u003ctd\u003eAssetPassword\u003c/td\u003e\n    \u003c/tr\u003e\n    \u003ctr\u003e\n      \u003ctd\u003eKnowledge Base Article\u003c/td\u003e\n      \u003ctd\u003eArticle\u003c/td\u003e\n    \u003c/tr\u003e\n    \u003ctr\u003e\n      \u003ctd\u003eProcess\u003c/td\u003e\n      \u003ctd\u003eProcedure\u003c/td\u003e\n    \u003c/tr\u003e\n  \u003c/tbody\u003e\n\u003c/table\u003e\n\n\u003ch2\u003ePagination\u003c/h2\u003e\n\u003cp\u003eAll responses are paginated with 25 results per page. Use the \u003ccode\u003e?page=X\u003c/code\u003e query parameter to navigate.\u003c/p\u003e\n\n\u003ch2\u003eRate Limiting\u003c/h2\u003e\n\u003cp\u003eThe API supports up to \u003cstrong\u003e300 requests per minute\u003c/strong\u003e.\u003c/p\u003e\n\n\u003cp\u003e\u0026copy; 2023 Hudu Technologies, Inc. All rights reserved.\u003c/p\u003e",

@@ -5,6 +5,16 @@ All notable changes to **node-hudu** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] — 2026-09-12
+
+### Changed
+
+- **Reference spec refreshed to Hudu API 2.45.1.** `api-docs.json` now matches
+  `api-docs-v2.45.1.json` (same 82 paths; the only semantic delta is activity-log
+  filtering — `resource_type` is now a standalone server-side filter and
+  `resource_id` narrows within it). The SDK forwards list params to the API as-is,
+  so no code changes were required; the 2.45.1 behaviour applies automatically.
+
 ## [0.2.0] — 2026-08-11
 
 ### Changed — MCP v2 alignment
