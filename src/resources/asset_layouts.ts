@@ -22,20 +22,33 @@ export interface LayoutWriteOptions {
   dryRun?: boolean;
 }
 
-/** Helper `limit` bounds (policy §9): default 25, hard maximum 100. */
-const MAX_HELPER_LIMIT = 100;
+/**
+ * Options accepted by `asset_layouts.resolve`. `HelperOptions.limit` is deliberately
+ * absent: /asset_layouts has no `page_size`, so no helper of this resource can bound the
+ * number of rows a request returns, and advertising a knob that does nothing would lie.
+ */
+export interface AssetLayoutResolveOptions {
+  /** Return the full record instead of the compact `AssetLayoutSummary`. */
+  expand?: boolean;
+  /** Return the `Resolution<T>` wrapper (cost, scanned, scanTruncated, candidates). */
+  resolutionDetails?: boolean;
+}
 
 /** The identifier kinds `asset_layouts.resolve` documents. */
 const LAYOUT_IDENTIFIER_KINDS =
   'asset_layouts.resolve accepts { id }, { name } or { slug }, or a bare numeric id / slug / exact name';
 
-/** Validate a helper `limit`: default 25, hard maximum 100 — never silently clamped. */
-function helperLimit(limit: number | undefined): number {
-  if (limit === undefined) return 25;
-  if (!Number.isInteger(limit) || limit < 1 || limit > MAX_HELPER_LIMIT) {
-    throw new HuduConfigError(`limit must be an integer from 1 to ${MAX_HELPER_LIMIT}, got "${String(limit)}"`);
+/**
+ * Refuse a `limit` the endpoint cannot honour (JS callers can still pass one): GET
+ * /asset_layouts has no `page_size`, so a resolver cannot bound the rows it reads.
+ */
+function refuseUnsupportedLimit(opts: AssetLayoutResolveOptions | undefined): void {
+  const limit = (opts as HelperOptions | undefined)?.limit;
+  if (limit !== undefined) {
+    throw new HuduConfigError(
+      'asset_layouts.resolve does not accept `limit`: /asset_layouts has no page_size, so a layout scan cannot bound its page size; use the client resolution caps instead',
+    );
   }
-  return limit;
 }
 
 /** Case-insensitive, whitespace-trimmed equality — the exact compare applied to a vendor filter. */
@@ -145,22 +158,24 @@ export class AssetLayoutsResource extends BaseResource<AssetLayout> {
    * reached; a capped scan would throw `RESOLUTION_TRUNCATED` rather than return
    * `null`.
    *
-   * `limit` is validated against the helper bounds (default 25, hard maximum 100)
-   * but cannot be applied to the request: GET /asset_layouts accepts `page` and not
-   * `page_size`, so a layout read is one server-sized page.
+   * `limit` is NOT accepted: GET /asset_layouts accepts `page` and not `page_size`, so
+   * the number of records a scan examines cannot be bounded by the caller — only the
+   * client's own resolution caps (config `resolution.maxScanRecords/maxScanPages`) apply,
+   * and hitting them throws `RESOLUTION_TRUNCATED`. A caller that still passes `limit`
+   * is refused with `HuduConfigError` instead of having it silently ignored.
    */
   async resolve(identifier: number | string | AssetLayoutIdentifier): Promise<AssetLayoutSummary | null>;
   /** `expand: true` returns the full record. */
-  async resolve(identifier: number | string | AssetLayoutIdentifier, opts: HelperOptions & { expand: true }): Promise<AssetLayout | null>;
+  async resolve(identifier: number | string | AssetLayoutIdentifier, opts: AssetLayoutResolveOptions & { expand: true }): Promise<AssetLayout | null>;
   /** `resolutionDetails: true` returns the `Resolution<T>` wrapper. */
-  async resolve(identifier: number | string | AssetLayoutIdentifier, opts: HelperOptions & { resolutionDetails: true }): Promise<Resolution<AssetLayoutSummary>>;
+  async resolve(identifier: number | string | AssetLayoutIdentifier, opts: AssetLayoutResolveOptions & { resolutionDetails: true }): Promise<Resolution<AssetLayoutSummary>>;
   async resolve(
     identifier: number | string | AssetLayoutIdentifier,
-    opts?: HelperOptions,
+    opts?: AssetLayoutResolveOptions,
   ): Promise<AssetLayoutSummary | AssetLayout | null | Resolution<AssetLayoutSummary>>;
   async resolve(
     identifier: number | string | AssetLayoutIdentifier,
-    opts?: HelperOptions,
+    opts?: AssetLayoutResolveOptions,
   ): Promise<AssetLayoutSummary | AssetLayout | null | Resolution<AssetLayoutSummary>> {
     const resolution = await this.resolveRecord(identifier, opts);
     return projectResolution(resolution, opts, toAssetLayoutSummary) as
@@ -223,9 +238,9 @@ export class AssetLayoutsResource extends BaseResource<AssetLayout> {
   private async filterScan(
     filter: Record<string, unknown>,
     matches: (layout: AssetLayout) => boolean,
-    opts?: HelperOptions,
+    opts?: AssetLayoutResolveOptions,
   ): Promise<Resolution<AssetLayout>> {
-    helperLimit(opts?.limit);
+    refuseUnsupportedLimit(opts);
     const operation = 'asset_layouts.resolve';
     const fetched: AssetLayout[] = [];
     let fullPage = DEFAULT_PAGE_SIZE;

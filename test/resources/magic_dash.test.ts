@@ -92,9 +92,10 @@ describe('MagicDashResource — agent execution layer', () => {
   });
 
   it('dry-run issues no mutating request and returns simulated: true', async () => {
-    const spy = routed({});
+    // The bulk dry-run probes the blast radius with ONE read; it must never DELETE.
+    const spy = stubFetch((_raw, init) => (init.method === 'GET' ? json([item()]) : empty(204)));
     const result = await makeClient().magicDash.delete({ title: 'Microsoft 365', company_name: 'Acme' }, { dryRun: true });
-    expect(spy.calls).toHaveLength(0);
+    expect(spy.calls.map((call) => call.init.method)).toEqual(['GET']);
     expect(result).toMatchObject({
       operation: 'magic_dash.delete',
       request: { method: 'DELETE', path: '/magic_dash' },
@@ -117,33 +118,59 @@ describe('MagicDashResource — agent execution layer', () => {
   });
 
   it('refuses to run unconfirmed and reports the impact bound', async () => {
-    const spy = routed({});
+    const refused = routed({});
     const client = makeClient();
     const err = await rejection(client.magicDash.delete({ title: '   ', company_name: 'Acme' }));
     expect(err.code).toBe('POLICY_DENIED');
     expect(err.category).toBe('policy');
-    expect(spy.calls).toHaveLength(0);
+    expect(refused.calls).toHaveLength(0);
     const missingCompany = await rejection(client.magicDash.delete({ title: 'Microsoft 365', company_name: '' }));
     expect(missingCompany.code).toBe('POLICY_DENIED');
-    expect(spy.calls).toHaveLength(0);
+    expect(refused.calls).toHaveLength(0);
+    const spy = stubFetch((_raw, init) => (init.method === 'GET' ? json([item()]) : empty(204)));
     const described = await client.magicDash.delete(
       { title: 'Microsoft 365', company_name: 'Acme' },
       { dryRun: true },
     );
-    expect(described.impact).toEqual({ affected: 1, scope: 'bulk', reversible: false });
-    expect(spy.calls).toHaveLength(0);
+    expect(described.impact).toEqual({ affected: 1, scope: 'bulk', reversible: false, exact: false });
+    expect(spy.calls.map((call) => call.init.method)).toEqual(['GET']);
   });
 
   it('dry-run reports the affected count and issues no request', async () => {
-    const spy = routed({});
+    // Title verbatim from the plan row; the mandated floor probe is a READ, so the assertion is
+    // "exactly one GET and zero mutating requests" rather than "zero requests".
+    const spy = stubFetch((_raw, init) => (init.method === 'GET' ? json([item()]) : empty(204)));
     const result = await makeClient().magicDash.delete(
       { title: 'Microsoft 365', company_name: 'Acme' },
       { dryRun: true },
     );
-    expect(spy.calls).toHaveLength(0);
+    expect(spy.calls.map((call) => call.init.method)).toEqual(['GET']);
     expect(result.impact.affected).toBe(1);
     expect(result.impact.scope).toBe('bulk');
     expect(result.warnings.join(' ')).toContain('Microsoft 365');
+  });
+
+  it('reports affected as a bounded FLOOR for the by-title bulk delete', async () => {
+    const spy = stubFetch((_raw, init) =>
+      (init.method === 'GET'
+        ? json([item(), item({ id: 8 }), item({ id: 9, company_name: 'Other' })])
+        : empty(204)));
+    const result = await makeClient().magicDash.delete(
+      { title: 'Microsoft 365', company_name: 'Acme' },
+      { dryRun: true },
+    );
+    // Only the items matching BOTH bounds count; the rest of the server-side set is unknown.
+    expect(result.impact.exact).toBe(false);
+    expect(result.impact.affected).toBe(2);
+    expect(result.impact.scope).toBe('bulk');
+    expect(result.impact.reversible).toBe(false);
+    expect(result.request.method).toBe('DELETE');
+    expect(spy.calls).toHaveLength(1);
+    expect(spy.calls[0]?.init.method).toBe('GET');
+    expect(spy.calls[0]?.url).toContain('page_size=100');
+    expect(spy.calls[0]?.url).toContain('title=Microsoft+365');
+    expect(result.warnings.join(' ')).toContain('FLOOR');
+    expect(result.warnings.join(' ')).toContain('the server decides the final target set');
   });
 
   it('calls the magic_dash.deleteById endpoint and returns the documented shape', async () => {
@@ -298,7 +325,7 @@ describe('MagicDashResource — agent execution layer', () => {
       { company_id: 3, positions: [{ id: 7, position: 1 }, { id: 8, position: 2 }] },
       { dryRun: true },
     );
-    expect(described.impact).toEqual({ affected: 2, scope: 'bulk', reversible: true });
+    expect(described.impact).toEqual({ affected: 2, scope: 'bulk', reversible: true, exact: true });
     expect(described.target.ids).toEqual([7, 8]);
     expect(spy.calls).toHaveLength(0);
   });
@@ -312,6 +339,8 @@ describe('MagicDashResource — agent execution layer', () => {
     expect(spy.calls).toHaveLength(0);
     expect(result.impact.affected).toBe(3);
     expect(result.impact.scope).toBe('bulk');
+    // The caller supplied the bound, so the count IS the affected set.
+    expect(result.impact.exact).toBe(true);
     expect(result.checks[0]).toMatchObject({ name: 'explicit-targets', ok: true });
   });
 
@@ -421,6 +450,26 @@ describe('MagicDashResource — resolution edge cases', () => {
     );
     expect(denied.code).toBe('POLICY_DENIED');
     expect(denied.resourceIds).toBeUndefined();
+    expect(spy.calls).toHaveLength(0);
+  });
+
+  it('refuses expectedUpdatedAt on every path whose staleCheck is unavailable', async () => {
+    const spy = routed({});
+    const client = makeClient();
+    const cases: Array<Promise<unknown>> = [
+      client.magicDash.create({ title: 'x' }, { expectedUpdatedAt: '2024-05-01T00:00:00Z' }),
+      client.magicDash.delete({ title: 'x', company_name: 'y' }, { expectedUpdatedAt: '2024-05-01T00:00:00Z' }),
+      client.magicDash.deleteById(7, { expectedUpdatedAt: '2024-05-01T00:00:00Z' }),
+      client.magicDash.updatePositions(
+        { company_id: 3, positions: [{ id: 7, position: 1 }] },
+        { expectedUpdatedAt: '2024-05-01T00:00:00Z' },
+      ),
+    ];
+    for (const call of cases) {
+      const err = await rejection(call);
+      expect(err.code).toBe('CONFIG_ERROR');
+      expect(err.message).toContain('update (PUT) only');
+    }
     expect(spy.calls).toHaveLength(0);
   });
 

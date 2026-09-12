@@ -256,3 +256,66 @@ plan 225 rows / 223 emitted):
 **Caveat:** two agents are still editing `src/resources/*.ts`. Any registry change makes the manifest
 stale again, and the new `manifest-planhash` rule now catches it — run `npm run mcp:project` after
 those edits land (the projection is deliberately not part of `capabilities:build`).
+
+## 10. Addendum — consolidated follow-up (example safety, 9 new gate rules, injections)
+
+**CRITICAL — examples documented throwing calls (fixed).** `BaseResource.assertNoExpectedUpdatedAt`
+runs before the dry-run branch, so a create/delete/archive example passing `expectedUpdatedAt` raises
+`HuduConfigError` and never reaches the wire. `exampleFor()` now emits `{ dryRun: true }` for every
+mutation options bag, and `expectedUpdatedAt` only on a row that is both `<x>.update` **and**
+`staleCheck === "updated_at"`. New checker rule `example-expectedUpdatedAt` enforces it.
+Count before: 75 records with `expectedUpdatedAt`, 51 of them non-update. After: **25 records, 0
+non-update**. Samples now: `companies.create(..., { dryRun: true })`, `companies.delete(1, { dryRun: true })`,
+`companies.update(1, {...}, { dryRun: true, expectedUpdatedAt: '2026-01-01T00:00:00Z' })`.
+
+**New gate rules** (all in `scripts/check-capabilities.mjs`, all forced to fail by an injection):
+`example-expectedUpdatedAt`, `preferredWhen-required` (every row of a resource that has a helper must
+record preferredWhen; the old same-endpoint sibling rule is kept), `compact-shape-unknown` (a compact
+name must be an exported interface/type in `src/types/**` or `src/operations/**`),
+`resolution-caps` (client-scan needs both caps > 0; server-filter must still declare them; an
+unknown basis such as `composite` is a warning, since composition is not a scan),
+`redaction-value` (exactly "none" | "credentials"),
+`errors-vocabulary` (SCREAMING_SNAKE; CONFIG_ERROR on every row; STALE_OBJECT when staleCheck is
+updated_at), `related-dangling` (every related entry must be a registry record — this pins the 79
+edges the coordinator repaired), `pagination` (object present; never nonPaginated + mode "page"; a
+list primitive states its mode; a paginated record needs a positive `maxPageSize`), and
+`inputSchema-name` (every field object carries the `name` key `CapabilityField` declares).
+
+**maxPageSize is now a real bound.** The generator reads the vendor's `page_size` parameter
+description in `api-docs.json` (`max(?:imum)?\s*(\d+)`) and falls back to the MCP bound 100:
+`groups.list` → 1000 (`maxPageSizeSource: "api-docs"`), `companies.list` → 100 (`"default"`).
+Non-paginated list records stay `mode: "none"` with null sizes.
+
+**Field `name` coverage.** Every inputSchema field node — parameter nodes, nested `fields[]` entries
+and union `variants` — now carries its `name`, so `CapabilityField` is honest. Injection I11 (a field
+node without `name`) fails with `inputSchema-name`.
+
+**Injection battery** (each on a /tmp copy; `check-capabilities.mjs` exit code — all 1):
+
+| # | injection | exit | rule that fired |
+| --- | --- | --- | --- |
+| I1 | non-update example passes expectedUpdatedAt | 1 | example-expectedUpdatedAt |
+| I2 | preferredWhen blanked on all rows | 1 | preferredWhen-required |
+| I3 | compact = "NotARealShape" | 1 | compact-shape-unknown |
+| I4 | caps stripped from 5 client-scan rows | 1 | resolution-caps |
+| I5 | pagination mode "page" + nonPaginated true | 1 | pagination |
+| I6 | list primitive without a pagination object | 1 | pagination |
+| I7 | error code `not_screaming` | 1 | errors-vocabulary |
+| I8 | CONFIG_ERROR removed | 1 | errors-vocabulary |
+| I9 | redaction = "sometimes" | 1 | redaction-value |
+| I10 | related = ["ghost.operation"] | 1 | related-dangling |
+| I11 | inputSchema field without `name` | 1 | inputSchema-name |
+| I12 | committed fixture | 1 | missing-key, mutation-dryRun, test-title (3 by design) |
+
+**Fixture re-derived** from the current plan with the same three deliberate drifts (the earlier copy
+had accumulated incidental drift and fired extra rules). It now fails exactly the three intended
+rules, non-zero as required.
+
+**Final battery** (planHash `defc10c664e04404210cfcdef4a2bc307e6c3e86b9e2b09c67a841a816977b53`, manifest
+pinned to the same hash, 225 rows / 223 records):
+`generate-capabilities.mjs` EXIT 0 (`records emitted=223`, `opaque inputSchema: 0`, `dropsUnresolved: 0`);
+`project-mcp-tools.mjs` EXIT 0 (`tools projected=201; excluded=22`, 57 primitive-backed read warnings);
+`check-capabilities.mjs` EXIT 0 (`PASS — 0 failures; registryRecords=223 warnings=67`);
+`npx tsc --noEmit` EXIT 0; `npx vitest run test/registry.test.ts` EXIT 0 (`Tests 8 passed (8)`);
+fixture EXIT 1 (3 rules by design); `--ship` EXIT 1 (`ship-status=2` — the two `operations.*` rows,
+expected and deliberately not "fixed").

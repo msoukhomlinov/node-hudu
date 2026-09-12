@@ -351,7 +351,10 @@ function fieldsForType(typeText) {
   if (resolved) {
     return resolved.map((p) => {
       const base = jsonType(p.type);
-      return { name: p.name, ...base, required: !p.optional, ...(p.enumValues ? { enum: p.enumValues.map((e) => e.replace(/^['"`]|['"`]$/g, '')) } : {}) };
+      const node = { name: p.name, ...base, required: !p.optional, ...(p.enumValues ? { enum: p.enumValues.map((e) => e.replace(/^['"`]|['"`]$/g, '')) } : {}) };
+      // Nested union members carry the field's `name` too (CapabilityField declares name).
+      if (Array.isArray(node.variants)) node.variants = node.variants.map((v) => ({ name: p.name, ...v }));
+      return node;
     });
   }
   return null;
@@ -407,7 +410,7 @@ function inputSchema(method) {
       for (const f of p.fields) schema[f.name] = f;
       return schema;
     }
-    schema[p.name] = { ...jsonType(p.type), required: p.required };
+    schema[p.name] = { name: p.name, ...jsonType(p.type), required: p.required };
     return schema;
   }
   // Several parameters: keep the parameter names, and nest each object parameter's declared fields.
@@ -415,9 +418,12 @@ function inputSchema(method) {
   for (const p of infos) {
     const jt = jsonType(p.type);
     const expandable = p.fields && p.fields.length && !jt.variants && !jt.anyOf;
-    const node = { ...jt, required: p.required, ...(expandable ? { fields: p.fields } : {}) };
+    const node = { name: p.name, ...jt, required: p.required, ...(expandable ? { fields: p.fields } : {}) };
     // An inline type literal has no type NAME worth printing: the fields are the whole story.
     if (p.type.trim().startsWith('{') || expandable) { delete node.typeName; delete node.resolved; }
+    // Every field node carries the `name` key its CapabilityField interface declares, including
+    // the union variants (they describe the same parameter).
+    if (Array.isArray(node.variants)) node.variants = node.variants.map((v) => ({ name: p.name, ...v }));
     schema[p.name] = node;
   }
   return schema;
@@ -456,12 +462,25 @@ function sampleValue(field) {
 }
 function exampleFor(row, method, resource) {
   if (!method) return `await hudu.${resource}.<method>()`;
+  const opName = String(row.primitive ?? row.helper ?? '');
+  // Only an update row that actually checks staleness may show expectedUpdatedAt: every other
+  // mutation (and every update without a stale guard) throws CONFIG_ERROR before reaching the wire.
+  const isUpdateRow = opName.endsWith('.update') && row.staleCheck === 'updated_at';
+  const isMutation = row.effect === 'write' || row.effect === 'destructive';
   const args = paramInfo(method).map((p) => {
     if (!p.fields || !p.fields.length) {
       return p.required ? sampleValue({ type: jsonType(p.type).type }) : undefined;
     }
-    const shown = p.fields.slice(0, 4).map((f) => `${f.name}: ${sampleValue(f)}`);
-    const rest = p.fields.length > 4 ? ', /* ... */' : '';
+    const isOptionsBag = isMutation && (p.name === 'opts' || p.name === 'options');
+    // A mutation example must be a call that WORKS. BaseResource.assertNoExpectedUpdatedAt runs
+    // before the dry-run branch, so only an update row may pass expectedUpdatedAt; every other
+    // mutation shows the plain `{ dryRun: true }` form it actually accepts.
+    if (isOptionsBag) {
+      return isUpdateRow ? "{ dryRun: true, expectedUpdatedAt: '2026-01-01T00:00:00Z' }" : '{ dryRun: true }';
+    }
+    const fields = p.fields.filter((f) => isUpdateRow || f.name !== 'expectedUpdatedAt');
+    const shown = fields.slice(0, 4).map((f) => `${f.name}: ${sampleValue(f)}`);
+    const rest = fields.length > 4 ? ', /* ... */' : '';
     return `{ ${shown.join(', ')}${rest} }`;
   }).filter((a) => a !== undefined);
   return `await hudu.${resource}.${method.name}(${args.join(', ')})`;
@@ -552,6 +571,23 @@ function outputSchema(row, method) {
 //   list primitives          -> { mode: 'page', defaultPageSize: 25, maxPageSize, nonPaginated }
 // defaultPageSize comes from src/config.ts DEFAULT_PAGE_SIZE; nonPaginated is derived from the
 // resource source (BaseResource `paginated: false`) and cross-checked against the spec list.
+// The vendor's documented page-size maximum lives in the `page_size` query parameter description
+// (e.g. /groups: "The number of results to return per page (max 1000)"). Where the spec states no
+// maximum, the MCP bound (100) is used, so a MAX bound always exists somewhere.
+const API_DOCS = existsSync(path.join(ROOT, 'api-docs.json')) ? JSON.parse(readFileSync(path.join(ROOT, 'api-docs.json'), 'utf8')) : null;
+const MCP_MAX_PAGE_SIZE = 100;
+function documentedMaxPageSize(endpoint) {
+  if (!API_DOCS || !endpoint) return null;
+  const [method, template] = String(endpoint).split(' ');
+  const item = API_DOCS.paths ? API_DOCS.paths[template] : null;
+  if (!item) return null;
+  const op = item[String(method).toLowerCase()];
+  if (!op || !Array.isArray(op.parameters)) return null;
+  const p = op.parameters.find((x) => x && x.name === 'page_size');
+  const m = p && typeof p.description === 'string' ? /max(?:imum)?\s*(\d+)/i.exec(p.description) : null;
+  return m ? Number(m[1]) : null;
+}
+
 const CONFIG_TEXT = existsSync(path.join(ROOT, 'src/config.ts')) ? readFileSync(path.join(ROOT, 'src/config.ts'), 'utf8') : '';
 const DEFAULT_PAGE_SIZE = Number((/DEFAULT_PAGE_SIZE\s*=\s*(\d+)/.exec(CONFIG_TEXT) ?? []) [1] ?? 25);
 const SPEC_NON_PAGINATED = ['/ip_addresses', '/lists', '/networks', '/procedure_tasks', '/rack_storage_items', '/rack_storages', '/vlan_zones', '/vlans', '/exports'];
@@ -567,10 +603,12 @@ function paginationFor(row, method, mod) {
   // "page" with the SDK's default page size (maxPageSize stays null: the vendor spec declares no
   // enforced maximum, and a fabricated bound would be worse than an explicit null).
   const nonPaginated = sourceSays === false || (sourceSays === null && specSays);
+  const documentedMax = documentedMaxPageSize(row.endpoint);
   return {
     mode: nonPaginated ? 'none' : 'page',
     defaultPageSize: nonPaginated ? null : DEFAULT_PAGE_SIZE,
-    maxPageSize: null,
+    maxPageSize: nonPaginated ? null : (documentedMax ?? MCP_MAX_PAGE_SIZE),
+    maxPageSizeSource: nonPaginated ? null : (documentedMax ? 'api-docs' : 'default'),
     nonPaginated,
     sourcePaginated: sourceSays,
     specSaysNonPaginated: specSays,

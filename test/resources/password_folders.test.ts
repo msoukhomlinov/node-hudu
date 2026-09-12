@@ -3,13 +3,26 @@
  * envelopes. Sensitive resource: the redaction contract is asserted here too.
  */
 import { describe, it, expect, afterEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { HuduClient } from '../../src/client.js';
 import type { AuditEvent } from '../../src/types/common.js';
 import { HuduConfigError, NotFoundError, ResolutionError, ValidationFailedError } from '../../src/errors.js';
 import { REDACTED, redact } from '../../src/logger.js';
 import { stubFetch, json, empty, clearFetch } from '../helpers.js';
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
 const BASE = 'https://hudu.example.com/api/v1';
+
+/** The fields a summary interface declares, read from its source so a future widening cannot slip past. */
+function declaredSummaryFields(file: string, name: string): string[] {
+  const src = readFileSync(join(__dirname, file), 'utf8');
+  const match = new RegExp(`export interface ${name} \\{([\\s\\S]*?)\\n\\}`).exec(src);
+  if (!match) throw new Error(`interface ${name} not found in ${file}`);
+  return [...match[1]!.matchAll(/^\s{2}([A-Za-z_][A-Za-z0-9_]*)\??:/gm)].map((m) => m[1]!);
+}
+
 
 function makeClient(overrides: Record<string, unknown> = {}) {
   return new HuduClient({ baseUrl: 'https://hudu.example.com', apiKey: 'k', ...overrides });
@@ -364,5 +377,22 @@ describe('PasswordFoldersResource identifier and guard edges', () => {
       client.passwordFolders.delete(21, { expectedUpdatedAt: '2026-09-02T00:00:00Z' }),
     ).rejects.toBeInstanceOf(HuduConfigError);
     expect(spy.calls).toHaveLength(0);
+  });
+});
+
+
+describe('PasswordFolderSummary projection pins the declared interface', () => {
+  afterEach(() => clearFetch());
+
+  /** One distinct fixture value per declared field, so a dropped field cannot hide. */
+  const SENTINEL: Record<string, unknown> = { id: 987, name: 'Prod secrets', company_id: 654, slug: 'SENTINEL-slug', security: 'specific', updated_at: 'SENTINEL-updated-at' };
+
+  it('populates every field the PasswordFolderSummary interface declares', async () => {
+    const declared = declaredSummaryFields('../../src/types/password_folder.ts', 'PasswordFolderSummary').sort();
+    expect(declared).toEqual(Object.keys(SENTINEL).sort());
+    stubFetch(() => json({ password_folders: [{ id: 987, name: 'Prod secrets', company_id: 654, slug: 'SENTINEL-slug', security: 'specific', updated_at: 'SENTINEL-updated-at' }] }));
+    const projected = (await makeClient().passwordFolders.resolve({ name: 'Prod secrets' })) as unknown as Record<string, unknown>;
+    expect(Object.keys(projected).sort()).toEqual(declared);
+    for (const key of declared) expect(projected[key], key).toEqual(SENTINEL[key]);
   });
 });

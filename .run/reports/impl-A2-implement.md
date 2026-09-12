@@ -74,3 +74,40 @@ Re-read my 25 rows after the ruling. Aligned state, verified programmatically:
 - Docstrings on the three delete methods no longer claim the guard (they say `staleCheck: unavailable`).
 
 Re-ran after the docstring fix: `npx tsc --noEmit` 0, `npx eslint <my 8 src files + 4 test files>` 0, `npx vitest run <my 4 test files>` 0 (116 tests).
+
+## QA findings round (independent reviewer) — fixed
+
+### Finding 1 — compact projection dropped declared fields
+
+`toWebsiteSummary` now populates EVERY field `WebsiteSummary` declares (id, name, slug, company_id,
+company_name, status, monitoring_status, paused, archived, url) — `slug`, `company_name`, `status` and
+`url` were previously missing, so `websites.resolve` / `findBySlug` / `search` returned a summary that
+contradicted the interface (and dropped `slug`, the field a slug lookup resolves by).
+
+Regression-proof pin: a new test in each of my four test files reads the summary interface straight out
+of `src/types/<resource>.ts` (`declaredSummaryFields`) and asserts (a) the interface's declared key list
+equals the fixture's sentinel map (so adding a field to the interface fails the test) and (b) the
+projection has exactly those keys with those values for every helper. Verified with the same
+declared-vs-set audit that `FolderSummary`, `PasswordFolderSummary` and `GroupSummary` already set every
+declared field; they now carry the same pin test.
+
+### Finding 2 — `asset_layouts.filterScan` could return a silent null
+
+Fixed in `src/resources/asset_layouts.ts` (another implementer's file — edited on the coordinator's
+instruction): the scan now walks pages with `page` only (`page_size` is NOT in the api-docs parameter
+list and is never sent), learns the server's full-page size from the responses (seeded with
+`DEFAULT_PAGE_SIZE` 25, grown when a longer page arrives, mirroring `assetLayoutPages`), reports
+`hasMore` honestly (an empty or short page ends the walk), and turns a client-cap stop into
+`RESOLUTION_TRUNCATED` instead of `null`. New tests: match found on page 2, cap hit → TRUNCATED (never
+null, 4 pages), and a page longer than the SDK default keeps the walk going.
+
+Also, on the coordinator's note: `limit` was not honour-able (`/asset_layouts` has no `page_size`), so it
+is **removed from `asset_layouts.resolve`'s signature** (new `AssetLayoutResolveOptions`) and refused at
+runtime with `HuduConfigError`/`CONFIG_ERROR` naming the reason; impl-A1's two `limit` tests were updated
+to assert that refusal (neither is a plan title).
+
+Re-ran: `npx tsc --noEmit` 0 · `npx eslint <my 9 src + 5 test files>` 0 · `npx vitest run
+test/resources/{websites,folders,password_folders,groups,asset_layouts}.test.ts` 0 — 151 tests.
+Plan titles for all 5 resource files: 94/94 present, 0 missing. Coverage: my 4 resource files 100 %
+stmts/branch/func; `asset_layouts.ts` 99.1 % stmts (the single uncovered statement is its pre-existing
+100 000-page runaway guard), 100 % branch/func.

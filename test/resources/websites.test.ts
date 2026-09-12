@@ -3,12 +3,40 @@
  * fetch envelopes. Never touches the network.
  */
 import { describe, it, expect, afterEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { HuduClient } from '../../src/client.js';
 import type { AuditEvent } from '../../src/types/common.js';
 import { HuduConfigError, NotFoundError, ResolutionError, ValidationFailedError } from '../../src/errors.js';
 import { stubFetch, json, empty, clearFetch } from '../helpers.js';
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
 const BASE = 'https://hudu.example.com/api/v1';
+
+/** The fields a summary interface declares, read from its source so a future widening cannot slip past. */
+function declaredSummaryFields(file: string, name: string): string[] {
+  const src = readFileSync(join(__dirname, file), 'utf8');
+  const match = new RegExp(`export interface ${name} \\{([\\s\\S]*?)\\n\\}`).exec(src);
+  if (!match) throw new Error(`interface ${name} not found in ${file}`);
+  return [...match[1]!.matchAll(/^\s{2}([A-Za-z_][A-Za-z0-9_]*)\??:/gm)].map((m) => m[1]!);
+}
+
+/** The compact projection of a website record, spelled field by field. */
+function summaryOf(record: Record<string, unknown>): Record<string, unknown> {
+  return {
+    id: record.id,
+    name: record.name,
+    slug: record.slug,
+    company_id: record.company_id,
+    company_name: record.company_name,
+    status: record.status,
+    monitoring_status: record.monitoring_status,
+    paused: record.paused,
+    archived: record.archived,
+    url: record.url,
+  };
+}
 
 function makeClient(overrides: Record<string, unknown> = {}) {
   return new HuduClient({ baseUrl: 'https://hudu.example.com', apiKey: 'k', ...overrides });
@@ -211,7 +239,7 @@ describe('WebsitesResource helpers', () => {
   it('fetches by id without a scan', async () => {
     const spy = stubFetch(() => json(website()));
     const res = await makeClient().websites.resolve(7);
-    expect(res).toEqual({ id: 7, name: 'https://acme.example.com', company_id: 42, monitoring_status: 'up', paused: false, archived: false });
+    expect(res).toEqual(summaryOf(website()));
     expect(spy.calls).toHaveLength(1);
     expect(spy.calls[0].url).toBe(`${BASE}/websites/7`);
   });
@@ -244,12 +272,10 @@ describe('WebsitesResource helpers', () => {
     stubFetch(() => json([website()]));
     const summary = await makeClient().websites.resolve({ name: 'https://acme.example.com' });
     expect(summary).not.toBeNull();
-    // Kept: the identifier fields and the monitoring state an agent needs.
-    expect(Object.keys(summary as object).sort()).toEqual(
-      ['archived', 'company_id', 'id', 'monitoring_status', 'name', 'paused'],
-    );
+    // Kept: every field the WebsiteSummary interface declares.
+    expect(Object.keys(summary as object).sort()).toEqual(Object.keys(summaryOf(website())).sort());
     // Dropped: the full record's bulk (headers, notes, account_id, and so on).
-    for (const dropped of ['headers', 'notes', 'account_id', 'code', 'message', 'keyword', 'url']) {
+    for (const dropped of ['headers', 'notes', 'account_id', 'code', 'message', 'keyword']) {
       expect(summary as object).not.toHaveProperty(dropped);
     }
   });
@@ -323,9 +349,7 @@ describe('WebsitesResource helpers', () => {
   it('returns WebsiteSummary', async () => {
     stubFetch(() => json([website({ slug: 'acme' })]));
     const summary = await makeClient().websites.findBySlug('acme');
-    expect(summary).toEqual({
-      id: 7, name: 'https://acme.example.com', company_id: 42, monitoring_status: 'up', paused: false, archived: false,
-    });
+    expect(summary).toEqual(summaryOf(website()));
     expect(summary).not.toHaveProperty('headers');
   });
 
@@ -407,5 +431,49 @@ describe('WebsitesResource identifier and guard edges', () => {
       client.websites.delete(7, { expectedUpdatedAt: '2026-09-02T00:00:00Z' }),
     ).rejects.toBeInstanceOf(HuduConfigError);
     expect(spy.calls).toHaveLength(0);
+  });
+});
+
+describe('WebsitesResource projection pins the declared interface', () => {
+  afterEach(() => clearFetch());
+
+  /** One distinct sentinel per declared field, so a dropped field cannot hide. */
+  const SENTINEL: Record<string, unknown> = {
+    id: 987,
+    name: 'SENTINEL-name',
+    slug: 'SENTINEL-slug',
+    company_id: 654,
+    company_name: 'SENTINEL-company',
+    status: 'SENTINEL-status',
+    monitoring_status: 'SENTINEL-monitoring',
+    paused: true,
+    archived: true,
+    url: 'https://SENTINEL.example.com',
+  };
+
+  it('populates every field the WebsiteSummary interface declares, in every helper', async () => {
+    const declared = declaredSummaryFields('../../src/types/website.ts', 'WebsiteSummary').sort();
+    // The sentinel fixture mirrors the interface: adding a field to the interface and
+    // not to this map fails here rather than silently shrinking the projection.
+    expect(declared).toEqual(Object.keys(SENTINEL).sort());
+    const record = website(SENTINEL);
+    const client = makeClient();
+
+    stubFetch(() => json([record]));
+    const byResolve = await client.websites.resolve({ slug: 'SENTINEL-slug' });
+    clearFetch();
+    stubFetch(() => json([record]));
+    const bySlug = await client.websites.findBySlug('SENTINEL-slug');
+    clearFetch();
+    stubFetch(() => json([record]));
+    const bySearch = (await client.websites.search('SENTINEL-slug'))[0];
+
+    for (const [label, summary] of [['resolve', byResolve], ['findBySlug', bySlug], ['search', bySearch]] as const) {
+      const projected = summary as Record<string, unknown>;
+      expect(Object.keys(projected).sort(), label).toEqual(declared);
+      for (const key of declared) {
+        expect(projected[key], `${label}.${key}`).toEqual(SENTINEL[key]);
+      }
+    }
   });
 });

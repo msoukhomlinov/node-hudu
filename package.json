@@ -57,6 +57,16 @@
         "default": "./dist/capabilities.cjs"
       }
     },
+    "./operations": {
+      "import": {
+        "types": "./dist/operations/index.d.ts",
+        "default": "./dist/operations/index.js"
+      },
+      "require": {
+        "types": "./dist/operations/index.d.cts",
+        "default": "./dist/operations/index.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "files": [

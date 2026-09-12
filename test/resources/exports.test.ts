@@ -143,9 +143,26 @@ describe('ExportsResource — plan rows', () => {
     expect(result.request).toEqual({ method: 'POST', path: '/exports' });
     expect(result.checks.map((c) => c.name)).toEqual(['payload-present', 'export-request']);
     // The plan's contract: the warning states there is no server-computed result to promise.
-    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings).toHaveLength(2);
     expect(result.warnings[0]).toContain('empty 200 body');
     expect(result.warnings[0]).toContain('no server-computed result to promise');
+    // An export cannot be undone: /exports has no DELETE and no cancel.
+    expect(result.warnings[1]).toContain('no cancel or delete path');
+    expect(result.warnings[1]).toContain('cannot be undone');
+    expect(result.impact.reversible).toBe(false);
+  });
+
+  it('dry-run tells the truth about an irreversible async export (impact, warning, zero requests)', async () => {
+    const spy = stubFetch(() => empty(200));
+    const result = (await makeClient().exports.create(
+      { format: 'pdf', company_id: 1, include_passwords: false, include_websites: true },
+      { dryRun: true },
+    )) as DryRunResult<void>;
+    expect(result.impact).toEqual({ affected: 1, scope: 'single', reversible: false });
+    expect(result.warnings.some((w) => w.includes('no cancel or delete path'))).toBe(true);
+    expect(result.warnings.some((w) => w.includes('cannot be undone'))).toBe(true);
+    expect(result.simulated).toBe(true);
+    expect(spy.calls).toHaveLength(0);
   });
 
   it('surfaces a correlation id on the success path and the error path', async () => {

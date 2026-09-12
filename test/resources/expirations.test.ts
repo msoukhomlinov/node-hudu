@@ -362,3 +362,16 @@ describe('ExpirationsResource — bounded candidate collection', () => {
     expect(spy.calls).toHaveLength(1);
   });
 });
+
+describe('ExpirationsResource — expectedUpdatedAt is refused outside update', () => {
+  afterEach(() => clearFetch());
+
+  it('refuses the guard on delete and keeps it on update', async () => {
+    const spy = routed({});
+    const client = makeClient();
+    const err = await rejection(client.expirations.delete(1, { expectedUpdatedAt: '2024-05-01T00:00:00Z' }));
+    expect(err.code).toBe('CONFIG_ERROR');
+    expect(err.message).toContain('update (PUT) only');
+    expect(spy.calls).toHaveLength(0);
+  });
+});

@@ -356,3 +356,19 @@ describe('ProcedureTasksResource — bounded candidate collection', () => {
     expect(dry.target.ids).toEqual([5]);
   });
 });
+
+describe('ProcedureTasksResource — expectedUpdatedAt is refused outside update', () => {
+  afterEach(() => clearFetch());
+
+  it('refuses the guard on create and delete', async () => {
+    const spy = routed({});
+    const client = makeClient();
+    const guard = { expectedUpdatedAt: '2024-05-01T00:00:00Z' };
+    for (const call of [client.procedureTasks.create({ name: 'x' }, guard), client.procedureTasks.delete(5, guard)]) {
+      const err = await rejection(call);
+      expect(err.code).toBe('CONFIG_ERROR');
+      expect(err.message).toContain('update (PUT) only');
+    }
+    expect(spy.calls).toHaveLength(0);
+  });
+});

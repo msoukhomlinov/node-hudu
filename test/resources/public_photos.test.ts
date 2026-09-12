@@ -302,3 +302,20 @@ describe('PublicPhotosResource — the stale option outside update', () => {
     expect(spy.calls).toHaveLength(0);
   });
 });
+
+describe('PublicPhotosResource — dry-run impact truthfulness', () => {
+  afterEach(() => clearFetch());
+
+  it('dry-run reports a create that cannot be undone (no DELETE for public_photos)', async () => {
+    const spy = stubFetch(() => json({}));
+    const result = (await makeClient().publicPhotos.create(
+      { photo: new Blob(['x']), record_type: 'Article', record_id: 5 },
+      { dryRun: true },
+    )) as DryRunResult<PublicPhoto>;
+    expect(result.impact).toEqual({ affected: 1, scope: 'single', reversible: false });
+    expect(result.warnings.some((w) => w.includes('no delete path for a public photo'))).toBe(true);
+    expect(result.warnings.some((w) => w.includes('cannot be undone'))).toBe(true);
+    expect(result.simulated).toBe(true);
+    expect(spy.calls).toHaveLength(0);
+  });
+});

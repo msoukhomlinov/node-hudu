@@ -206,3 +206,21 @@ editing that file concurrently — it passed, so nothing was excluded).
 
 Constraints respected: no return shape changed, no existing parameter position changed, no primitive
 touched, no new helper name added (only new option *types* were declared, in the resource modules).
+
+## 8. Handoff note (after the coordinator's FYI) — no disagreement
+
+* `src/resources/asset_layouts.ts` and `test/resources/asset_layouts.test.ts` were re-edited by impl-A2
+  under the coordinator's order (multi-page walk with `page` only, `RESOLUTION_TRUNCATED` at the cap,
+  `limit` refused with `CONFIG_ERROR`). I agree: it is the same honesty rule I applied in §7 — an option
+  that cannot be honoured must be refused, not ignored — and it is strictly better than my
+  "validated but not applied" note. The §7 asset_layouts `limit` item is therefore superseded.
+  Both files are now theirs; I will not re-edit them.
+* Re-verified after their change, with only my own files touched by me:
+  `npx vitest run test/resources/{companies,articles,assets,asset_layouts,asset_passwords}.test.ts`
+  -> exit 0, **266 tests passed** (asset_layouts now 31). My other four resources were untouched by
+  anyone else.
+* **Project-wide blocker, NOT mine**: `npx tsc --noEmit` currently fails on the untracked probe file
+  `src/__probe2.ts` (line 19, `Property 'email' does not exist on ... UserSummary`). It imports
+  `./operations/index.js` and probes `searchAcrossResources` / `resolveAny`. It is not one of my files
+  (I never created it) and I have not deleted it, since it belongs to whoever is working on
+  `src/operations/**`. Whoever owns it must delete it before the batch gate, or `tsc` stays red.

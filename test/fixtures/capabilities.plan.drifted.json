@@ -3,7 +3,7 @@
     "source": "api-docs.json",
     "version": "2.45.1"
   },
-  "generatedAt": "2026-09-12T13:24:33.259Z",
+  "generatedAt": "2026-09-12T14:54:35.600Z",
   "resources": {
     "companies": {
       "helperCap": 4,
@@ -242,9 +242,10 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -264,15 +265,10 @@
           "id": "companies.delete.correlation",
           "file": "test/resources/companies.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "companies.delete.stale",
-          "file": "test/resources/companies.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /companies",
@@ -311,6 +307,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -328,7 +325,6 @@
     {
       "endpoint": "GET /companies/{id}",
       "primitive": "companies.get",
-      "specialOp": null,
       "vendorFilters": [],
       "search": null,
       "helper": null,
@@ -342,14 +338,15 @@
         "usage": "Read path for companies returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; companies.resolve is for a name, slug or domain.",
         "related": [
-          "companies.resolve",
-          "companies.list"
+          "companies.list",
+          "companies.resolve"
         ]
       },
       "compact": null,
       "resolution": null,
       "staleCheck": null,
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -372,7 +369,8 @@
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested",
+      "redaction": "none"
     },
     {
       "endpoint": "GET /companies/jump",
@@ -403,6 +401,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_ACCEPTABLE",
         "NOT_FOUND",
@@ -421,7 +420,7 @@
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "POST /companies",
@@ -445,9 +444,10 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -468,15 +468,10 @@
           "id": "companies.create.correlation",
           "file": "test/resources/companies.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "companies.create.stale",
-          "file": "test/resources/companies.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "PUT /companies/{id}",
@@ -505,8 +500,10 @@
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -534,11 +531,11 @@
         {
           "id": "companies.update.stale",
           "file": "test/resources/companies.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
+          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT (update)"
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "PUT /companies/{id}/archive",
@@ -568,6 +565,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -591,7 +589,7 @@
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "PUT /companies/{id}/unarchive",
@@ -620,6 +618,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -643,7 +642,7 @@
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -662,11 +661,11 @@
         "usage": "Accepts {id} (direct fetch; a miss throws NOT_FOUND), {name}, {slug} or {website}/{domain}. A bare value is read in the documented order: numeric id, slug, exact name, domain. Never returns null after a partial scan.",
         "preferredWhen": "Use when the caller has an identifier rather than a numeric id; companies.get is cheaper when the id is known.",
         "related": [
-          "companies.get",
           "companies.findByDomain",
           "companies.findBySlug",
-          "companies.search",
-          "companies.getContext"
+          "companies.get",
+          "companies.getContext",
+          "companies.search"
         ]
       },
       "compact": "CompanySummary",
@@ -678,10 +677,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -726,7 +726,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -745,8 +745,8 @@
         "usage": "Uses the vendor `website` filter and compares the returned value exactly, so a fuzzy vendor match cannot produce a false positive. Bounded by the resolution caps; throws RESOLUTION_TRUNCATED at the cap and RESOLUTION_AMBIGUOUS for several exact matches.",
         "preferredWhen": "Preferred over companies.list for any domain lookup.",
         "related": [
-          "companies.resolve",
-          "companies.findBySlug"
+          "companies.findBySlug",
+          "companies.resolve"
         ]
       },
       "compact": "CompanySummary",
@@ -758,9 +758,10 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -795,7 +796,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -814,8 +815,8 @@
         "usage": "Uses the vendor `slug` filter with an exact compare. Bounded by the resolution caps.",
         "preferredWhen": "Preferred over companies.list for a slug lookup.",
         "related": [
-          "companies.resolve",
-          "companies.findByDomain"
+          "companies.findByDomain",
+          "companies.resolve"
         ]
       },
       "compact": "CompanySummary",
@@ -827,9 +828,10 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -854,7 +856,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -887,8 +889,9 @@
       "redaction": "none",
       "errors": [
         "BAD_REQUEST",
-        "RATE_LIMIT",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "RATE_LIMIT"
       ],
       "tests": [
         {
@@ -908,7 +911,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -927,9 +930,9 @@
         "usage": "Returns the company plus bounded lists of its assets, articles, websites and asset passwords (limit defaults to 25, max 100). Every sub-list is a bounded fetch - nothing here pages the account.",
         "preferredWhen": "Preferred over four separate list calls when an agent starts work on a company.",
         "related": [
-          "companies.get",
-          "assets.listAll",
           "articles.list",
+          "assets.list",
+          "companies.get",
           "websites.list"
         ]
       },
@@ -938,8 +941,9 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
-        "NOT_FOUND",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "NOT_FOUND"
       ],
       "tests": [
         {
@@ -959,7 +963,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": "DELETE /articles/{id}",
@@ -986,9 +990,10 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -1007,16 +1012,11 @@
         {
           "id": "articles.delete.correlation",
           "file": "test/resources/articles.test.ts",
-          "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "articles.delete.stale",
-          "file": "test/resources/articles.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
+          "title": "surfaces a correlation id on the success path and the error path (delete)"
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /articles",
@@ -1052,6 +1052,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -1070,11 +1071,11 @@
         {
           "id": "articles.list.correlation",
           "file": "test/resources/articles.test.ts",
-          "title": "surfaces a correlation id on the success path and the error path"
+          "title": "surfaces a correlation id on the success path and the error path (list)"
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /articles/{id}",
@@ -1093,8 +1094,8 @@
         "usage": "Read path for articles returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; articles.resolve is for a name, slug or domain.",
         "related": [
-          "articles.resolve",
-          "articles.list"
+          "articles.list",
+          "articles.resolve"
         ]
       },
       "compact": null,
@@ -1102,6 +1103,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -1120,11 +1122,11 @@
         {
           "id": "articles.get.correlation",
           "file": "test/resources/articles.test.ts",
-          "title": "surfaces a correlation id on the success path and the error path"
+          "title": "surfaces a correlation id on the success path and the error path (get)"
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "POST /articles",
@@ -1148,9 +1150,10 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -1164,21 +1167,16 @@
         {
           "id": "articles.create.dry-run",
           "file": "test/resources/articles.test.ts",
-          "title": "dry-run issues no mutating request and returns simulated: true"
+          "title": "dry-run issues no mutating request and returns simulated: true (create)"
         },
         {
           "id": "articles.create.correlation",
           "file": "test/resources/articles.test.ts",
-          "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "articles.create.stale",
-          "file": "test/resources/articles.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
+          "title": "surfaces a correlation id on the success path and the error path (create)"
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "PUT /articles/{id}",
@@ -1207,8 +1205,10 @@
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -1226,21 +1226,21 @@
         {
           "id": "articles.update.unwraps-by-singleKey",
           "file": "test/resources/articles.test.ts",
-          "title": "unwraps the PUT response by singleKey"
+          "title": "unwraps the PUT response by singleKey (update)"
         },
         {
           "id": "articles.update.correlation",
           "file": "test/resources/articles.test.ts",
-          "title": "surfaces a correlation id on the success path and the error path"
+          "title": "surfaces a correlation id on the success path and the error path (update)"
         },
         {
           "id": "articles.update.stale",
           "file": "test/resources/articles.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
+          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT (update)"
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "PUT /articles/{id}/archive",
@@ -1270,6 +1270,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -1284,16 +1285,16 @@
         {
           "id": "articles.archive.dry-run",
           "file": "test/resources/articles.test.ts",
-          "title": "dry-run issues no mutating request and returns simulated: true"
+          "title": "dry-run issues no mutating request and returns simulated: true (archive)"
         },
         {
           "id": "articles.archive.correlation",
           "file": "test/resources/articles.test.ts",
-          "title": "surfaces a correlation id on the success path and the error path"
+          "title": "surfaces a correlation id on the success path and the error path (archive)"
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "PUT /articles/{id}/unarchive",
@@ -1322,6 +1323,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -1336,16 +1338,16 @@
         {
           "id": "articles.unarchive.dry-run",
           "file": "test/resources/articles.test.ts",
-          "title": "dry-run issues no mutating request and returns simulated: true"
+          "title": "dry-run issues no mutating request and returns simulated: true (unarchive)"
         },
         {
           "id": "articles.unarchive.correlation",
           "file": "test/resources/articles.test.ts",
-          "title": "surfaces a correlation id on the success path and the error path"
+          "title": "surfaces a correlation id on the success path and the error path (unarchive)"
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -1364,10 +1366,10 @@
         "usage": "Bare values are read in the order: numeric id, slug, exact name (optionally narrowed by company_id). A miss on {id} throws NOT_FOUND; a complete scan with no match returns null.",
         "preferredWhen": "Use when the article identifier is a name or slug; articles.get is cheaper for a known id.",
         "related": [
-          "articles.get",
           "articles.findBySlug",
-          "articles.search",
-          "articles.getContext"
+          "articles.get",
+          "articles.getContext",
+          "articles.search"
         ]
       },
       "compact": "ArticleSummary",
@@ -1379,10 +1381,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -1427,7 +1430,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -1459,15 +1462,16 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
           "id": "articles.findBySlug.match",
           "file": "test/resources/articles.test.ts",
-          "title": "returns the exact match"
+          "title": "returns the exact match (slug)"
         },
         {
           "id": "articles.findBySlug.no-match",
@@ -1486,7 +1490,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -1519,8 +1523,9 @@
       "redaction": "none",
       "errors": [
         "BAD_REQUEST",
-        "RATE_LIMIT",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "RATE_LIMIT"
       ],
       "tests": [
         {
@@ -1540,7 +1545,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -1556,7 +1561,7 @@
       "dryRun": false,
       "metadata": {
         "purpose": "Fetch an article with its company and folder context.",
-        "usage": "Returns the article plus its company and folder (when set) in one call. Every part is a bounded fetch.",
+        "usage": "Returns the article plus its company and folder (when set) in one call. Each part is a single-record fetch, so there is no sub-list and no limit: use `{ expand: true }` for the full records.",
         "preferredWhen": "Preferred over three separate calls when an agent starts from an article.",
         "related": [
           "articles.get",
@@ -1569,8 +1574,9 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
-        "NOT_FOUND",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "NOT_FOUND"
       ],
       "tests": [
         {
@@ -1585,7 +1591,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": "DELETE /companies/{company_id}/assets/{id}",
@@ -1615,6 +1621,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -1633,11 +1640,11 @@
         {
           "id": "assets.delete.correlation",
           "file": "test/resources/assets.test.ts",
-          "title": "surfaces a correlation id on the success path and the error path"
+          "title": "surfaces a correlation id on the success path and the error path (delete)"
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /assets",
@@ -1675,6 +1682,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -1688,11 +1696,11 @@
         {
           "id": "assets.listAcrossCompanies.correlation",
           "file": "test/resources/assets.test.ts",
-          "title": "surfaces a correlation id on the success path and the error path"
+          "title": "surfaces a correlation id on the success path and the error path (listAcrossCompanies)"
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /companies/{company_id}/assets",
@@ -1722,6 +1730,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -1740,11 +1749,11 @@
         {
           "id": "assets.list.correlation",
           "file": "test/resources/assets.test.ts",
-          "title": "surfaces a correlation id on the success path and the error path"
+          "title": "surfaces a correlation id on the success path and the error path (list)"
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /companies/{company_id}/assets/{id}",
@@ -1763,8 +1772,8 @@
         "usage": "Read path for assets returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; assets.resolve is for a name, slug or domain.",
         "related": [
-          "assets.resolve",
-          "assets.list"
+          "assets.list",
+          "assets.resolve"
         ]
       },
       "compact": null,
@@ -1772,6 +1781,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -1790,11 +1800,11 @@
         {
           "id": "assets.get.correlation",
           "file": "test/resources/assets.test.ts",
-          "title": "surfaces a correlation id on the success path and the error path"
+          "title": "surfaces a correlation id on the success path and the error path (get)"
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "POST /companies/{company_id}/assets",
@@ -1821,6 +1831,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR"
       ],
       "tests": [
@@ -1832,16 +1843,16 @@
         {
           "id": "assets.create.dry-run",
           "file": "test/resources/assets.test.ts",
-          "title": "dry-run issues no mutating request and returns simulated: true"
+          "title": "dry-run issues no mutating request and returns simulated: true (create)"
         },
         {
           "id": "assets.create.correlation",
           "file": "test/resources/assets.test.ts",
-          "title": "surfaces a correlation id on the success path and the error path"
+          "title": "surfaces a correlation id on the success path and the error path (create)"
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "PUT /companies/{company_id}/assets/{id}",
@@ -1870,6 +1881,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -1884,21 +1896,21 @@
         {
           "id": "assets.update.dry-run",
           "file": "test/resources/assets.test.ts",
-          "title": "dry-run issues no PUT request and returns simulated: true"
+          "title": "dry-run issues no PUT request and returns simulated: true (update)"
         },
         {
           "id": "assets.update.unwraps-by-singleKey",
           "file": "test/resources/assets.test.ts",
-          "title": "unwraps the PUT response by singleKey"
+          "title": "unwraps the PUT response by singleKey (update)"
         },
         {
           "id": "assets.update.correlation",
           "file": "test/resources/assets.test.ts",
-          "title": "surfaces a correlation id on the success path and the error path"
+          "title": "surfaces a correlation id on the success path and the error path (update)"
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "PUT /companies/{company_id}/assets/{id}/archive",
@@ -1928,6 +1940,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -1942,16 +1955,16 @@
         {
           "id": "assets.archive.dry-run",
           "file": "test/resources/assets.test.ts",
-          "title": "dry-run issues no mutating request and returns simulated: true"
+          "title": "dry-run issues no mutating request and returns simulated: true (archive)"
         },
         {
           "id": "assets.archive.correlation",
           "file": "test/resources/assets.test.ts",
-          "title": "surfaces a correlation id on the success path and the error path"
+          "title": "surfaces a correlation id on the success path and the error path (archive)"
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "PUT /companies/{company_id}/assets/{id}/move_layout",
@@ -1980,6 +1993,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -1994,16 +2008,16 @@
         {
           "id": "assets.moveLayout.dry-run",
           "file": "test/resources/assets.test.ts",
-          "title": "dry-run issues no mutating request and returns simulated: true"
+          "title": "dry-run issues no mutating request and returns simulated: true (moveLayout)"
         },
         {
           "id": "assets.moveLayout.correlation",
           "file": "test/resources/assets.test.ts",
-          "title": "surfaces a correlation id on the success path and the error path"
+          "title": "surfaces a correlation id on the success path and the error path (moveLayout)"
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "PUT /companies/{company_id}/assets/{id}/unarchive",
@@ -2032,6 +2046,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -2046,16 +2061,16 @@
         {
           "id": "assets.unarchive.dry-run",
           "file": "test/resources/assets.test.ts",
-          "title": "dry-run issues no mutating request and returns simulated: true"
+          "title": "dry-run issues no mutating request and returns simulated: true (unarchive)"
         },
         {
           "id": "assets.unarchive.correlation",
           "file": "test/resources/assets.test.ts",
-          "title": "surfaces a correlation id on the success path and the error path"
+          "title": "surfaces a correlation id on the success path and the error path (unarchive)"
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -2074,10 +2089,10 @@
         "usage": "Accepts {companyId, id} for a direct company-scoped fetch, or an account-wide identifier (primary_serial, name, slug) that uses the vendor filters on GET /assets. Bare values are read in the order: numeric id, primary_serial, name, slug.",
         "preferredWhen": "Use when the identifier is a serial or a name; assets.get is cheaper for a known id.",
         "related": [
-          "assets.get",
           "assets.findBySerial",
-          "assets.search",
-          "assets.getContext"
+          "assets.get",
+          "assets.getContext",
+          "assets.search"
         ]
       },
       "compact": "AssetSummary",
@@ -2089,10 +2104,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -2137,7 +2153,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -2156,8 +2172,8 @@
         "usage": "Uses the vendor `primary_serial` filter with an exact compare, bounded by the resolution caps. Most useful for the account-wide path; a company-scoped asset can be fetched directly with assets.get.",
         "preferredWhen": "Preferred over assets.listAllAcrossCompanies for any serial lookup.",
         "related": [
-          "assets.resolve",
-          "assets.get"
+          "assets.get",
+          "assets.resolve"
         ]
       },
       "compact": "AssetSummary",
@@ -2169,15 +2185,16 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
           "id": "assets.findBySerial.match",
           "file": "test/resources/assets.test.ts",
-          "title": "returns the exact match"
+          "title": "returns the exact match (serial)"
         },
         {
           "id": "assets.findBySerial.no-match",
@@ -2201,7 +2218,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -2235,8 +2252,9 @@
       "redaction": "none",
       "errors": [
         "BAD_REQUEST",
-        "RATE_LIMIT",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "RATE_LIMIT"
       ],
       "tests": [
         {
@@ -2256,7 +2274,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -2275,8 +2293,8 @@
         "usage": "Returns the asset, its layout, its expirations and its relations in one call, each as a bounded list (limit defaults to 25, max 100).",
         "preferredWhen": "Preferred over four separate calls when an agent starts from an asset.",
         "related": [
-          "assets.get",
           "asset_layouts.get",
+          "assets.get",
           "expirations.list",
           "relations.list"
         ]
@@ -2286,8 +2304,9 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
-        "NOT_FOUND",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "NOT_FOUND"
       ],
       "tests": [
         {
@@ -2307,7 +2326,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": "GET /asset_layouts",
@@ -2331,8 +2350,7 @@
         "usage": "Read path for asset_layouts returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer asset_layouts.search or asset_layouts.resolve for a single lookup.",
         "related": [
-          "asset_layouts.resolve",
-          "asset_layouts.search"
+          "asset_layouts.resolve"
         ]
       },
       "compact": null,
@@ -2340,6 +2358,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -2363,7 +2382,7 @@
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /asset_layouts/{id}",
@@ -2382,8 +2401,8 @@
         "usage": "Read path for asset_layouts returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; asset_layouts.resolve is for a name, slug or domain.",
         "related": [
-          "asset_layouts.resolve",
-          "asset_layouts.list"
+          "asset_layouts.list",
+          "asset_layouts.resolve"
         ]
       },
       "compact": null,
@@ -2391,6 +2410,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -2413,7 +2433,7 @@
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "POST /asset_layouts",
@@ -2437,9 +2457,10 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -2460,15 +2481,10 @@
           "id": "asset_layouts.create.correlation",
           "file": "test/resources/asset_layouts.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "asset_layouts.create.stale",
-          "file": "test/resources/asset_layouts.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "PUT /asset_layouts/{id}",
@@ -2497,8 +2513,10 @@
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -2516,7 +2534,7 @@
         {
           "id": "asset_layouts.update.unwraps-by-singleKey",
           "file": "test/resources/asset_layouts.test.ts",
-          "title": "unwraps the PUT response by singleKey"
+          "title": "unwraps the PUT response by singleKey (update)"
         },
         {
           "id": "asset_layouts.update.correlation",
@@ -2526,11 +2544,11 @@
         {
           "id": "asset_layouts.update.stale",
           "file": "test/resources/asset_layouts.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
+          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT (update)"
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -2546,7 +2564,7 @@
       "dryRun": false,
       "metadata": {
         "purpose": "Resolve an asset layout from an id, name or slug.",
-        "usage": "Bare values are read in the order: numeric id, slug, exact name. Layouts are a small configuration table, so the caps are never expected to be reached.",
+        "usage": "Bare values are read in the order: numeric id, slug, exact name. Layouts are a small configuration table, so the caps are never expected to be reached. NOTE: GET /asset_layouts accepts `page` but no `page_size`, so the scan pages at the vendor's own page size and reports RESOLUTION_TRUNCATED if the page cap is reached before a match.",
         "preferredWhen": "Use when the identifier is a layout name or slug; asset_layouts.get is cheaper for a known id.",
         "related": [
           "asset_layouts.get",
@@ -2562,10 +2580,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -2600,7 +2619,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": "DELETE /asset_passwords/{id}",
@@ -2628,9 +2647,10 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "credentials",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -2649,16 +2669,11 @@
         {
           "id": "asset_passwords.delete.correlation",
           "file": "test/resources/asset_passwords.test.ts",
-          "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "asset_passwords.delete.stale",
-          "file": "test/resources/asset_passwords.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
+          "title": "surfaces a correlation id on the success path and the error path (delete)"
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /asset_passwords",
@@ -2695,6 +2710,7 @@
       "staleCheck": null,
       "redaction": "credentials",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED"
       ],
@@ -2712,7 +2728,7 @@
         {
           "id": "asset_passwords.list.correlation",
           "file": "test/resources/asset_passwords.test.ts",
-          "title": "surfaces a correlation id on the success path and the error path"
+          "title": "surfaces a correlation id on the success path and the error path (list)"
         },
         {
           "id": "asset_passwords.list.redaction",
@@ -2721,7 +2737,7 @@
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /asset_passwords/{id}",
@@ -2742,8 +2758,8 @@
         "usage": "Read path for asset_passwords returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; asset_passwords.resolve is for a name, slug or domain.",
         "related": [
-          "asset_passwords.resolve",
-          "asset_passwords.list"
+          "asset_passwords.list",
+          "asset_passwords.resolve"
         ]
       },
       "compact": null,
@@ -2751,6 +2767,7 @@
       "staleCheck": null,
       "redaction": "credentials",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -2769,7 +2786,7 @@
         {
           "id": "asset_passwords.get.correlation",
           "file": "test/resources/asset_passwords.test.ts",
-          "title": "surfaces a correlation id on the success path and the error path"
+          "title": "surfaces a correlation id on the success path and the error path (get)"
         },
         {
           "id": "asset_passwords.get.redaction",
@@ -2778,7 +2795,7 @@
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "POST /asset_passwords",
@@ -2804,9 +2821,10 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "credentials",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -2820,21 +2838,16 @@
         {
           "id": "asset_passwords.create.dry-run",
           "file": "test/resources/asset_passwords.test.ts",
-          "title": "dry-run issues no mutating request and returns simulated: true"
+          "title": "dry-run issues no mutating request and returns simulated: true (create)"
         },
         {
           "id": "asset_passwords.create.correlation",
           "file": "test/resources/asset_passwords.test.ts",
-          "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "asset_passwords.create.stale",
-          "file": "test/resources/asset_passwords.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
+          "title": "surfaces a correlation id on the success path and the error path (create)"
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "PUT /asset_passwords/{id}",
@@ -2864,8 +2877,10 @@
       "staleCheck": "updated_at",
       "redaction": "credentials",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -2883,21 +2898,21 @@
         {
           "id": "asset_passwords.update.unwraps-by-singleKey",
           "file": "test/resources/asset_passwords.test.ts",
-          "title": "unwraps the PUT response by singleKey"
+          "title": "unwraps the PUT response by singleKey (update)"
         },
         {
           "id": "asset_passwords.update.correlation",
           "file": "test/resources/asset_passwords.test.ts",
-          "title": "surfaces a correlation id on the success path and the error path"
+          "title": "surfaces a correlation id on the success path and the error path (update)"
         },
         {
           "id": "asset_passwords.update.stale",
           "file": "test/resources/asset_passwords.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
+          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT (update)"
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "PUT /asset_passwords/{id}/archive",
@@ -2928,6 +2943,7 @@
       "staleCheck": "unavailable",
       "redaction": "credentials",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -2942,16 +2958,16 @@
         {
           "id": "asset_passwords.archive.dry-run",
           "file": "test/resources/asset_passwords.test.ts",
-          "title": "dry-run issues no mutating request and returns simulated: true"
+          "title": "dry-run issues no mutating request and returns simulated: true (archive)"
         },
         {
           "id": "asset_passwords.archive.correlation",
           "file": "test/resources/asset_passwords.test.ts",
-          "title": "surfaces a correlation id on the success path and the error path"
+          "title": "surfaces a correlation id on the success path and the error path (archive)"
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "PUT /asset_passwords/{id}/unarchive",
@@ -2981,6 +2997,7 @@
       "staleCheck": "unavailable",
       "redaction": "credentials",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -2995,16 +3012,16 @@
         {
           "id": "asset_passwords.unarchive.dry-run",
           "file": "test/resources/asset_passwords.test.ts",
-          "title": "dry-run issues no mutating request and returns simulated: true"
+          "title": "dry-run issues no mutating request and returns simulated: true (unarchive)"
         },
         {
           "id": "asset_passwords.unarchive.correlation",
           "file": "test/resources/asset_passwords.test.ts",
-          "title": "surfaces a correlation id on the success path and the error path"
+          "title": "surfaces a correlation id on the success path and the error path (unarchive)"
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -3025,8 +3042,8 @@
         "usage": "Sensitive resource: the summary never contains the secret. Bare values are read in the order: numeric id, slug, exact name (optionally narrowed by company_id).",
         "preferredWhen": "Use when the identifier is a name or slug; asset_passwords.get returns the full record including the secret.",
         "related": [
-          "asset_passwords.get",
           "asset_passwords.findBySlug",
+          "asset_passwords.get",
           "asset_passwords.search"
         ]
       },
@@ -3039,10 +3056,11 @@
       "staleCheck": null,
       "redaction": "credentials",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -3082,7 +3100,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -3116,9 +3134,10 @@
       "staleCheck": null,
       "redaction": "credentials",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -3138,7 +3157,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -3173,8 +3192,9 @@
       "redaction": "credentials",
       "errors": [
         "BAD_REQUEST",
-        "RATE_LIMIT",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "RATE_LIMIT"
       ],
       "tests": [
         {
@@ -3194,7 +3214,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": "DELETE /websites/{id}",
@@ -3216,14 +3236,15 @@
         "usage": "Mutating path for websites; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer websites.archive when the record may be needed again.",
         "related": [
-          "websites.archive"
+          "websites.delete"
         ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -3243,15 +3264,10 @@
           "id": "websites.delete.correlation",
           "file": "test/resources/websites.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "websites.delete.stale",
-          "file": "test/resources/websites.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /websites",
@@ -3284,6 +3300,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -3306,7 +3323,7 @@
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /websites/{id}",
@@ -3325,8 +3342,8 @@
         "usage": "Read path for websites returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; websites.resolve is for a name, slug or domain.",
         "related": [
-          "websites.resolve",
-          "websites.list"
+          "websites.list",
+          "websites.resolve"
         ]
       },
       "compact": null,
@@ -3334,6 +3351,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -3356,7 +3374,7 @@
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "POST /websites",
@@ -3380,9 +3398,10 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -3403,15 +3422,10 @@
           "id": "websites.create.correlation",
           "file": "test/resources/websites.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "websites.create.stale",
-          "file": "test/resources/websites.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "PUT /websites/{id}",
@@ -3440,8 +3454,10 @@
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -3473,7 +3489,7 @@
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -3492,8 +3508,8 @@
         "usage": "Bare values are read in the order: numeric id, slug, exact name. Monitoring fields are reached through the full record, not the summary.",
         "preferredWhen": "Use when the identifier is a name or slug; websites.get is cheaper for a known id.",
         "related": [
-          "websites.get",
           "websites.findBySlug",
+          "websites.get",
           "websites.search"
         ]
       },
@@ -3506,10 +3522,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -3544,7 +3561,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -3576,9 +3593,10 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -3598,7 +3616,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -3631,8 +3649,9 @@
       "redaction": "none",
       "errors": [
         "BAD_REQUEST",
-        "RATE_LIMIT",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "RATE_LIMIT"
       ],
       "tests": [
         {
@@ -3647,7 +3666,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": "DELETE /folders/{id}",
@@ -3669,14 +3688,15 @@
         "usage": "Mutating path for folders; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer folders.archive when the record may be needed again.",
         "related": [
-          "folders.archive"
+          "folders.delete"
         ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -3696,15 +3716,10 @@
           "id": "folders.delete.correlation",
           "file": "test/resources/folders.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "folders.delete.stale",
-          "file": "test/resources/folders.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /folders",
@@ -3728,8 +3743,7 @@
         "usage": "Read path for folders returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer folders.search or folders.resolve for a single lookup.",
         "related": [
-          "folders.resolve",
-          "folders.search"
+          "folders.resolve"
         ]
       },
       "compact": null,
@@ -3737,6 +3751,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -3759,7 +3774,7 @@
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /folders/{id}",
@@ -3778,8 +3793,8 @@
         "usage": "Read path for folders returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; folders.resolve is for a name, slug or domain.",
         "related": [
-          "folders.resolve",
-          "folders.list"
+          "folders.list",
+          "folders.resolve"
         ]
       },
       "compact": null,
@@ -3787,6 +3802,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -3809,7 +3825,7 @@
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "POST /folders",
@@ -3833,9 +3849,10 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -3856,15 +3873,10 @@
           "id": "folders.create.correlation",
           "file": "test/resources/folders.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "folders.create.stale",
-          "file": "test/resources/folders.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "PUT /folders/{id}",
@@ -3893,8 +3905,10 @@
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -3926,7 +3940,7 @@
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -3958,10 +3972,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -4001,7 +4016,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": "DELETE /password_folders/{id}",
@@ -4024,14 +4039,15 @@
         "usage": "Mutating path for password_folders; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer password_folders.archive when the record may be needed again.",
         "related": [
-          "password_folders.archive"
+          "password_folders.delete"
         ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "credentials",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -4051,15 +4067,10 @@
           "id": "password_folders.delete.correlation",
           "file": "test/resources/password_folders.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "password_folders.delete.stale",
-          "file": "test/resources/password_folders.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /password_folders",
@@ -4093,6 +4104,7 @@
       "staleCheck": null,
       "redaction": "credentials",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -4120,7 +4132,7 @@
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /password_folders/{id}",
@@ -4141,8 +4153,8 @@
         "usage": "Read path for password_folders returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; password_folders.resolve is for a name, slug or domain.",
         "related": [
-          "password_folders.resolve",
-          "password_folders.list"
+          "password_folders.list",
+          "password_folders.resolve"
         ]
       },
       "compact": null,
@@ -4150,6 +4162,7 @@
       "staleCheck": null,
       "redaction": "credentials",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -4177,7 +4190,7 @@
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "POST /password_folders",
@@ -4203,9 +4216,10 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "credentials",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -4225,15 +4239,10 @@
           "id": "password_folders.create.correlation",
           "file": "test/resources/password_folders.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "password_folders.create.stale",
-          "file": "test/resources/password_folders.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "PUT /password_folders/{id}",
@@ -4263,8 +4272,10 @@
       "staleCheck": "updated_at",
       "redaction": "credentials",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -4296,7 +4307,7 @@
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -4330,10 +4341,11 @@
       "staleCheck": null,
       "redaction": "credentials",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -4368,7 +4380,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -4403,8 +4415,9 @@
       "redaction": "credentials",
       "errors": [
         "BAD_REQUEST",
-        "RATE_LIMIT",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "RATE_LIMIT"
       ],
       "tests": [
         {
@@ -4419,7 +4432,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": "GET /groups",
@@ -4451,6 +4464,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -4473,7 +4487,7 @@
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /groups/{id}",
@@ -4492,8 +4506,8 @@
         "usage": "Read path for groups returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; groups.resolve is for a name, slug or domain.",
         "related": [
-          "groups.resolve",
-          "groups.list"
+          "groups.list",
+          "groups.resolve"
         ]
       },
       "compact": null,
@@ -4501,6 +4515,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -4523,7 +4538,7 @@
         }
       ],
       "group": "A",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -4555,10 +4570,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -4593,7 +4609,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -4626,8 +4642,9 @@
       "redaction": "none",
       "errors": [
         "BAD_REQUEST",
-        "RATE_LIMIT",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "RATE_LIMIT"
       ],
       "tests": [
         {
@@ -4642,7 +4659,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": "DELETE /networks/{id}",
@@ -4664,14 +4681,15 @@
         "usage": "Mutating path for networks; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer networks.archive when the record may be needed again.",
         "related": [
-          "networks.archive"
+          "networks.delete"
         ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -4691,15 +4709,10 @@
           "id": "networks.delete.correlation",
           "file": "test/resources/networks.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "networks.delete.stale",
-          "file": "test/resources/networks.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /networks",
@@ -4728,8 +4741,7 @@
         "usage": "Read path for networks returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer networks.search or networks.resolve for a single lookup.",
         "related": [
-          "networks.resolve",
-          "networks.search"
+          "networks.resolve"
         ]
       },
       "compact": null,
@@ -4737,6 +4749,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED"
       ],
@@ -4758,7 +4771,7 @@
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /networks/{id}",
@@ -4777,8 +4790,8 @@
         "usage": "Read path for networks returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; networks.resolve is for a name, slug or domain.",
         "related": [
-          "networks.resolve",
-          "networks.list"
+          "networks.list",
+          "networks.resolve"
         ]
       },
       "compact": null,
@@ -4786,6 +4799,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -4808,7 +4822,7 @@
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "POST /networks",
@@ -4832,9 +4846,10 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -4854,15 +4869,10 @@
           "id": "networks.create.correlation",
           "file": "test/resources/networks.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "networks.create.stale",
-          "file": "test/resources/networks.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "PUT /networks/{id}",
@@ -4891,8 +4901,10 @@
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -4924,7 +4936,7 @@
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -4943,8 +4955,8 @@
         "usage": "Bare values are read in the order: numeric id, slug, exact name, address (CIDR). GET /networks is not paginated, so a lookup returns the whole collection in one request and the record cap cannot truncate it. Accepted identifier kinds are listed here because any other kind throws a validation error rather than guessing.",
         "preferredWhen": "Use when the identifier is a name, slug or CIDR; networks.get is cheaper for a known id.",
         "related": [
-          "networks.get",
-          "networks.findByAddress"
+          "networks.findByAddress",
+          "networks.get"
         ]
       },
       "compact": "NetworkSummary",
@@ -4956,10 +4968,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -4999,7 +5012,7 @@
         }
       ],
       "group": "B",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -5018,8 +5031,8 @@
         "usage": "Uses the vendor `address` filter with an exact compare. Bounded by the resolution caps; a non-paginated list is returned whole, so nothing is silently left unread.",
         "preferredWhen": "Preferred over networks.list for any CIDR lookup.",
         "related": [
-          "networks.resolve",
-          "ip_addresses.listAll"
+          "ip_addresses.list",
+          "networks.resolve"
         ]
       },
       "compact": "NetworkSummary",
@@ -5031,9 +5044,10 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -5053,7 +5067,7 @@
         }
       ],
       "group": "B",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": "DELETE /vlans/{id}",
@@ -5075,14 +5089,15 @@
         "usage": "Mutating path for vlans; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer vlans.archive when the record may be needed again.",
         "related": [
-          "vlans.archive"
+          "vlans.delete"
         ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -5102,15 +5117,10 @@
           "id": "vlans.delete.correlation",
           "file": "test/resources/vlans.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "vlans.delete.stale",
-          "file": "test/resources/vlans.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /vlans",
@@ -5137,8 +5147,7 @@
         "usage": "Read path for vlans returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer vlans.search or vlans.resolve for a single lookup.",
         "related": [
-          "vlans.resolve",
-          "vlans.search"
+          "vlans.resolve"
         ]
       },
       "compact": null,
@@ -5147,6 +5156,7 @@
       "redaction": "none",
       "errors": [
         "BAD_REQUEST",
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED"
       ],
@@ -5168,7 +5178,7 @@
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /vlans/{id}",
@@ -5187,8 +5197,8 @@
         "usage": "Read path for vlans returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; vlans.resolve is for a name, slug or domain.",
         "related": [
-          "vlans.resolve",
-          "vlans.list"
+          "vlans.list",
+          "vlans.resolve"
         ]
       },
       "compact": null,
@@ -5196,6 +5206,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -5218,7 +5229,7 @@
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "POST /vlans",
@@ -5242,9 +5253,10 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -5264,15 +5276,10 @@
           "id": "vlans.create.correlation",
           "file": "test/resources/vlans.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "vlans.create.stale",
-          "file": "test/resources/vlans.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "PUT /vlans/{id}",
@@ -5301,8 +5308,10 @@
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -5334,7 +5343,7 @@
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -5353,8 +5362,8 @@
         "usage": "Bare values are read in the order: numeric id, vlan_id, exact name. GET /vlans is not paginated (a single complete fetch).",
         "preferredWhen": "Use when the identifier is a name or VLAN number; vlans.get is cheaper for a known id.",
         "related": [
-          "vlans.get",
-          "vlans.findByVlanId"
+          "vlans.findByVlanId",
+          "vlans.get"
         ]
       },
       "compact": "VlanSummary",
@@ -5366,10 +5375,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -5404,7 +5414,7 @@
         }
       ],
       "group": "B",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -5435,9 +5445,10 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -5457,7 +5468,7 @@
         }
       ],
       "group": "B",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": "DELETE /vlan_zones/{id}",
@@ -5479,14 +5490,15 @@
         "usage": "Mutating path for vlan_zones; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer vlan_zones.archive when the record may be needed again.",
         "related": [
-          "vlan_zones.archive"
+          "vlan_zones.delete"
         ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -5506,15 +5518,10 @@
           "id": "vlan_zones.delete.correlation",
           "file": "test/resources/vlan_zones.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "vlan_zones.delete.stale",
-          "file": "test/resources/vlan_zones.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /vlan_zones",
@@ -5539,8 +5546,7 @@
         "usage": "Read path for vlan_zones returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer vlan_zones.search or vlan_zones.resolve for a single lookup.",
         "related": [
-          "vlan_zones.resolve",
-          "vlan_zones.search"
+          "vlan_zones.resolve"
         ]
       },
       "compact": null,
@@ -5549,6 +5555,7 @@
       "redaction": "none",
       "errors": [
         "BAD_REQUEST",
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED"
       ],
@@ -5570,7 +5577,7 @@
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /vlan_zones/{id}",
@@ -5589,8 +5596,8 @@
         "usage": "Read path for vlan_zones returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; vlan_zones.resolve is for a name, slug or domain.",
         "related": [
-          "vlan_zones.resolve",
-          "vlan_zones.list"
+          "vlan_zones.list",
+          "vlan_zones.resolve"
         ]
       },
       "compact": null,
@@ -5598,6 +5605,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -5620,7 +5628,7 @@
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "POST /vlan_zones",
@@ -5644,9 +5652,10 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -5666,15 +5675,10 @@
           "id": "vlan_zones.create.correlation",
           "file": "test/resources/vlan_zones.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "vlan_zones.create.stale",
-          "file": "test/resources/vlan_zones.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "PUT /vlan_zones/{id}",
@@ -5703,8 +5707,10 @@
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -5736,7 +5742,7 @@
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -5756,7 +5762,7 @@
         "preferredWhen": "Use when the identifier is a name or slug; vlan_zones.get is cheaper for a known id.",
         "related": [
           "vlan_zones.get",
-          "vlans.listAll"
+          "vlans.list"
         ]
       },
       "compact": "VlanZoneSummary",
@@ -5768,10 +5774,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -5806,7 +5813,7 @@
         }
       ],
       "group": "B",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": "DELETE /ip_addresses/{id}",
@@ -5828,7 +5835,7 @@
         "usage": "Mutating path for ip_addresses; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer ip_addresses.archive when the record may be needed again.",
         "related": [
-          "ip_addresses.archive"
+          "ip_addresses.delete"
         ]
       },
       "compact": null,
@@ -5836,6 +5843,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -5858,7 +5866,7 @@
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /ip_addresses",
@@ -5886,8 +5894,7 @@
         "usage": "Read path for ip_addresses returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer ip_addresses.search or ip_addresses.resolve for a single lookup.",
         "related": [
-          "ip_addresses.resolve",
-          "ip_addresses.search"
+          "ip_addresses.resolve"
         ]
       },
       "compact": null,
@@ -5895,6 +5902,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED"
       ],
@@ -5916,7 +5924,7 @@
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /ip_addresses/{id}",
@@ -5935,8 +5943,8 @@
         "usage": "Read path for ip_addresses returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; ip_addresses.resolve is for a name, slug or domain.",
         "related": [
-          "ip_addresses.resolve",
-          "ip_addresses.list"
+          "ip_addresses.list",
+          "ip_addresses.resolve"
         ]
       },
       "compact": null,
@@ -5944,6 +5952,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -5966,7 +5975,7 @@
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "POST /ip_addresses",
@@ -5993,6 +6002,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -6015,7 +6025,7 @@
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "PUT /ip_addresses/{id}",
@@ -6044,6 +6054,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -6072,7 +6083,7 @@
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -6091,8 +6102,8 @@
         "usage": "Bare values are read in the order: numeric id, exact address, exact FQDN. GET /ip_addresses is not paginated (a single complete fetch). NOTE: the vendor's IpAddress definition does not declare an id field even though /ip_addresses/{id} exists, so candidate labels fall back to the address.",
         "preferredWhen": "Use when the identifier is a CIDR address or an FQDN; ip_addresses.get is cheaper for a known id.",
         "related": [
-          "ip_addresses.get",
-          "ip_addresses.findByAddress"
+          "ip_addresses.findByAddress",
+          "ip_addresses.get"
         ]
       },
       "compact": "IpAddressSummary",
@@ -6104,10 +6115,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -6147,7 +6159,7 @@
         }
       ],
       "group": "B",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -6166,8 +6178,8 @@
         "usage": "Uses the vendor `address` filter with an exact compare. The most common agent lookup in this resource.",
         "preferredWhen": "Preferred over ip_addresses.listAll for any address lookup.",
         "related": [
-          "ip_addresses.resolve",
-          "ip_addresses.get"
+          "ip_addresses.get",
+          "ip_addresses.resolve"
         ]
       },
       "compact": "IpAddressSummary",
@@ -6179,9 +6191,10 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -6201,7 +6214,7 @@
         }
       ],
       "group": "B",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": "DELETE /rack_storages/{id}",
@@ -6223,14 +6236,15 @@
         "usage": "Mutating path for rack_storages; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer rack_storages.archive when the record may be needed again.",
         "related": [
-          "rack_storages.archive"
+          "rack_storages.delete"
         ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -6250,15 +6264,10 @@
           "id": "rack_storages.delete.correlation",
           "file": "test/resources/rack_storages.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "rack_storages.delete.stale",
-          "file": "test/resources/rack_storages.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /rack_storages",
@@ -6285,8 +6294,7 @@
         "usage": "Read path for rack_storages returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer rack_storages.search or rack_storages.resolve for a single lookup.",
         "related": [
-          "rack_storages.resolve",
-          "rack_storages.search"
+          "rack_storages.resolve"
         ]
       },
       "compact": null,
@@ -6294,6 +6302,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -6316,7 +6325,7 @@
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /rack_storages/{id}",
@@ -6335,8 +6344,8 @@
         "usage": "Read path for rack_storages returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; rack_storages.resolve is for a name, slug or domain.",
         "related": [
-          "rack_storages.resolve",
-          "rack_storages.list"
+          "rack_storages.list",
+          "rack_storages.resolve"
         ]
       },
       "compact": null,
@@ -6344,6 +6353,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -6366,7 +6376,7 @@
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "POST /rack_storages",
@@ -6390,9 +6400,10 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -6412,15 +6423,10 @@
           "id": "rack_storages.create.correlation",
           "file": "test/resources/rack_storages.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "rack_storages.create.stale",
-          "file": "test/resources/rack_storages.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "PUT /rack_storages/{id}",
@@ -6449,8 +6455,10 @@
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -6482,7 +6490,7 @@
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -6501,8 +6509,8 @@
         "usage": "An id is fetched directly. Hudu declares no name filter on /rack_storages, so a name lookup is a bounded client scan (500 records, one page - the endpoint is not paginated) with an exact compare. The accepted kinds are id and name; anything else throws a validation error.",
         "preferredWhen": "Use when the identifier is a rack name; rack_storages.get is cheaper for a known id.",
         "related": [
-          "rack_storages.get",
-          "rack_storage_items.listAll"
+          "rack_storage_items.list",
+          "rack_storages.get"
         ]
       },
       "compact": "RackStorageSummary",
@@ -6514,10 +6522,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -6557,7 +6566,7 @@
         }
       ],
       "group": "B",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": "DELETE /rack_storage_items/{id}",
@@ -6579,7 +6588,7 @@
         "usage": "Mutating path for rack_storage_items; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer rack_storage_items.archive when the record may be needed again.",
         "related": [
-          "rack_storage_items.archive"
+          "rack_storage_items.delete"
         ]
       },
       "compact": null,
@@ -6587,6 +6596,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -6609,7 +6619,7 @@
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /rack_storage_items",
@@ -6637,8 +6647,7 @@
         "usage": "Read path for rack_storage_items returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer rack_storage_items.search or rack_storage_items.resolve for a single lookup.",
         "related": [
-          "rack_storage_items.resolve",
-          "rack_storage_items.search"
+          "rack_storage_items.resolve"
         ]
       },
       "compact": null,
@@ -6646,6 +6655,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -6668,7 +6678,7 @@
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /rack_storage_items/{id}",
@@ -6687,8 +6697,8 @@
         "usage": "Read path for rack_storage_items returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; rack_storage_items.resolve is for a name, slug or domain.",
         "related": [
-          "rack_storage_items.resolve",
-          "rack_storage_items.list"
+          "rack_storage_items.list",
+          "rack_storage_items.resolve"
         ]
       },
       "compact": null,
@@ -6696,6 +6706,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -6718,7 +6729,7 @@
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "POST /rack_storage_items",
@@ -6745,6 +6756,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -6767,7 +6779,7 @@
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "PUT /rack_storage_items/{id}",
@@ -6796,6 +6808,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -6824,7 +6837,7 @@
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -6840,26 +6853,21 @@
       "dryRun": false,
       "metadata": {
         "purpose": "Resolve a rack storage item from an id.",
-        "usage": "Rack items have no name in the vendor API, so the only identifier kind is a numeric id (fetched directly through GET /rack_storage_items/{id}); any other kind throws a validation error naming the accepted kind. Use rack_storage_items.listAll with asset_id or rack_storage_role_id to enumerate positions.",
+        "usage": "Rack items have no name in the vendor API, so the only identifier kind is a numeric id (fetched directly through GET /rack_storage_items/{id}); any other kind throws a validation error naming the accepted kind. Use rack_storage_items.listAll with asset_id or rack_storage_role_id to enumerate positions. Only an id is accepted, so this helper never scans and never raises a resolution error.",
         "preferredWhen": "Use when the item id is known; rack_storage_items.listAll is the enumeration path.",
         "related": [
           "rack_storage_items.get",
-          "rack_storage_items.listAll"
+          "rack_storage_items.list"
         ]
       },
       "compact": "RackStorageItemSummary",
-      "resolution": {
-        "basis": "server-filter",
-        "maxScanRecords": 500,
-        "maxScanPages": 1
-      },
+      "resolution": null,
       "staleCheck": null,
       "redaction": "none",
       "errors": [
-        "NOT_FOUND",
-        "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "NOT_FOUND"
       ],
       "tests": [
         {
@@ -6889,7 +6897,7 @@
         }
       ],
       "group": "B",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": "DELETE /relations/{id}",
@@ -6911,7 +6919,7 @@
         "usage": "Mutating path for relations; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer relations.archive when the record may be needed again.",
         "related": [
-          "relations.archive"
+          "relations.delete"
         ]
       },
       "compact": null,
@@ -6919,6 +6927,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -6941,7 +6950,7 @@
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /relations",
@@ -6969,8 +6978,7 @@
         "usage": "Read path for relations returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer relations.search or relations.resolve for a single lookup.",
         "related": [
-          "relations.resolve",
-          "relations.search"
+          "relations.resolve"
         ]
       },
       "compact": null,
@@ -6978,6 +6986,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED"
       ],
@@ -6999,7 +7008,7 @@
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "POST /relations",
@@ -7017,15 +7026,14 @@
         "purpose": "Create a Relation.",
         "usage": "Mutating path for relations; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Only for a record that does not exist yet; prefer relations.update for an id you already have.",
-        "related": [
-          "relations.update"
-        ]
+        "related": []
       },
       "compact": null,
       "resolution": null,
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -7048,7 +7056,7 @@
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -7068,7 +7076,7 @@
         "preferredWhen": "Prefer relations.findByEndpoints whenever the endpoints are known; resolve is only for a known relation id.",
         "related": [
           "relations.findByEndpoints",
-          "relations.listAll"
+          "relations.list"
         ]
       },
       "compact": "RelationSummary",
@@ -7080,10 +7088,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -7108,7 +7117,7 @@
         }
       ],
       "group": "B",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -7127,8 +7136,8 @@
         "usage": "Uses the vendor fromable_*/toable_* filters, so no scan is needed. Returns every matching relation as RelationSummary (bounded by limit, default 25, max 100), because two records can legitimately be connected more than once.",
         "preferredWhen": "Preferred over relations.listAll for the 'what is this record related to' question.",
         "related": [
-          "relations.resolve",
-          "relations.listAll"
+          "relations.list",
+          "relations.resolve"
         ]
       },
       "compact": "RelationSummary",
@@ -7140,9 +7149,9 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
-        "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -7167,7 +7176,7 @@
         }
       ],
       "group": "B",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": "DELETE /flags/{id}",
@@ -7189,14 +7198,15 @@
         "usage": "Mutating path for flags; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer flags.archive when the record may be needed again.",
         "related": [
-          "flags.archive"
+          "flags.delete"
         ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -7217,15 +7227,10 @@
           "id": "flags.delete.correlation",
           "file": "test/resources/flags.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "flags.delete.stale",
-          "file": "test/resources/flags.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /flags",
@@ -7251,8 +7256,7 @@
         "usage": "Read path for flags returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer flags.search or flags.resolve for a single lookup.",
         "related": [
-          "flags.resolve",
-          "flags.search"
+          "flags.resolve"
         ]
       },
       "compact": null,
@@ -7260,6 +7264,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -7282,7 +7287,7 @@
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /flags/{id}",
@@ -7301,8 +7306,8 @@
         "usage": "Read path for flags returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; flags.resolve is for a name, slug or domain.",
         "related": [
-          "flags.resolve",
-          "flags.list"
+          "flags.list",
+          "flags.resolve"
         ]
       },
       "compact": null,
@@ -7310,6 +7315,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -7333,7 +7339,7 @@
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "POST /flags",
@@ -7357,9 +7363,10 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -7379,15 +7386,10 @@
           "id": "flags.create.correlation",
           "file": "test/resources/flags.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "flags.create.stale",
-          "file": "test/resources/flags.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "PUT /flags/{id}",
@@ -7416,8 +7418,10 @@
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -7449,7 +7453,7 @@
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -7465,26 +7469,21 @@
       "dryRun": false,
       "metadata": {
         "purpose": "Resolve a flag by its id.",
-        "usage": "Flags are identified by id (GET /flags/{id}); their text lives in `description`, and there is no name filter, so the accepted kind is id. Use flags.findByFlagable to list the flags on a record.",
+        "usage": "Flags are identified by id (GET /flags/{id}); their text lives in `description`, and there is no name filter, so the accepted kind is id. Use flags.findByFlagable to list the flags on a record. Only an id is accepted, so this helper never scans and never raises a resolution error.",
         "preferredWhen": "Prefer flags.findByFlagable when the flagged record is known; resolve is for a known flag id.",
         "related": [
-          "flags.get",
-          "flags.findByFlagable"
+          "flags.findByFlagable",
+          "flags.get"
         ]
       },
       "compact": "FlagSummary",
-      "resolution": {
-        "basis": "server-filter",
-        "maxScanRecords": 500,
-        "maxScanPages": 4
-      },
+      "resolution": null,
       "staleCheck": null,
       "redaction": "none",
       "errors": [
-        "NOT_FOUND",
-        "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "NOT_FOUND"
       ],
       "tests": [
         {
@@ -7509,7 +7508,7 @@
         }
       ],
       "group": "B",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -7528,8 +7527,8 @@
         "usage": "Uses the vendor flagable_type + flagable_id filters. Returns FlagSummary records (bounded by limit, default 25, max 100).",
         "preferredWhen": "Preferred over flags.listAll for the 'is this record flagged' question.",
         "related": [
-          "flags.resolve",
-          "flag_types.resolve"
+          "flag_types.resolve",
+          "flags.resolve"
         ]
       },
       "compact": "FlagSummary",
@@ -7541,9 +7540,9 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
-        "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -7563,7 +7562,7 @@
         }
       ],
       "group": "B",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": "DELETE /flag_types/{id}",
@@ -7585,14 +7584,15 @@
         "usage": "Mutating path for flag_types; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer flag_types.archive when the record may be needed again.",
         "related": [
-          "flag_types.archive"
+          "flag_types.delete"
         ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -7613,15 +7613,10 @@
           "id": "flag_types.delete.correlation",
           "file": "test/resources/flag_types.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "flag_types.delete.stale",
-          "file": "test/resources/flag_types.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /flag_types",
@@ -7646,8 +7641,7 @@
         "usage": "Read path for flag_types returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer flag_types.search or flag_types.resolve for a single lookup.",
         "related": [
-          "flag_types.resolve",
-          "flag_types.search"
+          "flag_types.resolve"
         ]
       },
       "compact": null,
@@ -7655,6 +7649,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -7677,7 +7672,7 @@
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /flag_types/{id}",
@@ -7696,8 +7691,8 @@
         "usage": "Read path for flag_types returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; flag_types.resolve is for a name, slug or domain.",
         "related": [
-          "flag_types.resolve",
-          "flag_types.list"
+          "flag_types.list",
+          "flag_types.resolve"
         ]
       },
       "compact": null,
@@ -7705,6 +7700,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -7728,7 +7724,7 @@
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "POST /flag_types",
@@ -7752,9 +7748,10 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -7774,15 +7771,10 @@
           "id": "flag_types.create.correlation",
           "file": "test/resources/flag_types.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "flag_types.create.stale",
-          "file": "test/resources/flag_types.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "PUT /flag_types/{id}",
@@ -7811,8 +7803,10 @@
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -7844,7 +7838,7 @@
         }
       ],
       "group": "B",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -7876,10 +7870,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -7914,7 +7909,7 @@
         }
       ],
       "group": "B",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": "DELETE /procedures/{id}",
@@ -7936,14 +7931,15 @@
         "usage": "Mutating path for procedures; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer procedures.archive when the record may be needed again.",
         "related": [
-          "procedures.archive"
+          "procedures.delete"
         ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -7964,15 +7960,10 @@
           "id": "procedures.delete.correlation",
           "file": "test/resources/procedures.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "procedures.delete.stale",
-          "file": "test/resources/procedures.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "C",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /procedures",
@@ -8004,8 +7995,7 @@
         "usage": "Read path for procedures returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer procedures.search or procedures.resolve for a single lookup.",
         "related": [
-          "procedures.resolve",
-          "procedures.search"
+          "procedures.resolve"
         ]
       },
       "compact": null,
@@ -8013,6 +8003,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -8035,7 +8026,7 @@
         }
       ],
       "group": "C",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /procedures/{id}",
@@ -8054,8 +8045,8 @@
         "usage": "Read path for procedures returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; procedures.resolve is for a name, slug or domain.",
         "related": [
-          "procedures.resolve",
-          "procedures.list"
+          "procedures.list",
+          "procedures.resolve"
         ]
       },
       "compact": null,
@@ -8063,6 +8054,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -8085,7 +8077,7 @@
         }
       ],
       "group": "C",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "POST /procedures",
@@ -8109,10 +8101,11 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "BAD_REQUEST",
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -8132,15 +8125,10 @@
           "id": "procedures.create.correlation",
           "file": "test/resources/procedures.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "procedures.create.stale",
-          "file": "test/resources/procedures.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "C",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "POST /procedures/{id}/create_from_template",
@@ -8172,6 +8160,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -8195,7 +8184,7 @@
         }
       ],
       "group": "C",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "POST /procedures/{id}/duplicate",
@@ -8218,8 +8207,8 @@
         "usage": "Mutating path for procedures; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Prefer duplicate over create when copying an existing process.",
         "related": [
-          "procedures.createFromTemplate",
-          "procedures.create"
+          "procedures.create",
+          "procedures.createFromTemplate"
         ]
       },
       "compact": null,
@@ -8227,6 +8216,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -8250,7 +8240,7 @@
         }
       ],
       "group": "C",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "POST /procedures/{id}/kickoff",
@@ -8272,8 +8262,8 @@
         "usage": "Mutating path for procedures; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Use to start a run; procedures.getWithTasks is the read path for a process and its tasks.",
         "related": [
-          "procedures.getWithTasks",
-          "procedures.duplicate"
+          "procedures.duplicate",
+          "procedures.getWithTasks"
         ]
       },
       "compact": null,
@@ -8281,6 +8271,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNPROCESSABLE_ENTITY"
@@ -8303,7 +8294,7 @@
         }
       ],
       "group": "C",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "PUT /procedures/{id}",
@@ -8332,8 +8323,10 @@
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -8365,7 +8358,7 @@
         }
       ],
       "group": "C",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -8384,9 +8377,9 @@
         "usage": "Bare values are read in the order: numeric id, slug, exact name (narrow with companyId). Accepted kinds are id, slug and name; anything else throws a validation error.",
         "preferredWhen": "Use when the identifier is a name or slug; procedures.get is cheaper for a known id.",
         "related": [
+          "procedure_tasks.list",
           "procedures.get",
-          "procedures.getWithTasks",
-          "procedure_tasks.listAll"
+          "procedures.getWithTasks"
         ]
       },
       "compact": "ProcedureSummary",
@@ -8398,10 +8391,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -8441,7 +8435,7 @@
         }
       ],
       "group": "C",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -8460,8 +8454,8 @@
         "usage": "Combines GET /procedures/{id} with GET /procedure_tasks?procedure_id={id} (a non-paginated endpoint) so an agent does not have to know that the tasks live in another resource. The task list is bounded by limit (default 25, max 100).",
         "preferredWhen": "Preferred over calling procedures.get and procedure_tasks.listAll yourself whenever the goal is to read or report on a process.",
         "related": [
+          "procedure_tasks.list",
           "procedures.get",
-          "procedure_tasks.listAll",
           "procedures.kickoff"
         ]
       },
@@ -8474,9 +8468,10 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -8496,7 +8491,7 @@
         }
       ],
       "group": "C",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": "DELETE /procedure_tasks/{id}",
@@ -8518,14 +8513,15 @@
         "usage": "Mutating path for procedure_tasks; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer procedure_tasks.archive when the record may be needed again.",
         "related": [
-          "procedure_tasks.archive"
+          "procedure_tasks.delete"
         ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNPROCESSABLE_ENTITY"
@@ -8545,15 +8541,10 @@
           "id": "procedure_tasks.delete.correlation",
           "file": "test/resources/procedure_tasks.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "procedure_tasks.delete.stale",
-          "file": "test/resources/procedure_tasks.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "C",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /procedure_tasks",
@@ -8576,8 +8567,7 @@
         "usage": "Read path for procedure_tasks returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer procedure_tasks.search or procedure_tasks.resolve for a single lookup.",
         "related": [
-          "procedure_tasks.resolve",
-          "procedure_tasks.search"
+          "procedure_tasks.resolve"
         ]
       },
       "compact": null,
@@ -8585,6 +8575,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED"
       ],
@@ -8606,7 +8597,7 @@
         }
       ],
       "group": "C",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /procedure_tasks/{id}",
@@ -8625,8 +8616,8 @@
         "usage": "Read path for procedure_tasks returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; procedure_tasks.resolve is for a name, slug or domain.",
         "related": [
-          "procedure_tasks.resolve",
-          "procedure_tasks.list"
+          "procedure_tasks.list",
+          "procedure_tasks.resolve"
         ]
       },
       "compact": null,
@@ -8634,6 +8625,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -8656,7 +8648,7 @@
         }
       ],
       "group": "C",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "POST /procedure_tasks",
@@ -8680,9 +8672,10 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNPROCESSABLE_ENTITY"
@@ -8702,15 +8695,10 @@
           "id": "procedure_tasks.create.correlation",
           "file": "test/resources/procedure_tasks.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "procedure_tasks.create.stale",
-          "file": "test/resources/procedure_tasks.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "C",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "PUT /procedure_tasks/{id}",
@@ -8739,8 +8727,10 @@
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNPROCESSABLE_ENTITY"
       ],
       "tests": [
@@ -8771,7 +8761,7 @@
         }
       ],
       "group": "C",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -8803,10 +8793,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -8836,7 +8827,7 @@
         }
       ],
       "group": "C",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": "GET /cards/jump",
@@ -8859,15 +8850,14 @@
         "purpose": "Jump to an asset with integration details without API key authentication, only requiring authentication at the time of jump.",
         "usage": "Read path for cards returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the caller has an integration identifier instead of a Hudu id; cards.get is for a known id.",
-        "related": [
-          "cards.get"
-        ]
+        "related": []
       },
       "compact": null,
       "resolution": null,
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -8885,7 +8875,7 @@
         }
       ],
       "group": "C",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /cards/lookup",
@@ -8908,8 +8898,8 @@
         "usage": "Read path for cards returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Prefer cards.resolve over calling lookup and jump yourself when the goal is one integration record.",
         "related": [
-          "cards.resolve",
-          "cards.jump"
+          "cards.jump",
+          "cards.resolve"
         ]
       },
       "compact": null,
@@ -8917,6 +8907,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -8934,7 +8925,7 @@
         }
       ],
       "group": "C",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -8953,8 +8944,8 @@
         "usage": "Uses GET /cards/lookup with the vendor's integration filters, so the caller does not have to know that two endpoints (lookup and jump) exist. Returns the matching integrator cards (bounded by limit); when the integration exposes a jump target, the resolved URL is included.",
         "preferredWhen": "Preferred over calling cards.lookup and cards.jump directly when the goal is 'give me the card for this integration record'.",
         "related": [
-          "cards.lookup",
-          "cards.jump"
+          "cards.jump",
+          "cards.lookup"
         ]
       },
       "compact": "IntegratorCardSummary",
@@ -8966,10 +8957,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -8994,7 +8986,7 @@
         }
       ],
       "group": "C",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": "DELETE /activity_logs",
@@ -9019,8 +9011,8 @@
         "usage": "Mutating path for activity_logs; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "There is no narrower bulk delete: this endpoint removes every log from a datetime on. Refuses to run without an explicit bound.",
         "related": [
-          "activity_logs.listAll",
-          "activity_logs.findByResource"
+          "activity_logs.findByResource",
+          "activity_logs.list"
         ]
       },
       "compact": null,
@@ -9029,6 +9021,7 @@
       "redaction": "none",
       "errors": [
         "BAD_REQUEST",
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "POLICY_DENIED",
         "UNAUTHORIZED"
@@ -9061,7 +9054,7 @@
         }
       ],
       "group": "C",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /activity_logs",
@@ -9087,8 +9080,7 @@
         "usage": "Read path for activity_logs returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer activity_logs.search or activity_logs.resolve for a single lookup.",
         "related": [
-          "activity_logs.resolve",
-          "activity_logs.search"
+          "activity_logs.resolve"
         ]
       },
       "compact": null,
@@ -9096,6 +9088,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -9118,7 +9111,7 @@
         }
       ],
       "group": "C",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -9138,7 +9131,7 @@
         "preferredWhen": "Use activity_logs.findByResource instead whenever the resource is known - it uses server filters and needs no scan.",
         "related": [
           "activity_logs.findByResource",
-          "activity_logs.listAll"
+          "activity_logs.list"
         ]
       },
       "compact": "ActivityLogSummary",
@@ -9150,10 +9143,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -9178,7 +9172,7 @@
         }
       ],
       "group": "C",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -9197,8 +9191,8 @@
         "usage": "Uses the vendor resource_id + resource_type filters, optionally bounded by startDate. No scan is needed. Returns ActivityLogSummary records (limit default 25, max 100).",
         "preferredWhen": "Preferred over activity_logs.listAll for 'what happened to this record'.",
         "related": [
-          "activity_logs.resolve",
-          "activity_logs.listAll"
+          "activity_logs.list",
+          "activity_logs.resolve"
         ]
       },
       "compact": "ActivityLogSummary",
@@ -9210,9 +9204,9 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
-        "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -9237,7 +9231,7 @@
         }
       ],
       "group": "C",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": "DELETE /expirations/{id}",
@@ -9259,14 +9253,15 @@
         "usage": "Mutating path for expirations; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer expirations.archive when the record may be needed again.",
         "related": [
-          "expirations.archive"
+          "expirations.delete"
         ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -9287,15 +9282,10 @@
           "id": "expirations.delete.correlation",
           "file": "test/resources/expirations.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "expirations.delete.stale",
-          "file": "test/resources/expirations.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "C",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /expirations",
@@ -9320,8 +9310,7 @@
         "usage": "Read path for expirations returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer expirations.search or expirations.resolve for a single lookup.",
         "related": [
-          "expirations.resolve",
-          "expirations.search"
+          "expirations.resolve"
         ]
       },
       "compact": null,
@@ -9329,6 +9318,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -9351,7 +9341,7 @@
         }
       ],
       "group": "C",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "PUT /expirations/{id}",
@@ -9371,17 +9361,17 @@
         "purpose": "Update an expiration.",
         "usage": "Mutating path for expirations; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Preferred over create or delete when the record exists and only some fields change.",
-        "related": [
-          "expirations.get"
-        ]
+        "related": []
       },
       "compact": null,
       "resolution": null,
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -9413,7 +9403,7 @@
         }
       ],
       "group": "C",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -9422,7 +9412,7 @@
       "vendorFilters": [],
       "search": null,
       "helper": "expirations.resolve",
-      "helperBasis": "server-filter",
+      "helperBasis": "client-scan",
       "helperRationale": "Removes the caller-side choice of lookup endpoint and the paging + exact-match loop; without it every agent re-implements name/domain matching and reads a truncated scan as 'does not exist'.",
       "effect": "read",
       "flags": [],
@@ -9432,23 +9422,23 @@
         "usage": "Bare values are read in the order: numeric id, {resourceType, resourceId} (server filter). An id is fetched directly; a resource lookup can legitimately match several expirations and then throws RESOLUTION_AMBIGUOUS with the candidate ids.",
         "preferredWhen": "Use when the identifier is a resource pair; expirations.get is cheaper for a known id.",
         "related": [
-          "expirations.get",
           "expirations.findByResource"
         ]
       },
       "compact": "ExpirationSummary",
       "resolution": {
-        "basis": "server-filter",
+        "basis": "client-scan",
         "maxScanRecords": 500,
         "maxScanPages": 4
       },
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -9483,7 +9473,7 @@
         }
       ],
       "group": "C",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -9502,8 +9492,8 @@
         "usage": "Uses the vendor resource_id + resource_type filters. No scan is needed. Returns ExpirationSummary records (limit default 25, max 100).",
         "preferredWhen": "Preferred over expirations.listAll for 'when does this record expire'.",
         "related": [
-          "expirations.resolve",
-          "expirations.listAll"
+          "expirations.list",
+          "expirations.resolve"
         ]
       },
       "compact": "ExpirationSummary",
@@ -9515,9 +9505,9 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
-        "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -9537,7 +9527,7 @@
         }
       ],
       "group": "C",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": "DELETE /matchers/{id}",
@@ -9559,7 +9549,7 @@
         "usage": "Mutating path for matchers; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer matchers.archive when the record may be needed again.",
         "related": [
-          "matchers.archive"
+          "matchers.delete"
         ]
       },
       "compact": null,
@@ -9567,6 +9557,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -9589,7 +9580,7 @@
         }
       ],
       "group": "C",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /matchers",
@@ -9614,8 +9605,7 @@
         "usage": "Read path for matchers returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer matchers.search or matchers.resolve for a single lookup.",
         "related": [
-          "matchers.resolve",
-          "matchers.search"
+          "matchers.resolve"
         ]
       },
       "compact": null,
@@ -9623,6 +9613,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -9645,7 +9636,7 @@
         }
       ],
       "group": "C",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "PUT /matchers/{id}",
@@ -9665,15 +9656,14 @@
         "purpose": "Update a Matcher.",
         "usage": "Mutating path for matchers; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Preferred over create or delete when the record exists and only some fields change.",
-        "related": [
-          "matchers.get"
-        ]
+        "related": []
       },
       "compact": null,
       "resolution": null,
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -9702,7 +9692,7 @@
         }
       ],
       "group": "C",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -9722,7 +9712,7 @@
         "preferredWhen": "Use when correlating a Hudu record with an external system; matchers.listAll is the enumeration path.",
         "related": [
           "matchers.findBySyncId",
-          "matchers.listAll"
+          "matchers.list"
         ]
       },
       "compact": null,
@@ -9734,10 +9724,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -9762,7 +9753,7 @@
         }
       ],
       "group": "C",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -9781,8 +9772,8 @@
         "usage": "Uses the vendor sync_id filter. Returns the matching Matcher records (limit default 25, max 100); integrator syncs commonly match more than one.",
         "preferredWhen": "Preferred over matchers.listAll for any sync-id lookup.",
         "related": [
-          "matchers.resolve",
-          "matchers.listAll"
+          "matchers.list",
+          "matchers.resolve"
         ]
       },
       "compact": null,
@@ -9794,9 +9785,10 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -9816,7 +9808,7 @@
         }
       ],
       "group": "C",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": "DELETE /magic_dash",
@@ -9838,7 +9830,7 @@
         "usage": "Mutating path for magic_dash; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer magic_dash.archive when the record may be needed again.",
         "related": [
-          "magic_dash.archive"
+          "magic_dash.delete"
         ]
       },
       "compact": null,
@@ -9846,6 +9838,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "POLICY_DENIED",
@@ -9880,7 +9873,7 @@
         }
       ],
       "group": "C",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "DELETE /magic_dash/{id}",
@@ -9910,6 +9903,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -9925,10 +9919,25 @@
           "id": "magic_dash.deleteById.correlation",
           "file": "test/resources/magic_dash.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
+        },
+        {
+          "id": "magic_dash.deleteById.dry-run",
+          "file": "test/resources/magic_dash.test.ts",
+          "title": "dry-run issues no DELETE request and returns simulated: true"
+        },
+        {
+          "id": "magic_dash.deleteById.bound",
+          "file": "test/resources/magic_dash.test.ts",
+          "title": "refuses to run unconfirmed and reports the impact bound"
+        },
+        {
+          "id": "magic_dash.deleteById.dry-run-bound",
+          "file": "test/resources/magic_dash.test.ts",
+          "title": "dry-run reports the affected count and issues no request"
         }
       ],
       "group": "C",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /magic_dash",
@@ -9950,8 +9959,7 @@
         "usage": "Read path for magic_dash returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer magic_dash.search or magic_dash.resolve for a single lookup.",
         "related": [
-          "magic_dash.resolve",
-          "magic_dash.search"
+          "magic_dash.resolve"
         ]
       },
       "compact": null,
@@ -9959,6 +9967,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -9981,7 +9990,7 @@
         }
       ],
       "group": "C",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "POST /magic_dash",
@@ -9999,15 +10008,14 @@
         "purpose": "Create or update a Magic Dash Item.",
         "usage": "Mutating path for magic_dash; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Only for a record that does not exist yet; prefer magic_dash.update for an id you already have.",
-        "related": [
-          "magic_dash.update"
-        ]
+        "related": []
       },
       "compact": null,
       "resolution": null,
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -10031,7 +10039,7 @@
         }
       ],
       "group": "C",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "PUT /magic_dash/update_positions",
@@ -10054,7 +10062,7 @@
         "preferredWhen": "Bulk fan-out across many positions in one call; declares its bound and refuses to run unconfirmed.",
         "related": [
           "magic_dash.create",
-          "magic_dash.listAll"
+          "magic_dash.list"
         ]
       },
       "compact": null,
@@ -10062,6 +10070,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "POLICY_DENIED",
         "UNAUTHORIZED",
@@ -10095,7 +10104,7 @@
         }
       ],
       "group": "C",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -10115,7 +10124,7 @@
         "preferredWhen": "Use when the identifier is a dashboard title; magic_dash.findByCompany is the company-scoped path.",
         "related": [
           "magic_dash.findByCompany",
-          "magic_dash.listAll"
+          "magic_dash.list"
         ]
       },
       "compact": "MagicDashSummary",
@@ -10127,10 +10136,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -10160,7 +10170,7 @@
         }
       ],
       "group": "C",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -10179,8 +10189,8 @@
         "usage": "Uses the vendor company_id filter. Returns MagicDashSummary records (limit default 25, max 100).",
         "preferredWhen": "Preferred over magic_dash.listAll for the per-company dashboard read.",
         "related": [
-          "magic_dash.resolve",
-          "magic_dash.listAll"
+          "magic_dash.list",
+          "magic_dash.resolve"
         ]
       },
       "compact": "MagicDashSummary",
@@ -10192,9 +10202,9 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
-        "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -10214,7 +10224,7 @@
         }
       ],
       "group": "C",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": "GET /api_info",
@@ -10233,8 +10243,7 @@
         "usage": "Read path for api_info returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; api_info.resolve is for a name, slug or domain.",
         "related": [
-          "api_info.resolve",
-          "api_info.list"
+          "api_info.resolve"
         ]
       },
       "compact": null,
@@ -10242,6 +10251,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -10265,7 +10275,7 @@
         }
       ],
       "group": "C",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -10281,25 +10291,20 @@
       "dryRun": false,
       "metadata": {
         "purpose": "Return the API information document.",
-        "usage": "DEGENERATE CASE, documented deliberately: GET /api_info is a singleton with no identifier (version + date). This resolve ignores any identifier, performs one bounded read and returns the singleton, so the SDK's floor ('resolve everywhere') holds without inventing a lookup the vendor cannot support. Unsupported identifier kinds are ignored rather than throwing.",
+        "usage": "DEGENERATE CASE, documented deliberately: GET /api_info is a singleton with no identifier (version + date). This resolve ignores any identifier, performs one bounded read and returns the singleton, so the SDK's floor ('resolve everywhere') holds without inventing a lookup the vendor cannot support. Unsupported identifier kinds are ignored rather than throwing. No scan is performed and no resolution error can be raised.",
         "preferredWhen": "Prefer api_info.get; this exists so every resource satisfies the same floor.",
         "related": [
           "api_info.get"
         ]
       },
       "compact": null,
-      "resolution": {
-        "basis": "server-filter",
-        "maxScanRecords": 500,
-        "maxScanPages": 4
-      },
+      "resolution": null,
       "staleCheck": null,
       "redaction": "none",
       "errors": [
-        "NOT_FOUND",
-        "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "NOT_FOUND"
       ],
       "tests": [
         {
@@ -10309,7 +10314,7 @@
         }
       ],
       "group": "C",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": "DELETE /uploads/{id}",
@@ -10331,7 +10336,7 @@
         "usage": "Mutating path for uploads; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer uploads.archive when the record may be needed again.",
         "related": [
-          "uploads.archive"
+          "uploads.delete"
         ]
       },
       "compact": null,
@@ -10339,6 +10344,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -10361,7 +10367,7 @@
         }
       ],
       "group": "D",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /uploads",
@@ -10380,8 +10386,7 @@
         "usage": "Read path for uploads returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer uploads.search or uploads.resolve for a single lookup.",
         "related": [
-          "uploads.resolve",
-          "uploads.search"
+          "uploads.resolve"
         ]
       },
       "compact": null,
@@ -10389,6 +10394,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED"
       ],
@@ -10410,7 +10416,7 @@
         }
       ],
       "group": "D",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /uploads/{id}",
@@ -10429,8 +10435,8 @@
         "usage": "Read path for uploads returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; uploads.resolve is for a name, slug or domain.",
         "related": [
-          "uploads.resolve",
-          "uploads.list"
+          "uploads.list",
+          "uploads.resolve"
         ]
       },
       "compact": null,
@@ -10438,6 +10444,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -10460,7 +10467,7 @@
         }
       ],
       "group": "D",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "POST /uploads",
@@ -10480,7 +10487,7 @@
         "preferredWhen": "The only create path for uploads; photos.create is the photo-specific upload.",
         "related": [
           "uploads.get",
-          "uploads.listAll"
+          "uploads.list"
         ]
       },
       "compact": null,
@@ -10489,6 +10496,7 @@
       "redaction": "none",
       "errors": [
         "BAD_REQUEST",
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -10511,7 +10519,7 @@
         }
       ],
       "group": "D",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -10527,26 +10535,21 @@
       "dryRun": false,
       "metadata": {
         "purpose": "Resolve an upload by its id.",
-        "usage": "Uploads carry no name filter and their only identity is the id, so the accepted kind is id (fetched directly through GET /uploads/{id}); any other kind throws a validation error rather than scanning. Use uploads.listAll to enumerate.",
+        "usage": "Uploads carry no name filter and their only identity is the id, so the accepted kind is id (fetched directly through GET /uploads/{id}); any other kind throws a validation error rather than scanning. Use uploads.listAll to enumerate. Only an id is accepted, so this helper never scans and never raises a resolution error.",
         "preferredWhen": "Use when the upload id is known; uploads.listAll is the enumeration path.",
         "related": [
           "uploads.get",
-          "uploads.listAll"
+          "uploads.list"
         ]
       },
       "compact": "UploadSummary",
-      "resolution": {
-        "basis": "server-filter",
-        "maxScanRecords": 500,
-        "maxScanPages": 4
-      },
+      "resolution": null,
       "staleCheck": null,
       "redaction": "none",
       "errors": [
-        "NOT_FOUND",
-        "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "NOT_FOUND"
       ],
       "tests": [
         {
@@ -10576,7 +10579,7 @@
         }
       ],
       "group": "D",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": "DELETE /photos/{id}",
@@ -10598,14 +10601,15 @@
         "usage": "Mutating path for photos; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer photos.archive when the record may be needed again.",
         "related": [
-          "photos.archive"
+          "photos.delete"
         ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -10626,15 +10630,10 @@
           "id": "photos.delete.correlation",
           "file": "test/resources/photos.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "photos.delete.stale",
-          "file": "test/resources/photos.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "D",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /photos",
@@ -10661,8 +10660,7 @@
         "usage": "Read path for photos returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer photos.search or photos.resolve for a single lookup.",
         "related": [
-          "photos.resolve",
-          "photos.search"
+          "photos.resolve"
         ]
       },
       "compact": null,
@@ -10670,6 +10668,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED"
       ],
@@ -10691,7 +10690,7 @@
         }
       ],
       "group": "D",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /photos/{id}",
@@ -10710,8 +10709,8 @@
         "usage": "Read path for photos returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; photos.resolve is for a name, slug or domain.",
         "related": [
-          "photos.resolve",
-          "photos.list"
+          "photos.list",
+          "photos.resolve"
         ]
       },
       "compact": null,
@@ -10719,6 +10718,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -10741,7 +10741,7 @@
         }
       ],
       "group": "D",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "POST /photos",
@@ -10765,9 +10765,10 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -10788,15 +10789,10 @@
           "id": "photos.create.correlation",
           "file": "test/resources/photos.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "photos.create.stale",
-          "file": "test/resources/photos.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "D",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "PUT /photos/{id}",
@@ -10825,8 +10821,10 @@
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -10858,7 +10856,7 @@
         }
       ],
       "group": "D",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -10877,8 +10875,8 @@
         "usage": "Bare values are read in the order: numeric id, {photoableType, photoableId}. An id is fetched directly; a photoable lookup uses the vendor filters and can legitimately match several photos, so it throws RESOLUTION_AMBIGUOUS with candidate ids (use photos.findByPhotoable for the list).",
         "preferredWhen": "Use when the identifier is a photoable pair; photos.get is cheaper for a known id.",
         "related": [
-          "photos.get",
-          "photos.findByPhotoable"
+          "photos.findByPhotoable",
+          "photos.get"
         ]
       },
       "compact": "PhotoSummary",
@@ -10890,10 +10888,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -10928,7 +10927,7 @@
         }
       ],
       "group": "D",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -10947,8 +10946,8 @@
         "usage": "Uses the vendor photoable_type + photoable_id filters (optionally narrowed by folder_id). No scan is needed. Returns PhotoSummary records (limit default 25, max 100).",
         "preferredWhen": "Preferred over photos.listAll for 'show me the photos of this record'.",
         "related": [
-          "photos.resolve",
-          "photos.listAll"
+          "photos.list",
+          "photos.resolve"
         ]
       },
       "compact": "PhotoSummary",
@@ -10960,9 +10959,9 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
-        "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -10982,7 +10981,7 @@
         }
       ],
       "group": "D",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": "GET /public_photos",
@@ -11001,8 +11000,7 @@
         "usage": "Read path for public_photos returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer public_photos.search or public_photos.resolve for a single lookup.",
         "related": [
-          "public_photos.resolve",
-          "public_photos.search"
+          "public_photos.resolve"
         ]
       },
       "compact": null,
@@ -11010,6 +11008,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -11032,7 +11031,7 @@
         }
       ],
       "group": "D",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /public_photos/{id}",
@@ -11051,8 +11050,8 @@
         "usage": "Read path for public_photos returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; public_photos.resolve is for a name, slug or domain.",
         "related": [
-          "public_photos.resolve",
-          "public_photos.list"
+          "public_photos.list",
+          "public_photos.resolve"
         ]
       },
       "compact": null,
@@ -11060,6 +11059,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -11082,7 +11082,7 @@
         }
       ],
       "group": "D",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "POST /public_photos",
@@ -11109,6 +11109,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -11132,7 +11133,7 @@
         }
       ],
       "group": "D",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "PUT /public_photos/{id}",
@@ -11161,6 +11162,7 @@
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -11189,7 +11191,7 @@
         }
       ],
       "group": "D",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -11209,7 +11211,7 @@
         "preferredWhen": "Use when correlating a public photo with the record it exposes; public_photos.listAll is the enumeration path.",
         "related": [
           "public_photos.get",
-          "public_photos.listAll"
+          "public_photos.list"
         ]
       },
       "compact": null,
@@ -11221,10 +11223,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -11249,7 +11252,7 @@
         }
       ],
       "group": "D",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": "GET /exports",
@@ -11268,8 +11271,7 @@
         "usage": "Read path for exports returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer exports.search or exports.resolve for a single lookup.",
         "related": [
-          "exports.resolve",
-          "exports.search"
+          "exports.resolve"
         ]
       },
       "compact": null,
@@ -11277,6 +11279,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED"
       ],
@@ -11298,7 +11301,7 @@
         }
       ],
       "group": "D",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /exports/{id}",
@@ -11317,8 +11320,8 @@
         "usage": "Read path for exports returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; exports.resolve is for a name, slug or domain.",
         "related": [
-          "exports.resolve",
-          "exports.list"
+          "exports.list",
+          "exports.resolve"
         ]
       },
       "compact": null,
@@ -11326,6 +11329,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -11348,7 +11352,7 @@
         }
       ],
       "group": "D",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "POST /exports",
@@ -11366,15 +11370,14 @@
         "purpose": "Initiate an export of a company.",
         "usage": "Mutating path for exports; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Only for a record that does not exist yet; prefer exports.update for an id you already have.",
-        "related": [
-          "exports.update"
-        ]
+        "related": []
       },
       "compact": null,
       "resolution": null,
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -11397,7 +11400,7 @@
         }
       ],
       "group": "D",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -11417,7 +11420,7 @@
         "preferredWhen": "Use when the identifier is a file name; exports.get is cheaper for a known id.",
         "related": [
           "exports.get",
-          "exports.listAll"
+          "exports.list"
         ]
       },
       "compact": null,
@@ -11429,10 +11432,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -11462,7 +11466,7 @@
         }
       ],
       "group": "D",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": "POST /s3_exports",
@@ -11480,15 +11484,14 @@
         "purpose": "Initiate a s3 export.",
         "usage": "Mutating path for s3_exports; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Only for a record that does not exist yet; prefer s3_exports.update for an id you already have.",
-        "related": [
-          "s3_exports.update"
-        ]
+        "related": []
       },
       "compact": null,
       "resolution": null,
       "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -11511,7 +11514,7 @@
         }
       ],
       "group": "D",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "DELETE /lists/{id}",
@@ -11533,14 +11536,15 @@
         "usage": "Mutating path for lists; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer lists.archive when the record may be needed again.",
         "related": [
-          "lists.archive"
+          "lists.delete"
         ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -11561,15 +11565,10 @@
           "id": "lists.delete.correlation",
           "file": "test/resources/lists.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "lists.delete.stale",
-          "file": "test/resources/lists.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "D",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /lists",
@@ -11591,8 +11590,7 @@
         "usage": "Read path for lists returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer lists.search or lists.resolve for a single lookup.",
         "related": [
-          "lists.resolve",
-          "lists.search"
+          "lists.resolve"
         ]
       },
       "compact": null,
@@ -11600,6 +11598,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -11622,7 +11621,7 @@
         }
       ],
       "group": "D",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /lists/{id}",
@@ -11641,8 +11640,8 @@
         "usage": "Read path for lists returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; lists.resolve is for a name, slug or domain.",
         "related": [
-          "lists.resolve",
-          "lists.list"
+          "lists.list",
+          "lists.resolve"
         ]
       },
       "compact": null,
@@ -11650,6 +11649,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -11673,7 +11673,7 @@
         }
       ],
       "group": "D",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "POST /lists",
@@ -11697,9 +11697,10 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -11719,15 +11720,10 @@
           "id": "lists.create.correlation",
           "file": "test/resources/lists.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "lists.create.stale",
-          "file": "test/resources/lists.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "D",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "PUT /lists/{id}",
@@ -11756,8 +11752,10 @@
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -11789,7 +11787,7 @@
         }
       ],
       "group": "D",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -11808,8 +11806,8 @@
         "usage": "Bare values are read in the order: numeric id, exact name. GET /lists is not paginated, so a name lookup fetches the collection once and nothing is left unread.",
         "preferredWhen": "Use when the identifier is a list name; lists.get is cheaper for a known id.",
         "related": [
-          "lists.get",
-          "lists.findByName"
+          "lists.findByName",
+          "lists.get"
         ]
       },
       "compact": null,
@@ -11821,10 +11819,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -11854,7 +11853,7 @@
         }
       ],
       "group": "D",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -11873,8 +11872,8 @@
         "usage": "Uses the vendor name filter with an exact compare. Lists are small configuration records, so the full record is returned (no compact shape).",
         "preferredWhen": "Preferred over lists.listAll for a name lookup.",
         "related": [
-          "lists.resolve",
-          "lists.get"
+          "lists.get",
+          "lists.resolve"
         ]
       },
       "compact": null,
@@ -11886,9 +11885,10 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -11903,7 +11903,7 @@
         }
       ],
       "group": "D",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": "DELETE /label_types/{id}",
@@ -11925,14 +11925,15 @@
         "usage": "Mutating path for label_types; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer label_types.archive when the record may be needed again.",
         "related": [
-          "label_types.archive"
+          "label_types.delete"
         ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -11953,15 +11954,10 @@
           "id": "label_types.delete.correlation",
           "file": "test/resources/label_types.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "label_types.delete.stale",
-          "file": "test/resources/label_types.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "D",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /label_types",
@@ -11986,8 +11982,7 @@
         "usage": "Read path for label_types returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer label_types.search or label_types.resolve for a single lookup.",
         "related": [
-          "label_types.resolve",
-          "label_types.search"
+          "label_types.resolve"
         ]
       },
       "compact": null,
@@ -11995,6 +11990,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -12017,7 +12013,7 @@
         }
       ],
       "group": "D",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /label_types/{id}",
@@ -12036,8 +12032,8 @@
         "usage": "Read path for label_types returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; label_types.resolve is for a name, slug or domain.",
         "related": [
-          "label_types.resolve",
-          "label_types.list"
+          "label_types.list",
+          "label_types.resolve"
         ]
       },
       "compact": null,
@@ -12045,6 +12041,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -12068,7 +12065,7 @@
         }
       ],
       "group": "D",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "POST /label_types",
@@ -12092,9 +12089,10 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -12114,15 +12112,10 @@
           "id": "label_types.create.correlation",
           "file": "test/resources/label_types.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "label_types.create.stale",
-          "file": "test/resources/label_types.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "D",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "PUT /label_types/{id}",
@@ -12151,8 +12144,10 @@
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -12184,7 +12179,7 @@
         }
       ],
       "group": "D",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -12216,10 +12211,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -12249,7 +12245,7 @@
         }
       ],
       "group": "D",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": "DELETE /labels/{id}",
@@ -12271,14 +12267,15 @@
         "usage": "Mutating path for labels; supports { dryRun: true }, which validates without issuing the write.",
         "preferredWhen": "Irreversible; prefer labels.archive when the record may be needed again.",
         "related": [
-          "labels.archive"
+          "labels.delete"
         ]
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -12299,15 +12296,10 @@
           "id": "labels.delete.correlation",
           "file": "test/resources/labels.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "labels.delete.stale",
-          "file": "test/resources/labels.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "D",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /labels",
@@ -12333,8 +12325,7 @@
         "usage": "Read path for labels returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Use when many records are needed; prefer labels.search or labels.resolve for a single lookup.",
         "related": [
-          "labels.resolve",
-          "labels.search"
+          "labels.resolve"
         ]
       },
       "compact": null,
@@ -12342,6 +12333,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -12364,7 +12356,7 @@
         }
       ],
       "group": "D",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /labels/{id}",
@@ -12383,8 +12375,8 @@
         "usage": "Read path for labels returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; labels.resolve is for a name, slug or domain.",
         "related": [
-          "labels.resolve",
-          "labels.list"
+          "labels.list",
+          "labels.resolve"
         ]
       },
       "compact": null,
@@ -12392,6 +12384,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED",
@@ -12415,7 +12408,7 @@
         }
       ],
       "group": "D",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "POST /labels",
@@ -12439,9 +12432,10 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
@@ -12461,15 +12455,10 @@
           "id": "labels.create.correlation",
           "file": "test/resources/labels.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "labels.create.stale",
-          "file": "test/resources/labels.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "D",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "PUT /labels/{id}",
@@ -12498,8 +12487,10 @@
       "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -12531,7 +12522,7 @@
         }
       ],
       "group": "D",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -12550,8 +12541,8 @@
         "usage": "Labels have no name field, so the accepted kinds are id (fetched directly) and a {labelableType, labelableId} pair (server filters; can match several labels and then throws RESOLUTION_AMBIGUOUS with candidate ids).",
         "preferredWhen": "Use labels.findByLabelable for the list form; resolve is for a single known label.",
         "related": [
-          "labels.get",
-          "labels.findByLabelable"
+          "labels.findByLabelable",
+          "labels.get"
         ]
       },
       "compact": "LabelSummary",
@@ -12563,10 +12554,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -12591,7 +12583,7 @@
         }
       ],
       "group": "D",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -12610,8 +12602,8 @@
         "usage": "Uses the vendor labelable_type + labelable_id filters (optionally narrowed by label_type_id). Returns LabelSummary records (limit default 25, max 100).",
         "preferredWhen": "Preferred over labels.listAll for 'what is this record tagged with'.",
         "related": [
-          "labels.resolve",
-          "label_types.resolve"
+          "label_types.resolve",
+          "labels.resolve"
         ]
       },
       "compact": "LabelSummary",
@@ -12623,9 +12615,9 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
-        "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -12645,7 +12637,7 @@
         }
       ],
       "group": "D",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": "GET /users",
@@ -12681,6 +12673,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -12703,7 +12696,7 @@
         }
       ],
       "group": "D",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": "GET /users/{id}",
@@ -12722,8 +12715,8 @@
         "usage": "Read path for users returning the full typed record; helpers return compact shapes.",
         "preferredWhen": "Preferred when the numeric id is already known; users.resolve is for a name, slug or domain.",
         "related": [
-          "users.resolve",
-          "users.list"
+          "users.list",
+          "users.resolve"
         ]
       },
       "compact": null,
@@ -12731,6 +12724,7 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
         "UNAUTHORIZED"
@@ -12753,7 +12747,7 @@
         }
       ],
       "group": "D",
-      "status": "implemented"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -12772,8 +12766,8 @@
         "usage": "Bare values are read in the order: numeric id, exact email, slug, exact name. Email is the natural key, so prefer users.findByEmail when the email is known.",
         "preferredWhen": "Use when the identifier is an email or a name; users.get is cheaper for a known id.",
         "related": [
-          "users.get",
           "users.findByEmail",
+          "users.get",
           "users.search"
         ]
       },
@@ -12786,10 +12780,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -12834,7 +12829,7 @@
         }
       ],
       "group": "D",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -12853,8 +12848,8 @@
         "usage": "Uses the vendor email filter with an exact compare.",
         "preferredWhen": "Preferred over users.listAll for any email lookup.",
         "related": [
-          "users.resolve",
-          "users.get"
+          "users.get",
+          "users.resolve"
         ]
       },
       "compact": "UserSummary",
@@ -12866,9 +12861,10 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -12888,7 +12884,7 @@
         }
       ],
       "group": "D",
-      "status": "planned"
+      "status": "tested"
     },
     {
       "endpoint": null,
@@ -12907,8 +12903,8 @@
         "usage": "Vendor search filter, optionally narrowed by archived or security_level. limit defaults to 25, max 100.",
         "preferredWhen": "Preferred over users.listAll for any text search.",
         "related": [
-          "users.listAll",
-          "users.findByEmail"
+          "users.findByEmail",
+          "users.list"
         ]
       },
       "compact": "UserSummary",
@@ -12921,8 +12917,9 @@
       "redaction": "none",
       "errors": [
         "BAD_REQUEST",
-        "RATE_LIMIT",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "RATE_LIMIT"
       ],
       "tests": [
         {
@@ -12937,18 +12934,147 @@
         }
       ],
       "group": "D",
+      "status": "tested"
+    },
+    {
+      "endpoint": null,
+      "primitive": null,
+      "specialOp": null,
+      "vendorFilters": [],
+      "search": null,
+      "helper": "operations.searchAcrossResources",
+      "helperBasis": "composite",
+      "helperRationale": "Removes an agent's own fan-out across the eight searchable resources and its reasoning about which of them expose text search, and bounds the fan-out at the client's concurrency (default 4) instead of an unbounded Promise.all.",
+      "effect": "read",
+      "flags": [],
+      "dryRun": false,
+      "metadata": {
+        "purpose": "Search several Hudu resources for one query in a single bounded call.",
+        "usage": "Runs each resource's own helper-tier `search` (vendor text search, never listAll) across the requested resources, at most `concurrency` requests in flight (default 4, from client config). limit defaults to 25 per resource and is capped at 100; an unknown resource name is rejected with CONFIG_ERROR. Results are compact summaries.",
+        "preferredWhen": "Preferred over calling several resources' search methods yourself whenever the caller does not know which resource holds the record.",
+        "related": [
+          "articles.search",
+          "asset_passwords.search",
+          "assets.search",
+          "companies.search",
+          "groups.search",
+          "password_folders.search",
+          "users.search",
+          "websites.search"
+        ]
+      },
+      "compact": "SearchHit",
+      "resolution": {
+        "basis": "server-filter",
+        "maxScanRecords": 500,
+        "maxScanPages": 4
+      },
+      "staleCheck": null,
+      "redaction": "none",
+      "errors": [
+        "BAD_REQUEST",
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "RATE_LIMIT"
+      ],
+      "tests": [
+        {
+          "id": "operations.searchAcrossResources.hits",
+          "file": "test/operations.test.ts",
+          "title": "returns hits from every searched resource"
+        },
+        {
+          "id": "operations.searchAcrossResources.filter",
+          "file": "test/operations.test.ts",
+          "title": "searches only the resources asked for"
+        },
+        {
+          "id": "operations.searchAcrossResources.limit",
+          "file": "test/operations.test.ts",
+          "title": "honours limit and never exceeds the maximum of 100"
+        },
+        {
+          "id": "operations.searchAcrossResources.concurrency",
+          "file": "test/operations.test.ts",
+          "title": "bounds the fan-out to the configured concurrency"
+        }
+      ],
+      "group": "operations",
+      "status": "planned"
+    },
+    {
+      "endpoint": null,
+      "primitive": null,
+      "specialOp": null,
+      "vendorFilters": [],
+      "search": null,
+      "helper": "operations.resolveAny",
+      "helperBasis": "composite",
+      "helperRationale": "Removes the agent's own sequence of guessing which resource a name, domain or serial belongs to, and turns several bounded per-resource resolution attempts into one call that returns honest candidates instead of a guess.",
+      "effect": "read",
+      "flags": [],
+      "dryRun": false,
+      "metadata": {
+        "purpose": "Resolve an identifier against several resources and return the candidates that match.",
+        "usage": "Calls each requested resource's `resolve` with the same identifier. Unlike a single-resource resolve it never throws RESOLUTION_AMBIGUOUS across the set: it returns every match as a candidate, so the caller can decide. A per-resource complete miss contributes nothing; a per-resource truncated scan is reported in `truncated` rather than silently dropped. Unsupported resource names are rejected with CONFIG_ERROR.",
+        "preferredWhen": "Preferred when the caller has an identifier but not the resource type; use the resource's own resolve when the type is known.",
+        "related": [
+          "articles.resolve",
+          "assets.resolve",
+          "companies.resolve",
+          "users.resolve",
+          "websites.resolve"
+        ]
+      },
+      "compact": "ResolutionCandidateHit",
+      "resolution": {
+        "basis": "server-filter",
+        "maxScanRecords": 500,
+        "maxScanPages": 4
+      },
+      "staleCheck": null,
+      "redaction": "none",
+      "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "NOT_FOUND",
+        "RESOLUTION_TRUNCATED"
+      ],
+      "tests": [
+        {
+          "id": "operations.resolveAny.match",
+          "file": "test/operations.test.ts",
+          "title": "resolves a domain to a company and a serial to an asset in one call"
+        },
+        {
+          "id": "operations.resolveAny.candidates",
+          "file": "test/operations.test.ts",
+          "title": "returns candidates instead of throwing when several resources match"
+        },
+        {
+          "id": "operations.resolveAny.empty",
+          "file": "test/operations.test.ts",
+          "title": "returns an empty result after a complete bounded search"
+        },
+        {
+          "id": "operations.resolveAny.unsupported",
+          "file": "test/operations.test.ts",
+          "title": "rejects an unsupported resource name with CONFIG_ERROR"
+        }
+      ],
+      "group": "operations",
       "status": "planned"
     }
   ],
   "_fixture": {
     "purpose": "Negative fixture for scripts/check-capabilities.mjs (policy \u00a74.2 \"the checker is itself gated\").",
     "derivedFrom": "capabilities.plan.json",
-    "sourcePlanHash": "b484cff113baf950e08119c33107f1bace80c6b1df26c117d03a65d6ae046e9b",
+    "sourcePlanHash": "defc10c664e04404210cfcdef4a2bc307e6c3e86b9e2b09c67a841a816977b53",
     "drifts": [
       {
         "jsonPath": "operations[2]",
         "rule": "missing-key",
-        "change": "removed the redaction key from companies.get"
+        "change": "removed the specialOp key from companies.get"
       },
       {
         "jsonPath": "operations[0]",

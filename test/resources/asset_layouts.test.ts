@@ -252,10 +252,13 @@ describe('AssetLayoutsResource helper edge branches and validation', () => {
     expect(miss.value).toBeNull();
   });
 
-  it('rejects an empty or unsupported identifier and an invalid limit or page', async () => {
+  it('rejects an empty or unsupported identifier and an unsupported limit or page', async () => {
     await expect(makeClient().assetLayouts.resolve('')).rejects.toMatchObject({ code: 'CONFIG_ERROR' });
     await expect(makeClient().assetLayouts.resolve(null as unknown as number)).rejects.toMatchObject({ code: 'CONFIG_ERROR' });
     await expect(makeClient().assetLayouts.resolve({ icon: 'x' } as unknown as { id?: number })).rejects.toMatchObject({ code: 'CONFIG_ERROR' });
+    // `limit` is not accepted at all: /asset_layouts has no page_size, so the resolver
+    // cannot bound its page size and refuses the knob instead of ignoring it.
+    await expect(makeClient().assetLayouts.resolve('server', { limit: 25 })).rejects.toMatchObject({ code: 'CONFIG_ERROR' });
     await expect(makeClient().assetLayouts.resolve('server', { limit: 0 })).rejects.toMatchObject({ code: 'CONFIG_ERROR' });
     await expect(makeClient().assetLayouts.resolve('server', { limit: 101 })).rejects.toMatchObject({ code: 'CONFIG_ERROR' });
     const invalidPage = (async () => {
@@ -273,10 +276,74 @@ describe('AssetLayoutsResource helper edge branches and validation', () => {
     expect(spy.calls).toHaveLength(2);
   });
 
-  it('matches a layout by exact name when the slug filter misses, honouring a valid limit', async () => {
+  it('matches a layout by exact name when the slug filter misses', async () => {
     const spy = stubFetch((url) => (url.includes('slug=') ? json({ asset_layouts: [] }) : json({ asset_layouts: [layout] })));
-    expect(asRecord(await makeClient().assetLayouts.resolve('Server', { limit: 25 })).id).toBe(1);
+    expect(asRecord(await makeClient().assetLayouts.resolve('Server')).id).toBe(1);
+    // The slug pass is empty (one read), the name pass finds it (one read).
     expect(spy.calls).toHaveLength(2);
   });
 
+});
+
+describe('AssetLayoutsResource paged resolution scan (QA finding 2)', () => {
+  afterEach(() => clearFetch());
+
+  /** 25 non-matching layouts — a full page at the SDK's assumed page size. */
+  const fullNonMatchingPage = () =>
+    Array.from({ length: 25 }, (_, i) => ({ ...layout, id: 500 + i, slug: `other-${i}`, name: `Other ${i}` }));
+
+  it('finds a layout that sits on page 2 instead of reporting it missing', async () => {
+    const spy = stubFetch((url) => {
+      if (url.includes('page=1')) return json({ asset_layouts: fullNonMatchingPage() });
+      return json({ asset_layouts: [{ ...layout, id: 7, slug: 'second-page', name: 'Second Page' }] });
+    });
+    const found = asRecord(await makeClient().assetLayouts.resolve('second-page'));
+    expect(found.id).toBe(7);
+    expect(spy.calls.map((call) => call.url)).toEqual([
+      expect.stringContaining('page=1'),
+      expect.stringContaining('page=2'),
+    ]);
+    // `page_size` is not in the api-docs parameter list, so the scan never sends it.
+    expect(spy.calls.every((call) => !call.url.includes('page_size'))).toBe(true);
+  });
+
+  it('throws RESOLUTION_TRUNCATED when the client cap stops the walk (never null)', async () => {
+    const spy = stubFetch(() => json({ asset_layouts: fullNonMatchingPage() }));
+    await expect(makeClient().assetLayouts.resolve('never-matches')).rejects.toMatchObject({
+      code: 'RESOLUTION_TRUNCATED',
+    });
+    // Bounded by the client caps: 4 pages of 25, never an unbounded walk.
+    expect(spy.calls).toHaveLength(4);
+  });
+
+  it('reports the found layout on page 2 with resolutionDetails', async () => {
+    stubFetch((url) => (url.includes('page=1')
+      ? json({ asset_layouts: fullNonMatchingPage() })
+      : json({ asset_layouts: [{ ...layout, id: 8, slug: 'paged' }] })));
+    const resolution = await makeClient().assetLayouts.resolve({ slug: 'paged' }, { resolutionDetails: true });
+    expect(asRecord(resolution.value).id).toBe(8);
+    expect(resolution.resolutionCost).toBe('server-filter');
+    expect(resolution.scanTruncated).toBe(false);
+    expect(resolution.scanned).toBe(26);
+  });
+});
+
+describe('AssetLayoutsResource page-size learning', () => {
+  afterEach(() => clearFetch());
+
+  it('keeps walking when the server returns a page longer than the SDK default', async () => {
+    // 40 > the assumed 25: the server's real page size is learned from the response,
+    // so the walk continues instead of stopping after one page.
+    const longPage = Array.from({ length: 40 }, (_, i) => ({ ...layout, id: 600 + i, slug: `other-${i}`, name: `Other ${i}` }));
+    const spy = stubFetch((url) => (url.includes('page=1')
+      ? json({ asset_layouts: longPage })
+      : json({ asset_layouts: [{ ...layout, id: 61, slug: 'tail', name: 'Tail' }] })));
+    const found = asRecord(await makeClient().assetLayouts.resolve({ slug: 'tail' }));
+    expect(found.id).toBe(61);
+    expect(spy.calls.map((call) => call.url)).toEqual([
+      expect.stringContaining('page=1'),
+      expect.stringContaining('page=2'),
+    ]);
+    expect(spy.calls.every((call) => !call.url.includes('page_size'))).toBe(true);
+  });
 });

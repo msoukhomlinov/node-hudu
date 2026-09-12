@@ -15,7 +15,8 @@ import * as api from '../src/index.js';
 const here = dirname(fileURLToPath(import.meta.url));
 const surface = JSON.parse(readFileSync(join(here, '__fixtures__', 'public-surface.json'), 'utf8')) as {
   capturedFrom: string;
-  rootExports: { values: string[]; types: string[]; starTypeBarrels: string[] };
+  rootExports: { values: string[]; types: string[]; starBarrels: string[] };
+  typeBarrelExports: string[];
   resources: Record<string, string[]>;
   errorCodes: Record<string, string>;
 };
@@ -26,11 +27,28 @@ describe(`public surface is additive only (baseline ${surface.capturedFrom})`, (
     expect(missing, `removed value exports: ${missing.join(', ')}`).toEqual([]);
   });
 
-  it('still re-exports the type barrels', () => {
+  it('still re-exports every star barrel', () => {
     const src = readFileSync(join(here, '..', 'src', 'index.ts'), 'utf8');
-    for (const barrel of surface.rootExports.starTypeBarrels) {
-      expect(src).toContain(barrel.replace('src/', './').replace('index.ts', 'index.js'));
+    for (const barrel of surface.rootExports.starBarrels) {
+      expect(src, `star barrel ${barrel} is no longer re-exported`).toMatch(
+        new RegExp(`export\\s+(?:type\\s+)?\\*\\s+from\\s+'\\./${barrel.replace('.', '\\.')}'`),
+      );
     }
+  });
+
+  it('still exports every name in the types barrel', () => {
+    const barrel = readFileSync(join(here, '..', 'src', 'types', 'index.ts'), 'utf8');
+    const missing = surface.typeBarrelExports.filter((name) => !barrel.includes(name));
+    expect(missing, `removed type-barrel exports: ${missing.join(', ')}`).toEqual([]);
+  });
+
+  it('the guard itself is not vacuous', () => {
+    // This test exists because an earlier version of the capture script silently produced an EMPTY
+    // star-barrel list, which made the whole types surface unguarded while the suite stayed green.
+    expect(surface.rootExports.starBarrels.length).toBeGreaterThanOrEqual(1);
+    expect(surface.typeBarrelExports.length).toBeGreaterThanOrEqual(30);
+    expect(surface.rootExports.values.length).toBeGreaterThanOrEqual(60);
+    expect(Object.keys(surface.resources).length).toBe(35);
   });
 
   it('keeps every type name in the type barrels', () => {

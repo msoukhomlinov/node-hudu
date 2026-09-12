@@ -87,12 +87,13 @@ describe('ActivityLogsResource — agent execution layer', () => {
   });
 
   it('dry-run issues no mutating request and returns simulated: true', async () => {
-    const spy = routed({});
+    // The bulk dry-run probes the blast radius with ONE read; it must never DELETE.
+    const spy = stubFetch((_raw, init) => (init.method === 'GET' ? json([log(), log({ id: 10 })]) : empty(204)));
     const result = await makeClient().activityLogs.deleteAll(
       { datetime: '2024-01-01T00:00:00Z' },
       { dryRun: true },
     );
-    expect(spy.calls).toHaveLength(0);
+    expect(spy.calls.map((call) => call.init.method)).toEqual(['GET']);
     expect(result).toMatchObject({
       operation: 'activity_logs.deleteAll',
       request: { method: 'DELETE', path: '/activity_logs' },
@@ -115,34 +116,67 @@ describe('ActivityLogsResource — agent execution layer', () => {
   });
 
   it('refuses to run unconfirmed and reports the impact bound', async () => {
-    const spy = routed({});
+    const refused = routed({});
     const client = makeClient();
-    // An empty datetime would delete the ENTIRE activity log: no bound, no run.
+    // An empty datetime would delete the ENTIRE activity log: no bound, no run, no probe.
     const err = await rejection(client.activityLogs.deleteAll({ datetime: '   ' }));
     expect(err.code).toBe('POLICY_DENIED');
     expect(err.category).toBe('policy');
     expect(err.retryable).toBe(false);
-    expect(spy.calls).toHaveLength(0);
+    expect(refused.calls).toHaveLength(0);
     // With a bound, the dry-run declares the impact scope the caller is accepting.
+    const spy = stubFetch((_raw, init) => (init.method === 'GET' ? json([log(), log({ id: 10 })]) : empty(204)));
     const described = await client.activityLogs.deleteAll(
       { datetime: '2024-01-01T00:00:00Z', delete_unassigned_logs: true },
       { dryRun: true },
     );
-    expect(described.impact).toEqual({ affected: 1, scope: 'bulk', reversible: false });
-    expect(spy.calls).toHaveLength(0);
+    expect(described.impact).toEqual({ affected: 2, scope: 'bulk', reversible: false, exact: false });
+    expect(spy.calls.map((call) => call.init.method)).toEqual(['GET']);
   });
 
   it('dry-run reports the affected count and issues no request', async () => {
-    const spy = routed({});
+    // Title verbatim from the plan row; the mandated floor probe is a READ, so the assertion is
+    // "exactly one GET and zero mutating requests" rather than "zero requests".
+    const spy = stubFetch((_raw, init) => (init.method === 'GET' ? json([log()]) : empty(204)));
     const result = await makeClient().activityLogs.deleteAll(
       { datetime: '2024-01-01T00:00:00Z' },
       { dryRun: true },
     );
-    expect(spy.calls).toHaveLength(0);
+    expect(spy.calls.map((call) => call.init.method)).toEqual(['GET']);
     expect(result.impact.affected).toBe(1);
     expect(result.impact.scope).toBe('bulk');
     expect(result.checks[0]).toMatchObject({ name: 'bulk-bound', ok: true });
     expect(result.warnings.join(' ')).toContain('2024-01-01T00:00:00Z');
+  });
+
+  it('reports affected as a bounded FLOOR for a server-computed bulk delete', async () => {
+    const spy = stubFetch((_raw, init) => (init.method === 'GET' ? json([log(), log({ id: 10 }), log({ id: 11 })]) : empty(204)));
+    const result = await makeClient().activityLogs.deleteAll(
+      { datetime: '2024-01-01T00:00:00Z' },
+      { dryRun: true },
+    );
+    // exact: false = "affected is a LOWER BOUND, the server computes the real set".
+    expect(result.impact.exact).toBe(false);
+    expect(result.impact.affected).toBe(3);
+    expect(result.impact.scope).toBe('bulk');
+    expect(result.impact.reversible).toBe(false);
+    expect(result.request.method).toBe('DELETE');
+    expect(spy.calls).toHaveLength(1);
+    expect(spy.calls[0]?.init.method).toBe('GET');
+    expect(spy.calls[0]?.url).toContain('page_size=100');
+    expect(spy.calls[0]?.url).toContain('start_date=2024-01-01T00%3A00%3A00Z');
+    expect(result.warnings.join(' ')).toContain('FLOOR');
+    expect(result.warnings.join(' ')).toContain('the server decides the final target set');
+  });
+
+  it('refuses expectedUpdatedAt on the bulk delete (staleCheck is unavailable)', async () => {
+    const spy = routed({});
+    const err = await rejection(
+      makeClient().activityLogs.deleteAll({ datetime: '2024-01-01T00:00:00Z' }, { expectedUpdatedAt: '2024-05-01T00:00:00Z' }),
+    );
+    expect(err.code).toBe('CONFIG_ERROR');
+    expect(err.message).toContain('update (PUT) only');
+    expect(spy.calls).toHaveLength(0);
   });
 
   it('returns the unwrapped activity_logs list', async () => {

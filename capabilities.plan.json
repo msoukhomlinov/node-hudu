@@ -2575,7 +2575,7 @@
       "dryRun": false,
       "metadata": {
         "purpose": "Resolve an asset layout from an id, name or slug.",
-        "usage": "Bare values are read in the order: numeric id, slug, exact name. Layouts are a small configuration table, so the caps are never expected to be reached. NOTE: GET /asset_layouts accepts `page` but no `page_size`, so the scan pages at the vendor's own page size and reports RESOLUTION_TRUNCATED if the page cap is reached before a match.",
+        "usage": "Bare values are read in the order: numeric id, slug, exact name. Layouts are a small configuration table, so the caps are never expected to be reached. NOTE: GET /asset_layouts accepts `page` but no `page_size`, so the scan pages at the vendor's own page size and reports RESOLUTION_TRUNCATED if the page cap is reached before a match. This helper accepts NO `limit`: GET /asset_layouts accepts `page` but no `page_size`, so the walk uses the vendor's own page size and reports RESOLUTION_TRUNCATED if the page cap is reached before a match.",
         "preferredWhen": "Use when the identifier is a layout name or slug; asset_layouts.get is cheaper for a known id.",
         "related": [
           "asset_layouts.get",

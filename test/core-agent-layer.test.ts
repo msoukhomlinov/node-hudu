@@ -291,6 +291,7 @@ describe('dry-run: no mutating request is ever issued', () => {
     const bare = r.buildResult<void>({ operation: 'companies.get', method: 'GET', path: '/companies/1' });
     expect(bare.diff).toBeUndefined();
     expect(bare.impact).toEqual({ affected: 1, scope: 'single', reversible: false });
+    expect('exact' in bare.impact).toBe(false);
     expect(bare.warnings).toEqual(['server-computed fields are not guaranteed by dry-run']);
   });
 
@@ -423,6 +424,91 @@ describe('correlation id and the optional audit hook', () => {
     const http = makeHttp();
     await expect(http.request({ method: 'GET', path: '/companies/1' })).resolves.toBeDefined();
     expect(spy.calls).toHaveLength(1);
+  });
+});
+
+describe('executed-result metadata: impact on the audit event (policy §7.3)', () => {
+  afterEach(() => clearFetch());
+
+  it('a successful update reports its impact in the executed result metadata', async () => {
+    stubFetch(() => json({ company: { id: 9, updated_at: 'T' } }));
+    const audit = auditSpy();
+    const r = new ProbeResource(makeHttp({ onAudit: audit.hook }));
+    await r.update(9, { name: 'x' });
+    expect(audit.events).toHaveLength(1);
+    const event = audit.events[0]!;
+    expect(event.effect).toBe('write');
+    expect(event.outcome).toBe('success');
+    expect(event.impact).toEqual({ affected: 1, scope: 'single', reversible: true });
+  });
+
+  it('a successful delete reports a non-reversible impact', async () => {
+    stubFetch(() => empty(204));
+    const audit = auditSpy();
+    const r = new ProbeResource(makeHttp({ onAudit: audit.hook }));
+    await r.remove(9);
+    const event = audit.events[0]!;
+    expect(event.effect).toBe('destructive');
+    expect(event.impact).toEqual({ affected: 1, scope: 'single', reversible: false });
+  });
+
+  it('a READ event carries no impact at all', async () => {
+    stubFetch(() => json({ company: { id: 9 } }));
+    const audit = auditSpy();
+    const r = new ProbeResource(makeHttp({ onAudit: audit.hook }));
+    await r.get(9);
+    const event = audit.events[0]!;
+    expect(event.effect).toBe('read');
+    expect(event.impact).toBeUndefined();
+    expect('impact' in event).toBe(false);
+  });
+
+  it('the error path still reports the best-effort impact', async () => {
+    stubFetch(() => json({ error: 'nope' }, 500));
+    const audit = auditSpy();
+    const r = new ProbeResource(makeHttp({ onAudit: audit.hook, maxRetries: 0 }));
+    await r.create({ name: 'x' }).catch(() => undefined);
+    const event = audit.events[0]!;
+    expect(event.outcome).toBe('error');
+    expect(event.httpStatus).toBe(500);
+    expect(event.impact).toEqual({ affected: 1, scope: 'single', reversible: true });
+  });
+
+  it('a caller-supplied bulk impact reaches the event, including exact: false', async () => {
+    stubFetch(() => empty(204));
+    const audit = auditSpy();
+    const http = makeHttp({ onAudit: audit.hook });
+    await http.request({
+      method: 'DELETE', path: '/activity_logs', operation: 'activity_logs.deleteAll',
+      impact: { affected: 50, scope: 'bulk', reversible: false, exact: false },
+    });
+    expect(audit.events[0]!.impact).toEqual({ affected: 50, scope: 'bulk', reversible: false, exact: false });
+    // A read never gains an impact even when one is passed.
+    await http.request({ method: 'GET', path: '/companies', impact: { affected: 5, scope: 'bulk', reversible: false } });
+    expect(audit.events[1]!.impact).toBeUndefined();
+  });
+
+  it('the dry-run impact and the executed impact are the same statement', async () => {
+    stubFetch(() => empty(204));
+    const audit = auditSpy();
+    const r = new ProbeResource(makeHttp({ onAudit: audit.hook }));
+    const dry = (await r.remove(9, { dryRun: true })) as DryRunResult<void>;
+    await r.remove(9);
+    expect(dry.impact).toEqual(audit.events[0]!.impact);
+  });
+
+  it('buildDryRunResult marks affected as a lower bound when exact: false is given', () => {
+    const r = new ProbeResource(makeHttp());
+    const bulk = r.buildResult<void>({
+      operation: 'activity_logs.deleteAll',
+      method: 'DELETE',
+      path: '/activity_logs',
+      affected: 50,
+      scope: 'bulk',
+      reversible: false,
+      exact: false,
+    });
+    expect(bulk.impact).toEqual({ affected: 50, scope: 'bulk', reversible: false, exact: false });
   });
 });
 

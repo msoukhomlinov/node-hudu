@@ -622,3 +622,33 @@ describe('ProceduresResource — bounded candidate collection', () => {
     expect(dryObject.target.ids).toEqual([5]);
   });
 });
+
+describe('ProceduresResource — expectedUpdatedAt is refused outside update', () => {
+  afterEach(() => clearFetch());
+
+  it('refuses the guard on create, delete and the special writers', async () => {
+    const spy = routed({});
+    const client = clientWith();
+    const guard = { expectedUpdatedAt: '2024-05-01T00:00:00Z' };
+    // Lazily: an eagerly built promise rejects before its turn and leaks as unhandled.
+    const cases: Array<() => Promise<unknown>> = [
+      () => client.procedures.create({ name: 'x' }, guard),
+      () => client.procedures.create({ name: 'x' }, { ...guard, dryRun: true }),
+      () => client.procedures.delete(5, guard),
+      () => client.procedures.duplicate(5, { company_id: 2 }, guard),
+      () => client.procedures.createFromTemplate(9, { company_id: 2 }, guard),
+      () => client.procedures.kickoff(5, { asset_id: 2 }, guard),
+    ];
+    // update keeps the guard (its staleCheck is updated_at): it is not in the refusal list.
+    const updating = routed({ [`${PATH}/5`]: () => json({ procedure }) });
+    await expect(client.procedures.update(5, { name: 'x' }, { expectedUpdatedAt: procedure.updated_at })).resolves.toEqual(procedure);
+    expect(updating.calls.map((call) => call.init.method)).toEqual(['GET', 'PUT']);
+    for (const call of cases) {
+      const err = await rejection(call());
+      expect(err.code).toBe('CONFIG_ERROR');
+      expect(err.message).toContain('update (PUT) only');
+    }
+    // No read, no write: the option is refused before anything is issued.
+    expect(spy.calls).toHaveLength(0);
+  });
+});

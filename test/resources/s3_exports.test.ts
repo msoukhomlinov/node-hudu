@@ -35,12 +35,24 @@ describe('S3ExportsResource — plan rows', () => {
     expect(result.wouldApply).toBe(true);
     expect(result.operation).toBe('s3_exports.create');
     expect(result.request).toEqual({ method: 'POST', path: '/s3_exports' });
-    expect(result.impact).toEqual({ affected: 1, scope: 'single', reversible: true });
     expect(result.checks).toEqual([{ name: 'payload-present', ok: true, detail: 'request body supplied' }]);
     // The plan's contract: the warning states there is no server-computed result to promise.
-    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings).toHaveLength(2);
     expect(result.warnings[0]).toContain('empty 200 body');
     expect(result.warnings[0]).toContain('no server-computed result to promise');
+    // An s3 export cannot be undone: /s3_exports has POST only.
+    expect(result.warnings[1]).toContain('no cancel or delete path');
+    expect(result.warnings[1]).toContain('cannot be undone');
+    expect(result.impact.reversible).toBe(false);
+  });
+
+  it('dry-run tells the truth about an irreversible async export (impact, warning, zero requests)', async () => {
+    const spy = stubFetch(() => empty(200));
+    const result = (await makeClient().s3Exports.create({ bucket: 'b' }, { dryRun: true })) as DryRunResult<void>;
+    expect(result.impact).toEqual({ affected: 1, scope: 'single', reversible: false });
+    expect(result.warnings.some((w) => w.includes('no cancel or delete path'))).toBe(true);
+    expect(result.simulated).toBe(true);
+    expect(spy.calls).toHaveLength(0);
   });
 
   it('surfaces a correlation id on the success path and the error path', async () => {

@@ -120,3 +120,73 @@ or `npm pack` (the coordinator's batch gate owns them).
 No git commit / push (coordinator commits). No MCP manifest change, no registry regeneration, no
 `capabilities.plan.json` edit, no `src/types/index.ts` edit (coordinator adds the new summary/identifier
 exports at the batch gate).
+
+
+---
+
+# QA fixes (round 2) — bulk dry-run floors + shared guard-refusal helper
+
+## FIX 1 — bulk-delete dry-run floors (HIGH)
+
+`activity_logs.deleteAll` and `magic_dash.delete` no longer report a literal `affected: 1`.
+Each dry-run now runs ONE bounded READ (`page_size = MAX_HELPER_LIMIT` = 100) with the same
+filter and reports the count as a floor:
+
+* `activity_logs.deleteAll`: `GET /activity_logs?start_date=<datetime>&page=1&page_size=100`
+  (`start_date` is the read-side filter the spec declares for this collection).
+* `magic_dash.delete`: `GET /magic_dash?title=<title>&page=1&page_size=100`, counting only the
+  items that match BOTH bounds (`title` AND `company_name`), which is what the delete targets.
+
+Both now set `impact.exact: false` (base supports `DryRunOperation.exact` → `impact.exact`) with a
+refreshed warning: `affected <n> is a FLOOR from ONE bounded page (page_size 100) …; the server
+decides the final target set`. `magic_dash.updatePositions` sets `exact: true` (the caller supplies
+the bound, so `positions.length` IS the affected set). The dry-run still issues NO mutating request
+(asserted: exactly one GET, zero DELETEs).
+
+Tests: 3 existing dry-run tests per operation updated (the "issues no request" titles are verbatim
+from the plan, so they assert "one GET and zero mutating requests" with a comment), plus ONE new test
+per operation asserting `exact === false`, the single pre-read GET, `page_size=100` in its URL, the
+`DELETE` in `request.method`, and the warning text.
+
+## FIX 2 — one shared guard-refusal helper (LOW)
+
+`refuseExpectedUpdatedAtOutsideUpdate(operation, opts)` added to `src/resources/agent-layer-helpers.ts`
+(75 lines → 88 lines total in that module) and adopted in the SIX group-C resource files that both
+import the module and own a non-update mutating path:
+
+`procedures.ts` (create, delete, duplicate, createFromTemplate, kickoff), `procedure_tasks.ts`
+(create, delete), `expirations.ts` (delete), `matchers.ts` (update — its plan row records
+`staleCheck: "unavailable"` and the vendor has no `GET /matchers/{id}` — and delete),
+`magic_dash.ts` (create, delete, deleteById, updatePositions), `activity_logs.ts` (deleteAll).
+
+Left untouched on purpose: `cards.ts` and `api_info.ts` (no mutating path accepting `MutationOptions`),
+and the 15 files owned by other implementers that still hold equivalent local copies (accepted debt):
+`exports.ts`, `s3_exports.ts`, `uploads.ts`, `photos.ts`, `public_photos.ts` (`refuseGuardOutsideUpdate`),
+`folders.ts`, `websites.ts`, `password_folders.ts` (`refuseGuardOnCreateOrDelete`), `labels.ts`,
+`lists.ts`, `flags.ts`, `flag_types.ts`, `relations.ts`, `rack_storage_items.ts`, `label_types.ts`
+(`refuseExpectedUpdatedAt`) — 16 definitions in total, not 17.
+
+**IMPORTANT premise mismatch:** no group-C file had a local guard-refusal definition to replace (the
+ruling had already removed the create/delete guards from my files), so FIX 2 became a behaviour change
+in my files: `expectedUpdatedAt` on a create/delete/special write was previously IGNORED and is now
+REFUSED with `HuduConfigError` (`code: CONFIG_ERROR`, message prefix
+`<operation>: expectedUpdatedAt compares an existing revision, so it applies to update (PUT) only`,
+plus `this path records staleCheck "unavailable" and would never run the guard.`). That matches the
+semantics the other 15 files implement. Update paths keep the guard unchanged
+(`procedures.update`, `procedure_tasks.update`, `expirations.update`).
+
+Message equivalence: the prefix is byte-identical to the `folders.ts`/`exports.ts` wording; the
+appended clause is new text. No test in my files asserted the old message, so no test needed a
+message update — the new tests assert `err.code === 'CONFIG_ERROR'` and
+`expect(err.message).toContain('update (PUT) only')`.
+
+## Commands after the fixes
+
+| command | exit | result |
+|---|---|---|
+| `npx tsc --noEmit` | **0** | 0 errors project-wide (the two other-agent errors from round 1 are gone) |
+| `npx eslint <8 src resource + 8 type + 8 test files>` | **0** | no findings |
+| `npx vitest run <my 8 test files>` | **0** | 8 files, **194 tests passed** (was 186: +8 from these fixes) |
+| `npx vitest run <same 8> --coverage --coverage.include='src/resources/<my 9>.ts'` | **0** | 98.74 stmts / 87.35 branch / 100 funcs / 99.19 lines |
+
+All 152 plan test titles are still present verbatim.

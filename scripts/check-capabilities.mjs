@@ -37,6 +37,17 @@
 //   dryrun-shape             a dry-run of an update must record the warnings/diff contract.
 //                            Proxy: an update-like row needs a dry-run test row (the dry-run
 //                            result shape is asserted there).
+//   example-expectedUpdatedAt a registry example shows `expectedUpdatedAt` on an operation that is
+//                            not an update row (assertNoExpectedUpdatedAt throws CONFIG_ERROR first)
+//   preferredWhen-required    a row of a resource that HAS a helper carries no preferredWhen
+//   compact-shape-unknown     a non-null `compact` names a shape that is not declared in src/types/**
+//   resolution-caps           a client-scan resolution without both caps, or a server-filter without them
+//   redaction-value           `redaction` is not exactly "none" or "credentials"
+//   errors-vocabulary         an `errors` entry is not SCREAMING_SNAKE, or a required code is missing
+//                            (CONFIG_ERROR on every row; STALE_OBJECT when staleCheck is updated_at)
+//   related-dangling          a `related` entry names an operation with no registry record
+//   pagination                a record's pagination is absent, or claims nonPaginated AND mode "page"
+//   inputSchema-name          an inputSchema field object omits the `name` key CapabilityField declares
 //   test-title               a row at "tested": no test with that exact title in the named file
 //   implemented-tests        a row at "implemented": empty tests array
 //   test-row                 a tests[] entry without id/file/title
@@ -206,6 +217,22 @@ if (!existsSync(REGISTRY_PATH)) {
   }
 }
 
+// ---------------------------------------------------------------- declared type names (src/types/**)
+const declaredTypes = new Set();
+(function scanTypes() {
+  // Cross-resource helper shapes belong to the operations module, so both trees are scanned.
+  for (const dir of [path.join(ROOT, 'src', 'types'), path.join(ROOT, 'src', 'operations')]) {
+    if (!existsSync(dir)) continue;
+    for (const name of readdirSync(dir)) {
+      if (!name.endsWith('.ts')) continue;
+      const text = readFileSync(path.join(dir, name), 'utf8');
+      const re = /export\s+(?:interface|type)\s+([A-Za-z0-9_]+)/g;
+      let m;
+      while ((m = re.exec(text))) declaredTypes.add(m[1]);
+    }
+  }
+})();
+
 // ---------------------------------------------------------------- test titles
 const testTitles = new Map(); // rel path -> Set<title>
 function walkTests(dir) {
@@ -247,6 +274,15 @@ const UPDATE_METHODS = new Set(['update', 'updatePositions', 'moveLayout', 'arch
 const scoped = operations
   .map((row, idx) => ({ row, jsonPath: `operations[${idx}]` }))
   .filter(({ row }) => !GROUP || row.group === GROUP);
+
+// Resources that carry at least one helper row: those resources have a choice to make, so every
+// one of their rows must say when it is preferred.
+const resourcesWithHelpers = new Set();
+for (const row of operations) {
+  if (typeof row.helper === 'string' && row.helper.length) resourcesWithHelpers.add(row.helper.split('.')[0]);
+}
+const registryNameSet = registry ? new Set(registry.keys()) : new Set();
+const RELATED_ALLOWED = registryNameSet.size ? registryNameSet : new Set(operations.map((r) => (typeof r.primitive === 'string' && r.primitive) || (typeof r.helper === 'string' && r.helper) || '').filter(Boolean));
 
 // ---------------------------------------------------------------- per-row rules
 const planNames = new Set();
@@ -311,6 +347,59 @@ for (const { row, jsonPath } of scoped) {
     warn('read-dryRun', jsonPath, `${name}: read operation with dryRun:true (policy: dryRun is false for reads)`);
   }
 
+  // classification: redaction vocabulary
+  if (row.redaction !== 'none' && row.redaction !== 'credentials') {
+    fail('redaction-value', `${jsonPath}.redaction`, `${name}: redaction must be exactly "none" or "credentials", got ${JSON.stringify(row.redaction)}`);
+  }
+
+  // resolution: a cap must exist, on both bases
+  if (row.resolution !== null && row.resolution !== undefined) {
+    const res = row.resolution;
+    const badCap = !Number.isFinite(Number(res.maxScanRecords)) || Number(res.maxScanRecords) <= 0
+      || !Number.isFinite(Number(res.maxScanPages)) || Number(res.maxScanPages) <= 0;
+    if (res.basis === 'client-scan' && badCap) {
+      fail('resolution-caps', `${jsonPath}.resolution`, `${name}: a client-scan needs maxScanRecords and maxScanPages > 0, got ${JSON.stringify(res)}`);
+    } else if (res.basis === 'server-filter' && badCap) {
+      fail('resolution-caps', `${jsonPath}.resolution`, `${name}: a server-filter resolution must still declare its caps (maxScanRecords, maxScanPages), got ${JSON.stringify(res)}`);
+    } else if (res.basis !== 'server-filter' && res.basis !== 'client-scan') {
+      // `composite` / `workflow` helpers compose calls instead of scanning; they carry no scan cap.
+      warn('resolution-basis', `${jsonPath}.resolution.basis`, `${name}: basis ${JSON.stringify(res.basis)} is neither "server-filter" nor "client-scan"`);
+    }
+  }
+
+  // errors: vocabulary + the codes the SDK raises for this shape
+  const rowErrors = Array.isArray(row.errors) ? row.errors : [];
+  rowErrors.forEach((code, i) => {
+    if (typeof code !== 'string' || !/^[A-Z][A-Z0-9_]*$/.test(code)) {
+      fail('errors-vocabulary', `${jsonPath}.errors[${i}]`, `${name}: "${code}" is not SCREAMING_SNAKE`);
+    }
+  });
+  if (!rowErrors.includes('CONFIG_ERROR')) {
+    fail('errors-vocabulary', `${jsonPath}.errors`, `${name}: CONFIG_ERROR is missing — the SDK raises it for every operation shape`);
+  }
+  if (row.staleCheck === 'updated_at' && !rowErrors.includes('STALE_OBJECT')) {
+    fail('errors-vocabulary', `${jsonPath}.errors`, `${name}: staleCheck is updated_at, so the row must list STALE_OBJECT`);
+  }
+
+  // compact: a shape name must be a declared exported type
+  if (row.compact !== null && row.compact !== undefined && !declaredTypes.has(String(row.compact))) {
+    fail('compact-shape-unknown', `${jsonPath}.compact`, `${name}: compact names "${row.compact}", which is not an exported interface/type in src/types/**`);
+  }
+
+  // related: no dangling edges
+  const related = row.metadata && Array.isArray(row.metadata.related) ? row.metadata.related : [];
+  related.forEach((target, i) => {
+    if (!RELATED_ALLOWED.has(target)) {
+      fail('related-dangling', `${jsonPath}.metadata.related[${i}]`, `${name}: related names "${target}", which has no registry record`);
+    }
+  });
+
+  // preferredWhen: a resource with a helper has a choice to make on every one of its rows
+  const owningResource = name.split('.')[0];
+  if (resourcesWithHelpers.has(owningResource) && !(row.metadata && row.metadata.preferredWhen)) {
+    fail('preferredWhen-required', `${jsonPath}.metadata.preferredWhen`, `${name}: ${owningResource} has helper operations, so this row must record when it is preferred`);
+  }
+
   // metadata completeness on the row
   const isHelper = typeof row.helper === 'string' && row.helper.length > 0;
   if (isHelper) {
@@ -353,6 +442,48 @@ if (registry) {
     if (!Array.isArray(rec.examples) || rec.examples.length === 0) fail('record-examples', `CAPABILITY_REGISTRY['${name}'].examples`, 'every operation has at least one realistic call');
     if (typeof rec.permissions !== 'string' || rec.permissions.length === 0) fail('record-permissions', `CAPABILITY_REGISTRY['${name}'].permissions`, 'permissions is missing or empty — the literal "unknown" is acceptable, an absent field is not');
     if (rec.purpose === null) warn('record-purpose', `CAPABILITY_REGISTRY['${name}'].purpose`, 'purpose is null (Architect judgement column unfilled)');
+    const planRow = operations.find((r) => r.primitive === name || r.helper === name);
+    // examples must show calls that work: only an update row may pass expectedUpdatedAt, because
+    // BaseResource.assertNoExpectedUpdatedAt throws CONFIG_ERROR before the dry-run branch.
+    if (Array.isArray(rec.examples)) {
+      rec.examples.forEach((ex, i) => {
+        if (typeof ex === 'string' && ex.includes('expectedUpdatedAt')) {
+          const isUpdate = name.endsWith('.update') && planRow && planRow.staleCheck === 'updated_at';
+          if (!isUpdate) {
+            fail('example-expectedUpdatedAt', `CAPABILITY_REGISTRY['${name}'].examples[${i}]`, `${name}: the example passes expectedUpdatedAt, which throws CONFIG_ERROR for every primitive except an update row with staleCheck updated_at`);
+          }
+        }
+      });
+    }
+    // pagination: present, and never "page" + nonPaginated at once
+    const pag = rec.pagination;
+    if (!pag || typeof pag !== 'object') {
+      fail('pagination', `CAPABILITY_REGISTRY['${name}'].pagination`, `${name}: a record must carry a pagination object`);
+    } else {
+      if (pag.nonPaginated === true && pag.mode === 'page') {
+        fail('pagination', `CAPABILITY_REGISTRY['${name}'].pagination`, `${name}: nonPaginated is true while mode is "page" — the two cannot both hold`);
+      }
+      if (name.endsWith('.list') && !pag.mode) {
+        fail('pagination', `CAPABILITY_REGISTRY['${name}'].pagination.mode`, `${name}: a list primitive must state its pagination mode`);
+      }
+      if (pag.nonPaginated === false && !(Number(pag.maxPageSize) > 0)) {
+        fail('pagination', `CAPABILITY_REGISTRY['${name}'].pagination.maxPageSize`, `${name}: a paginated operation needs a positive maxPageSize bound`);
+      }
+    }
+    // every inputSchema field object carries the `name` key CapabilityField declares
+    const walkFields = (node, jsonPath, key) => {
+      if (Array.isArray(node)) { node.forEach((v, i) => walkFields(v, `${jsonPath}[${i}]`, key)); return; }
+      if (!node || typeof node !== 'object') return;
+      if (key !== 'items' && key !== 'additionalProperties' && ('type' in node || 'typeName' in node || 'fields' in node)) {
+        if (typeof node.name !== 'string' || node.name.length === 0) {
+          fail('inputSchema-name', `${jsonPath}${key ? '.' + key : ''}`, `${name}: an inputSchema field object omits the \`name\` key (CapabilityField declares name: string)`);
+        }
+      }
+      for (const [k, v] of Object.entries(node)) if (v && typeof v === 'object') walkFields(v, jsonPath, k);
+    };
+    for (const [fieldName, fieldNode] of Object.entries(rec.inputSchema ?? {})) {
+      walkFields(fieldNode, `CAPABILITY_REGISTRY['${name}'].inputSchema`, fieldName);
+    }
     const outSchema = rec.outputSchema && typeof rec.outputSchema === 'object' ? rec.outputSchema : {};
     const claimsDrops = 'drops' in outSchema || 'dropsUnresolved' in outSchema;
     if (rec.compact) {

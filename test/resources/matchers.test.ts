@@ -304,3 +304,19 @@ describe('MatchersResource — bounded candidate collection', () => {
     expect(spy.calls).toHaveLength(2);
   });
 });
+
+describe('MatchersResource — expectedUpdatedAt is refused on every path', () => {
+  afterEach(() => clearFetch());
+
+  it('refuses the guard on update and delete (staleCheck is unavailable)', async () => {
+    const spy = routed({});
+    const client = makeClient();
+    const guard = { expectedUpdatedAt: '2024-05-01T00:00:00Z' };
+    for (const call of [client.matchers.update(55, { name: 'x' }, guard), client.matchers.delete(55, guard)]) {
+      const err = await rejection(call);
+      expect(err.code).toBe('CONFIG_ERROR');
+      expect(err.message).toContain('update (PUT) only');
+    }
+    expect(spy.calls).toHaveLength(0);
+  });
+});
