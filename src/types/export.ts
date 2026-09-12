@@ -33,3 +33,10 @@ export type ExportCreate = {
   [key: string]: unknown;
 };
 export type ExportUpdate = Partial<Export>;
+
+/**
+ * `Export` is already a compact record (9 scalar fields), so its summary shape is
+ * the record itself — nothing is dropped (plan: `compact: null`). The alias exists
+ * so `exports.resolve` reads consistently with the other resources' summaries.
+ */
+export type ExportSummary = Export;

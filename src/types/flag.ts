@@ -21,3 +21,21 @@ export type FlagCreate = Partial<Omit<Flag, 'id' | 'created_at' | 'updated_at' |
  * Input for updating a Flag.
  */
 export type FlagUpdate = Partial<Flag>;
+
+/**
+ * Compact projection of {@link Flag} (policy §9, helper tier).
+ *
+ * Keeps: id, flag_type_id, description, flagable_type, flagable_id, updated_at.
+ * Drops (recorded in the capability registry `outputSchema.drops`): created_at.
+ *
+ * `id` is kept because a flag has no name and is resolved by id; `updated_at` is kept because
+ * this resource declares `staleCheck: "updated_at"`.
+ */
+export interface FlagSummary {
+  id: number;
+  flag_type_id: number;
+  description: string;
+  flagable_type: string;
+  flagable_id: number;
+  updated_at: string;
+}

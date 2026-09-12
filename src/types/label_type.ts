@@ -23,3 +23,27 @@ export type LabelTypeCreate = Partial<Omit<LabelType, 'id' | 'created_at' | 'upd
  * Input for updating a LabelType.
  */
 export type LabelTypeUpdate = Partial<LabelType>;
+
+/**
+ * Object form of a `LabelTypesResource.resolve` identifier (agent-execution-layer §6).
+ * Accepted kinds: numeric `id`, vendor `slug`, exact `name`.
+ */
+export interface LabelTypeIdentifier {
+  id?: number;
+  slug?: string;
+  name?: string;
+}
+
+/**
+ * Compact projection of a LabelType (policy §9). Keeps `access_level` — it is
+ * permission-bearing and an agent needs it — and drops the allowed-company list plus
+ * the timestamps. Never drops `id`, the field a caller resolves by.
+ */
+export interface LabelTypeSummary {
+  id: number;
+  name: string;
+  slug: string;
+  color: string;
+  applicable_record_types: ("Article" | "Asset" | "AssetPassword" | "Website" | "IpAddress" | "Vlan" | "VlanZone" | "Procedure" | "Network" | "RackStorage")[];
+  access_level: "all_companies" | "specific_companies";
+}

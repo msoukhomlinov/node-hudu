@@ -26,3 +26,33 @@ export type RelationCreate = Partial<Omit<Relation, 'id' | 'created_at' | 'updat
  * Input for updating a Relation.
  */
 export type RelationUpdate = Partial<Relation>;
+
+/** One side of a relation, as the vendor's `fromable_*` / `toable_*` filters describe it. */
+export interface RelationEndpoint {
+  /** Vendor record type, e.g. "Asset", "Company", "Website". */
+  type: string;
+  id: number;
+}
+
+/**
+ * Compact projection of {@link Relation} (policy §9, helper tier).
+ *
+ * Keeps: id, name, description, is_inverse, fromable_id, fromable_type, fromable_url,
+ * toable_id, toable_type, toable_url.
+ * Drops (recorded in the capability registry `outputSchema.drops`): created_at, updated_at.
+ *
+ * `id` and `name` are kept; the endpoints are kept whole because they are what a caller reasons
+ * about to decide whether two records are related.
+ */
+export interface RelationSummary {
+  id: number;
+  name: string;
+  description: string | null;
+  is_inverse: boolean;
+  fromable_id: number;
+  fromable_type: string;
+  fromable_url: string;
+  toable_id: number;
+  toable_type: string;
+  toable_url: string;
+}

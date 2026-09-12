@@ -154,3 +154,47 @@ page-size fields null, `nonPaginated true`; `companies.list` → `mode "page"`, 
 `maxPageSize null`; `companies.get` → `mode "none"`.
 
 `test/registry.test.ts` and `capabilities.plan.json` were not touched. Nothing committed.
+
+## 8. Addendum — overload-union drops fix (coordinator follow-up, blocking)
+
+Bug: `outputSchema()` derived `drops` from `resolveProps(<last method declaration>.returnType)`.
+The mandated helper pattern is an overload set whose implementation signature must return the
+union of the public returns (TS 2394 forbids a narrower implementation return type), e.g.
+`Company | CompanySummary | null | Resolution<CompanySummary>`. `resolveProps()` cannot resolve a
+union text, so every compact-returning helper would have emitted
+`{ drops: [], dropsUnresolved: true }` and failed the `helper-compact-drops` rule.
+
+Fix in `scripts/generate-capabilities.mjs`:
+- new `splitTopLevel()` splits a union on TOP-LEVEL `|` only (nested `<>`, `()`, `[]`, `{}` respected,
+  so `Resolution<A | B>` stays one member);
+- new `pickFullMember()` skips `null`/`undefined`/`void` and `Resolution<...>` members, unwraps `X[]`
+  and `Array<X>`, resolves the remaining members, and picks the tightest STRICT superset of the
+  compact shape's fields (excluding a member that IS the compact type). If only one member resolves,
+  it is used; if only the compact shape itself resolves, `drops: []` is emitted — the honest answer
+  when the compact shape keeps every field. `dropsUnresolved: true` is now emitted only when no
+  member resolves, so the checker still fails loudly instead of the registry lying.
+- `drops` still equals (fields of the full record type) minus (fields of the compact shape).
+- build stdout now prints `records with dropsUnresolved=true: N`.
+
+Checker (`scripts/check-capabilities.mjs`), `helper-compact-drops` rule tightened:
+fails when a record declares a `compact` shape and either `dropsUnresolved === true` or `drops` is
+not an array; also fails when `compact` is null but the record carries a drops claim. An empty
+`drops` array is valid.
+
+Verification (plan untouched; synthetic plan in /tmp with all 65 helper rows set to implemented):
+- `node scripts/generate-capabilities.mjs --plan /tmp/helpers.plan.json --out /tmp/dropout --no-src`
+  EXIT 0 — `records emitted=223`, **`records with dropsUnresolved=true: 0`**, `coverage gaps: none`.
+- samples: `relations.resolve` → fullType `Relation`, drops 2; `companies.resolve`/`findByDomain` →
+  `Company`, drops 15; `users.findByEmail` → `User`, drops 12; `vlans.resolve` → `Vlan`, drops 4;
+  the three `getContext` helpers → `drops: []` (compact keeps every field of the `*ContextExpand` type);
+  the 7 helpers with `compact: null` carry no drops claim.
+- checker with that synthetic plan + a temp registry (`--registry /tmp/temp-registry.ts`):
+  `PASS — 0 failures; rows=223 scoped=223 registryRecords=223`.
+- negative control (one record in the temp registry forced to `dropsUnresolved: true`):
+  EXIT 1, `FAIL — 1 failure(s) in 1 distinct rule(s): helper-compact-drops=1`.
+
+Real-plan re-run (planHash 6808b158074e049e...): build EXIT 0 (`dropsUnresolved=true: 0` — the real
+plan still has all helper rows `planned`, so no helper record is emitted yet); checker EXIT 0
+`PASS — 0 failures; rows=223 scoped=223 registryRecords=158 warnings=66`; `npx tsc --noEmit` EXIT 0;
+`npx vitest run test/registry.test.ts` EXIT 0 `Tests 8 passed (8)`. `MCP_TOOL_MANIFEST.md`
+regenerated against the new registry.

@@ -21,3 +21,12 @@ export type ListCreate = Partial<Omit<List, 'id' | 'created_at' | 'updated_at' |
 import type { ListItem } from './list_item.js';
 
 export type ListUpdate = Partial<List>;
+
+/**
+ * Object form of a `ListsResource.resolve` identifier (agent-execution-layer policy §6).
+ * Lists have a `name` but no vendor slug, so the accepted kinds are `id` and `name`.
+ */
+export interface ListIdentifier {
+  id?: number;
+  name?: string;
+}

@@ -23,3 +23,27 @@ export type PasswordFolderCreate = Partial<Omit<PasswordFolder, 'id' | 'created_
  * Input for updating a Password_Folder.
  */
 export type PasswordFolderUpdate = Partial<PasswordFolder>;
+
+/**
+ * Compact projection used by the password-folder helper tier. Drops
+ * `allowed_groups`, `description` and `created_at`; never drops `id` or `name`.
+ */
+export interface PasswordFolderSummary {
+  id: number;
+  name: string;
+  company_id: number | null;
+  slug: string;
+  security: "all_users" | "specific";
+  updated_at: string;
+}
+
+/**
+ * Object identifier accepted by `password_folders.resolve`. `company_id` narrows
+ * the lookup with the vendor's own filter.
+ */
+export interface PasswordFolderIdentifier {
+  id?: number;
+  name?: string;
+  company_id?: number | null;
+  companyId?: number | null;
+}

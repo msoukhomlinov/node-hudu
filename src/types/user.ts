@@ -35,3 +35,31 @@ export type UserCreate = Partial<Omit<User, 'id' | 'created_at' | 'updated_at' |
  * Input for updating a User.
  */
 export type UserUpdate = Partial<User>;
+
+/**
+ * Object form of a `UsersResource.resolve` identifier (agent-execution-layer §6).
+ * Accepted kinds: numeric `id`, exact `email`, `slug`, exact `name`.
+ */
+export interface UserIdentifier {
+  id?: number;
+  email?: string;
+  slug?: string;
+  name?: string;
+}
+
+/**
+ * Compact projection of a User (policy §9). Keeps identity, access level, archive
+ * state and the portal-company link; drops the sign-in telemetry, the scoring fields
+ * and the contact/timezone details. Never drops `id` or `email`.
+ */
+export interface UserSummary {
+  id: number;
+  email: string;
+  first_name: string;
+  last_name: string;
+  slug: string;
+  security_level: string;
+  archived: boolean;
+  portal_member_company_id: number | null;
+  updated_at: string;
+}

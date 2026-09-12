@@ -3,7 +3,7 @@
     "source": "api-docs.json",
     "version": "2.45.1"
   },
-  "generatedAt": "2026-09-12T13:24:33.259Z",
+  "generatedAt": "2026-09-12T14:14:36.267Z",
   "resources": {
     "companies": {
       "helperCap": 4,
@@ -242,7 +242,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -264,11 +264,6 @@
           "id": "companies.delete.correlation",
           "file": "test/resources/companies.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "companies.delete.stale",
-          "file": "test/resources/companies.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
@@ -456,7 +451,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -479,11 +474,6 @@
           "id": "companies.create.correlation",
           "file": "test/resources/companies.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "companies.create.stale",
-          "file": "test/resources/companies.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
@@ -689,10 +679,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -737,7 +728,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": null,
@@ -769,9 +760,10 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -806,7 +798,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": null,
@@ -838,9 +830,10 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -865,7 +858,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": null,
@@ -898,8 +891,9 @@
       "redaction": "none",
       "errors": [
         "BAD_REQUEST",
-        "RATE_LIMIT",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "RATE_LIMIT"
       ],
       "tests": [
         {
@@ -919,7 +913,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": null,
@@ -949,8 +943,9 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
-        "NOT_FOUND",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "NOT_FOUND"
       ],
       "tests": [
         {
@@ -970,7 +965,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": "DELETE /articles/{id}",
@@ -997,7 +992,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -1019,11 +1014,6 @@
           "id": "articles.delete.correlation",
           "file": "test/resources/articles.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "articles.delete.stale",
-          "file": "test/resources/articles.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
@@ -1159,7 +1149,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -1181,11 +1171,6 @@
           "id": "articles.create.correlation",
           "file": "test/resources/articles.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "articles.create.stale",
-          "file": "test/resources/articles.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
@@ -1390,10 +1375,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -1438,7 +1424,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": null,
@@ -1470,9 +1456,10 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -1497,7 +1484,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": null,
@@ -1530,8 +1517,9 @@
       "redaction": "none",
       "errors": [
         "BAD_REQUEST",
-        "RATE_LIMIT",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "RATE_LIMIT"
       ],
       "tests": [
         {
@@ -1551,7 +1539,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": null,
@@ -1580,8 +1568,9 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
-        "NOT_FOUND",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "NOT_FOUND"
       ],
       "tests": [
         {
@@ -1596,7 +1585,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": "DELETE /companies/{company_id}/assets/{id}",
@@ -2100,10 +2089,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -2148,7 +2138,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": null,
@@ -2180,9 +2170,10 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -2212,7 +2203,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": null,
@@ -2246,8 +2237,9 @@
       "redaction": "none",
       "errors": [
         "BAD_REQUEST",
-        "RATE_LIMIT",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "RATE_LIMIT"
       ],
       "tests": [
         {
@@ -2267,7 +2259,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": null,
@@ -2297,8 +2289,9 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
-        "NOT_FOUND",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "NOT_FOUND"
       ],
       "tests": [
         {
@@ -2318,7 +2311,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": "GET /asset_layouts",
@@ -2448,7 +2441,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -2471,11 +2464,6 @@
           "id": "asset_layouts.create.correlation",
           "file": "test/resources/asset_layouts.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "asset_layouts.create.stale",
-          "file": "test/resources/asset_layouts.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
@@ -2573,10 +2561,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -2611,7 +2600,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": "DELETE /asset_passwords/{id}",
@@ -2639,7 +2628,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "credentials",
       "errors": [
         "NETWORK_ERROR",
@@ -2661,11 +2650,6 @@
           "id": "asset_passwords.delete.correlation",
           "file": "test/resources/asset_passwords.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "asset_passwords.delete.stale",
-          "file": "test/resources/asset_passwords.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
@@ -2815,7 +2799,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "credentials",
       "errors": [
         "NETWORK_ERROR",
@@ -2837,11 +2821,6 @@
           "id": "asset_passwords.create.correlation",
           "file": "test/resources/asset_passwords.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "asset_passwords.create.stale",
-          "file": "test/resources/asset_passwords.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
@@ -3050,10 +3029,11 @@
       "staleCheck": null,
       "redaction": "credentials",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -3093,7 +3073,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": null,
@@ -3127,9 +3107,10 @@
       "staleCheck": null,
       "redaction": "credentials",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -3149,7 +3130,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": null,
@@ -3184,8 +3165,9 @@
       "redaction": "credentials",
       "errors": [
         "BAD_REQUEST",
-        "RATE_LIMIT",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "RATE_LIMIT"
       ],
       "tests": [
         {
@@ -3205,7 +3187,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": "DELETE /websites/{id}",
@@ -3232,7 +3214,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -3254,11 +3236,6 @@
           "id": "websites.delete.correlation",
           "file": "test/resources/websites.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "websites.delete.stale",
-          "file": "test/resources/websites.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
@@ -3391,7 +3368,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -3414,11 +3391,6 @@
           "id": "websites.create.correlation",
           "file": "test/resources/websites.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "websites.create.stale",
-          "file": "test/resources/websites.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
@@ -3517,10 +3489,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -3555,7 +3528,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": null,
@@ -3587,9 +3560,10 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -3609,7 +3583,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": null,
@@ -3642,8 +3616,9 @@
       "redaction": "none",
       "errors": [
         "BAD_REQUEST",
-        "RATE_LIMIT",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "RATE_LIMIT"
       ],
       "tests": [
         {
@@ -3658,7 +3633,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": "DELETE /folders/{id}",
@@ -3685,7 +3660,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -3707,11 +3682,6 @@
           "id": "folders.delete.correlation",
           "file": "test/resources/folders.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "folders.delete.stale",
-          "file": "test/resources/folders.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
@@ -3844,7 +3814,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -3867,11 +3837,6 @@
           "id": "folders.create.correlation",
           "file": "test/resources/folders.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "folders.create.stale",
-          "file": "test/resources/folders.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
@@ -3969,10 +3934,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -4012,7 +3978,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": "DELETE /password_folders/{id}",
@@ -4040,7 +4006,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "credentials",
       "errors": [
         "NETWORK_ERROR",
@@ -4062,11 +4028,6 @@
           "id": "password_folders.delete.correlation",
           "file": "test/resources/password_folders.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "password_folders.delete.stale",
-          "file": "test/resources/password_folders.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
@@ -4214,7 +4175,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "credentials",
       "errors": [
         "NETWORK_ERROR",
@@ -4236,11 +4197,6 @@
           "id": "password_folders.create.correlation",
           "file": "test/resources/password_folders.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "password_folders.create.stale",
-          "file": "test/resources/password_folders.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "A",
@@ -4341,10 +4297,11 @@
       "staleCheck": null,
       "redaction": "credentials",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -4379,7 +4336,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": null,
@@ -4414,8 +4371,9 @@
       "redaction": "credentials",
       "errors": [
         "BAD_REQUEST",
-        "RATE_LIMIT",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "RATE_LIMIT"
       ],
       "tests": [
         {
@@ -4430,7 +4388,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": "GET /groups",
@@ -4566,10 +4524,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -4604,7 +4563,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": null,
@@ -4637,8 +4596,9 @@
       "redaction": "none",
       "errors": [
         "BAD_REQUEST",
-        "RATE_LIMIT",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "RATE_LIMIT"
       ],
       "tests": [
         {
@@ -4653,7 +4613,7 @@
         }
       ],
       "group": "A",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": "DELETE /networks/{id}",
@@ -4680,7 +4640,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -4702,11 +4662,6 @@
           "id": "networks.delete.correlation",
           "file": "test/resources/networks.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "networks.delete.stale",
-          "file": "test/resources/networks.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "B",
@@ -4843,7 +4798,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -4865,11 +4820,6 @@
           "id": "networks.create.correlation",
           "file": "test/resources/networks.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "networks.create.stale",
-          "file": "test/resources/networks.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "B",
@@ -4967,10 +4917,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -5010,7 +4961,7 @@
         }
       ],
       "group": "B",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": null,
@@ -5042,9 +4993,10 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -5064,7 +5016,7 @@
         }
       ],
       "group": "B",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": "DELETE /vlans/{id}",
@@ -5091,7 +5043,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -5113,11 +5065,6 @@
           "id": "vlans.delete.correlation",
           "file": "test/resources/vlans.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "vlans.delete.stale",
-          "file": "test/resources/vlans.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "B",
@@ -5253,7 +5200,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -5275,11 +5222,6 @@
           "id": "vlans.create.correlation",
           "file": "test/resources/vlans.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "vlans.create.stale",
-          "file": "test/resources/vlans.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "B",
@@ -5377,10 +5319,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -5415,7 +5358,7 @@
         }
       ],
       "group": "B",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": null,
@@ -5446,9 +5389,10 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -5468,7 +5412,7 @@
         }
       ],
       "group": "B",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": "DELETE /vlan_zones/{id}",
@@ -5495,7 +5439,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -5517,11 +5461,6 @@
           "id": "vlan_zones.delete.correlation",
           "file": "test/resources/vlan_zones.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "vlan_zones.delete.stale",
-          "file": "test/resources/vlan_zones.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "B",
@@ -5655,7 +5594,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -5677,11 +5616,6 @@
           "id": "vlan_zones.create.correlation",
           "file": "test/resources/vlan_zones.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "vlan_zones.create.stale",
-          "file": "test/resources/vlan_zones.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "B",
@@ -5779,10 +5713,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -5817,7 +5752,7 @@
         }
       ],
       "group": "B",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": "DELETE /ip_addresses/{id}",
@@ -6115,10 +6050,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -6158,7 +6094,7 @@
         }
       ],
       "group": "B",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": null,
@@ -6190,9 +6126,10 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -6212,7 +6149,7 @@
         }
       ],
       "group": "B",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": "DELETE /rack_storages/{id}",
@@ -6239,7 +6176,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -6261,11 +6198,6 @@
           "id": "rack_storages.delete.correlation",
           "file": "test/resources/rack_storages.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "rack_storages.delete.stale",
-          "file": "test/resources/rack_storages.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "B",
@@ -6401,7 +6333,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -6423,11 +6355,6 @@
           "id": "rack_storages.create.correlation",
           "file": "test/resources/rack_storages.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "rack_storages.create.stale",
-          "file": "test/resources/rack_storages.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "B",
@@ -6525,10 +6452,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -6568,7 +6496,7 @@
         }
       ],
       "group": "B",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": "DELETE /rack_storage_items/{id}",
@@ -6867,10 +6795,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -6900,7 +6829,7 @@
         }
       ],
       "group": "B",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": "DELETE /relations/{id}",
@@ -7091,10 +7020,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -7119,7 +7049,7 @@
         }
       ],
       "group": "B",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": null,
@@ -7151,9 +7081,9 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
-        "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -7178,7 +7108,7 @@
         }
       ],
       "group": "B",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": "DELETE /flags/{id}",
@@ -7205,7 +7135,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -7228,11 +7158,6 @@
           "id": "flags.delete.correlation",
           "file": "test/resources/flags.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "flags.delete.stale",
-          "file": "test/resources/flags.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "B",
@@ -7368,7 +7293,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -7390,11 +7315,6 @@
           "id": "flags.create.correlation",
           "file": "test/resources/flags.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "flags.create.stale",
-          "file": "test/resources/flags.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "B",
@@ -7492,10 +7412,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -7520,7 +7441,7 @@
         }
       ],
       "group": "B",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": null,
@@ -7552,9 +7473,9 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
-        "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -7574,7 +7495,7 @@
         }
       ],
       "group": "B",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": "DELETE /flag_types/{id}",
@@ -7601,7 +7522,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -7624,11 +7545,6 @@
           "id": "flag_types.delete.correlation",
           "file": "test/resources/flag_types.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "flag_types.delete.stale",
-          "file": "test/resources/flag_types.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "B",
@@ -7763,7 +7679,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -7785,11 +7701,6 @@
           "id": "flag_types.create.correlation",
           "file": "test/resources/flag_types.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "flag_types.create.stale",
-          "file": "test/resources/flag_types.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "B",
@@ -7887,10 +7798,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -7925,7 +7837,7 @@
         }
       ],
       "group": "B",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": "DELETE /procedures/{id}",
@@ -7952,7 +7864,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -7975,11 +7887,6 @@
           "id": "procedures.delete.correlation",
           "file": "test/resources/procedures.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "procedures.delete.stale",
-          "file": "test/resources/procedures.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "C",
@@ -8120,7 +8027,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "BAD_REQUEST",
@@ -8143,11 +8050,6 @@
           "id": "procedures.create.correlation",
           "file": "test/resources/procedures.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "procedures.create.stale",
-          "file": "test/resources/procedures.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "C",
@@ -8409,10 +8311,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -8452,7 +8355,7 @@
         }
       ],
       "group": "C",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": null,
@@ -8485,9 +8388,10 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -8507,7 +8411,7 @@
         }
       ],
       "group": "C",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": "DELETE /procedure_tasks/{id}",
@@ -8534,7 +8438,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -8556,11 +8460,6 @@
           "id": "procedure_tasks.delete.correlation",
           "file": "test/resources/procedure_tasks.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "procedure_tasks.delete.stale",
-          "file": "test/resources/procedure_tasks.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "C",
@@ -8691,7 +8590,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -8713,11 +8612,6 @@
           "id": "procedure_tasks.create.correlation",
           "file": "test/resources/procedure_tasks.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "procedure_tasks.create.stale",
-          "file": "test/resources/procedure_tasks.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "C",
@@ -8814,10 +8708,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -8847,7 +8742,7 @@
         }
       ],
       "group": "C",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": "GET /cards/jump",
@@ -8977,10 +8872,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -9005,7 +8901,7 @@
         }
       ],
       "group": "C",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": "DELETE /activity_logs",
@@ -9161,10 +9057,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -9189,7 +9086,7 @@
         }
       ],
       "group": "C",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": null,
@@ -9221,9 +9118,9 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
-        "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -9248,7 +9145,7 @@
         }
       ],
       "group": "C",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": "DELETE /expirations/{id}",
@@ -9275,7 +9172,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -9298,11 +9195,6 @@
           "id": "expirations.delete.correlation",
           "file": "test/resources/expirations.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "expirations.delete.stale",
-          "file": "test/resources/expirations.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "C",
@@ -9433,7 +9325,7 @@
       "vendorFilters": [],
       "search": null,
       "helper": "expirations.resolve",
-      "helperBasis": "server-filter",
+      "helperBasis": "client-scan",
       "helperRationale": "Removes the caller-side choice of lookup endpoint and the paging + exact-match loop; without it every agent re-implements name/domain matching and reads a truncated scan as 'does not exist'.",
       "effect": "read",
       "flags": [],
@@ -9449,17 +9341,18 @@
       },
       "compact": "ExpirationSummary",
       "resolution": {
-        "basis": "server-filter",
+        "basis": "client-scan",
         "maxScanRecords": 500,
         "maxScanPages": 4
       },
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -9494,7 +9387,7 @@
         }
       ],
       "group": "C",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": null,
@@ -9526,9 +9419,9 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
-        "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -9548,7 +9441,7 @@
         }
       ],
       "group": "C",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": "DELETE /matchers/{id}",
@@ -9745,10 +9638,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -9773,7 +9667,7 @@
         }
       ],
       "group": "C",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": null,
@@ -9805,9 +9699,10 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -9827,7 +9722,7 @@
         }
       ],
       "group": "C",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": "DELETE /magic_dash",
@@ -10153,10 +10048,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -10186,7 +10082,7 @@
         }
       ],
       "group": "C",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": null,
@@ -10218,9 +10114,9 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
-        "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -10240,7 +10136,7 @@
         }
       ],
       "group": "C",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": "GET /api_info",
@@ -10322,10 +10218,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -10335,7 +10232,7 @@
         }
       ],
       "group": "C",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": "DELETE /uploads/{id}",
@@ -10569,10 +10466,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -10602,7 +10500,7 @@
         }
       ],
       "group": "D",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": "DELETE /photos/{id}",
@@ -10629,7 +10527,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -10652,11 +10550,6 @@
           "id": "photos.delete.correlation",
           "file": "test/resources/photos.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "photos.delete.stale",
-          "file": "test/resources/photos.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "D",
@@ -10791,7 +10684,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -10814,11 +10707,6 @@
           "id": "photos.create.correlation",
           "file": "test/resources/photos.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "photos.create.stale",
-          "file": "test/resources/photos.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "D",
@@ -10916,10 +10804,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -10954,7 +10843,7 @@
         }
       ],
       "group": "D",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": null,
@@ -10986,9 +10875,9 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
-        "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -11008,7 +10897,7 @@
         }
       ],
       "group": "D",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": "GET /public_photos",
@@ -11247,10 +11136,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -11275,7 +11165,7 @@
         }
       ],
       "group": "D",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": "GET /exports",
@@ -11455,10 +11345,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -11488,7 +11379,7 @@
         }
       ],
       "group": "D",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": "POST /s3_exports",
@@ -11564,7 +11455,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -11587,11 +11478,6 @@
           "id": "lists.delete.correlation",
           "file": "test/resources/lists.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "lists.delete.stale",
-          "file": "test/resources/lists.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "D",
@@ -11723,7 +11609,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -11745,11 +11631,6 @@
           "id": "lists.create.correlation",
           "file": "test/resources/lists.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "lists.create.stale",
-          "file": "test/resources/lists.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "D",
@@ -11847,10 +11728,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -11880,7 +11762,7 @@
         }
       ],
       "group": "D",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": null,
@@ -11912,9 +11794,10 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -11929,7 +11812,7 @@
         }
       ],
       "group": "D",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": "DELETE /label_types/{id}",
@@ -11956,7 +11839,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -11979,11 +11862,6 @@
           "id": "label_types.delete.correlation",
           "file": "test/resources/label_types.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "label_types.delete.stale",
-          "file": "test/resources/label_types.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "D",
@@ -12118,7 +11996,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -12140,11 +12018,6 @@
           "id": "label_types.create.correlation",
           "file": "test/resources/label_types.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "label_types.create.stale",
-          "file": "test/resources/label_types.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "D",
@@ -12242,10 +12115,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -12275,7 +12149,7 @@
         }
       ],
       "group": "D",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": "DELETE /labels/{id}",
@@ -12302,7 +12176,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -12325,11 +12199,6 @@
           "id": "labels.delete.correlation",
           "file": "test/resources/labels.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "labels.delete.stale",
-          "file": "test/resources/labels.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "D",
@@ -12465,7 +12334,7 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "NETWORK_ERROR",
@@ -12487,11 +12356,6 @@
           "id": "labels.create.correlation",
           "file": "test/resources/labels.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
-        },
-        {
-          "id": "labels.create.stale",
-          "file": "test/resources/labels.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
         }
       ],
       "group": "D",
@@ -12589,10 +12453,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -12617,7 +12482,7 @@
         }
       ],
       "group": "D",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": null,
@@ -12649,9 +12514,9 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
-        "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -12671,7 +12536,7 @@
         }
       ],
       "group": "D",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": "GET /users",
@@ -12812,10 +12677,11 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "NOT_FOUND",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -12860,7 +12726,7 @@
         }
       ],
       "group": "D",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": null,
@@ -12892,9 +12758,10 @@
       "staleCheck": null,
       "redaction": "none",
       "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
         "RESOLUTION_AMBIGUOUS",
-        "RESOLUTION_TRUNCATED",
-        "NETWORK_ERROR"
+        "RESOLUTION_TRUNCATED"
       ],
       "tests": [
         {
@@ -12914,7 +12781,7 @@
         }
       ],
       "group": "D",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "endpoint": null,
@@ -12947,8 +12814,9 @@
       "redaction": "none",
       "errors": [
         "BAD_REQUEST",
-        "RATE_LIMIT",
-        "NETWORK_ERROR"
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "RATE_LIMIT"
       ],
       "tests": [
         {
@@ -12963,7 +12831,7 @@
         }
       ],
       "group": "D",
-      "status": "planned"
+      "status": "implemented"
     }
   ]
 }

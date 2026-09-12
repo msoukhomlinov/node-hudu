@@ -23,3 +23,30 @@ export type FolderCreate = Partial<Omit<Folder, 'id' | 'created_at' | 'updated_a
  * Input for updating a Folder.
  */
 export type FolderUpdate = Partial<Folder>;
+
+/**
+ * Compact projection used by the folder helper tier (`folders.resolve`).
+ * Drops `description` and `created_at`; never drops `id` or `name`.
+ */
+export interface FolderSummary {
+  id: number;
+  name: string;
+  company_id: number | null;
+  parent_folder_id: number | null;
+  folder_type: "article" | "photo";
+  icon: string | null;
+  updated_at: string;
+}
+
+/**
+ * Object identifier accepted by `folders.resolve`. `company_id` and `folder_type`
+ * narrow the lookup with the vendor's own filters instead of scanning the account.
+ */
+export interface FolderIdentifier {
+  id?: number;
+  name?: string;
+  company_id?: number | null;
+  companyId?: number | null;
+  folder_type?: "article" | "photo";
+  folderType?: "article" | "photo";
+}

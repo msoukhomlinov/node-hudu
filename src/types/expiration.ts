@@ -27,3 +27,36 @@ export type ExpirationCreate = Partial<Omit<Expiration, 'id' | 'created_at' | 'u
  * Input for updating a Expiration.
  */
 export type ExpirationUpdate = Partial<Expiration>;
+
+/**
+ * Identifier accepted by `expirations.resolve` (policy §6). Hudu exposes no
+ * `GET /expirations/{id}`, so an id is resolved by a bounded client scan; a
+ * `{ resource_type, resource_id }` pair resolves through the vendor filters and may
+ * legitimately match several expirations (which is reported as ambiguous, not guessed).
+ */
+export interface ExpirationIdentifier {
+  id?: number;
+  resource_type?: string;
+  resource_id?: number;
+  expiration_type?: string;
+  company_id?: number;
+}
+
+/**
+ * Compact projection of an Expiration (policy §9). Keeps the date, the kind, the owning
+ * company and the expiring record; never drops `id`.
+ *
+ * Drops: account_id, archived_at, created_at.
+ */
+export interface ExpirationSummary {
+  id: number;
+  date: string;
+  expiration_type: string;
+  company_id: number;
+  expirationable_type: string;
+  expirationable_id: number;
+  asset_field_id: number | null;
+  asset_layout_field_id: number | null;
+  sync_id: number | null;
+  updated_at: string;
+}

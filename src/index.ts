@@ -32,7 +32,17 @@ export { NOOP_LOGGER, redact, isCredentialKey, REDACTED, REDACTED_KEYS } from '.
 
 export type * from './types/index.js';
 // Agent-execution-layer shared types (operation metadata, dry-run, resolution, audit).
-export type * from './types/common.js';
+// Exported explicitly, not with `export type *`: the types barrel also re-exports some of
+// these names, and an explicit re-export resolves that ambiguity (TS2308) deterministically.
+export type {
+  OperationEffect, OperationFlag, OperationMetadata,
+  FieldDiff, DryRunCheck, DryRunResult,
+  ResolutionCost, ResolutionCandidate, Resolution,
+  AuditEvent, Identifier, IdentifierObject,
+  HelperOptions, ResolutionOptions, MutationOptions,
+} from './types/common.js';
+// The compact summary shapes live with the resource they belong to (SCOPING decision 6) and are
+// re-exported through the types barrel above, so they are not listed here.
 
 export {
   BaseResource,

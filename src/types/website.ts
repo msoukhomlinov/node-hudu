@@ -45,3 +45,33 @@ export type WebsiteCreate = Partial<Omit<Website, 'id' | 'created_at' | 'updated
  * Input for updating a Website.
  */
 export type WebsiteUpdate = Partial<Website>;
+
+/**
+ * Object identifier accepted by `websites.resolve`. The vendor filters `slug` and
+ * `name`; there is no domain/company filter on `/websites`.
+ */
+export interface WebsiteIdentifier {
+  id?: number;
+  slug?: string;
+  name?: string;
+}
+
+/**
+ * The compact projection of a website record. Drops: headers, account_id, asset_field_id,
+ * discarded_at, disable_ssl, disable_whois, disable_dns, enable_dmarc_tracking, enable_dkim_tracking,
+ * enable_spf_tracking, keyword, message, monitor_type, code, sent_notifications, icon, asset_type,
+ * refreshed_at, monitored_at, notes, object_type, created_at.
+ * The `Website` type declares no `updated_at`, so it cannot be kept.
+ */
+export interface WebsiteSummary {
+  id: number;
+  name: string;
+  slug?: string;
+  company_id?: number;
+  company_name?: string;
+  status?: string;
+  monitoring_status?: string;
+  paused?: boolean;
+  archived?: boolean;
+  url?: string;
+}

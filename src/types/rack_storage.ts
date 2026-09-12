@@ -26,3 +26,29 @@ export type RackStorageCreate = Partial<Omit<RackStorage, 'id' | 'created_at' | 
  * Input for updating a RackStorage.
  */
 export type RackStorageUpdate = Partial<RackStorage>;
+
+/**
+ * Identifier accepted by `rack_storages.resolve` (policy §6). Accepted kinds: id and
+ * exact name. Hudu declares no name filter on `/rack_storages`, so the name kind is a
+ * bounded client scan (one complete read of the non-paginated collection).
+ */
+export interface RackStorageIdentifier {
+  id?: number;
+  name?: string;
+}
+
+/**
+ * Compact projection returned by the `rack_storages` helper tier (policy §9).
+ * Drops: description, created_at, discarded_at.
+ */
+export interface RackStorageSummary {
+  id: number;
+  name: string;
+  company_id: number;
+  location_id: number;
+  height: number;
+  width: number;
+  max_wattage: number;
+  starting_unit: number;
+  updated_at: string;
+}

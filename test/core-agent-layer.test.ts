@@ -673,11 +673,48 @@ describe('stale-object guard and the updateOne contract', () => {
     expect(spy.calls).toHaveLength(1);
   });
 
-  it('assertNotStale treats an unreadable current record as stale', async () => {
-    stubFetch(() => json({}));
+  it('assertNotStale raises CONFIG_ERROR, never a bogus STALE_OBJECT, when there is no version field', async () => {
+    stubFetch(() => json({ company: { id: 9 } }));
     const r = new ProbeResource(makeHttp());
-    await expect(r.stale(9, '2026-01-01T00:00:00Z', () => Promise.resolve(undefined)))
-      .rejects.toThrow(StaleObjectError);
+    // No record body at all, then a record whose updated_at is undefined / null / empty.
+    for (const current of [undefined, {}, { updated_at: null }, { updated_at: '' }]) {
+      const err = (await rejection(r.stale(9, '2026-01-01T00:00:00Z', () => Promise.resolve(current)))) as HuduConfigError;
+      expect(err, JSON.stringify(current)).toBeInstanceOf(HuduConfigError);
+      expect(err).not.toBeInstanceOf(StaleObjectError);
+      expect(err.code).toBe('CONFIG_ERROR');
+      expect(err.category).toBe('validation');
+      expect(err.retryable).toBe(false);
+      expect(err.suggestedAction).toContain('updated_at');
+      expect(err.resourceIds).toEqual([9]);
+      expect(err.operation).toBe('companies.update');
+      expect(err.message).toContain('no updated_at');
+    }
+  });
+
+  it('rejects expectedUpdatedAt on create/delete/archive instead of silently ignoring it', async () => {
+    const spy = stubFetch(() => json({ company: { id: 9, updated_at: 'T' } }));
+    const r = new ProbeResource(makeHttp());
+    const calls: Promise<unknown>[] = [
+      r.create({ name: 'x' }, { expectedUpdatedAt: 'T' }),
+      r.create({ name: 'x' }, { expectedUpdatedAt: 'T', dryRun: true }),
+      r.remove(9, { expectedUpdatedAt: 'T' }),
+      r.remove(9, { expectedUpdatedAt: 'T', dryRun: true }),
+      r.archive(9, true, { expectedUpdatedAt: 'T' }),
+      r.archive(9, false, { expectedUpdatedAt: 'T', dryRun: true }),
+    ];
+    const names = ['createOne', 'createOne', 'deleteOne', 'deleteOne', 'setArchived', 'setArchived'];
+    for (let i = 0; i < calls.length; i++) {
+      const err = (await rejection(calls[i]!)) as HuduConfigError;
+      expect(err).toBeInstanceOf(HuduConfigError);
+      expect(err.code).toBe('CONFIG_ERROR');
+      expect(err.category).toBe('validation');
+      expect(err.message).toContain(names[i]!);
+      expect(err.message).toContain('guards update only (updateOne)');
+    }
+    // A caller believing a guard ran must not have issued anything.
+    expect(spy.calls).toHaveLength(0);
+    // The same options are still accepted by updateOne.
+    await expect(r.update(9, { name: 'x' }, { expectedUpdatedAt: 'T' })).resolves.toBeDefined();
   });
 });
 

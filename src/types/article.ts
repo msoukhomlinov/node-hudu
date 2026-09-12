@@ -27,4 +27,48 @@ export type ArticleCreate = Partial<Omit<Article, 'id' | 'created_at' | 'updated
 /**
  * Input for updating a Article.
  */
+import type { Company, CompanySummary } from './company.js';
+import type { Folder } from './folder.js';
+
 export type ArticleUpdate = Partial<Article>;
+
+
+/**
+ * Compact agent-facing projection of `Article` (policy §9, SCOPING decision 6).
+ *
+ * Keeps: id, name, slug, company_id, folder_id, draft, enable_sharing, updated_at.
+ * Drops (recorded in the registry `outputSchema.drops`): content, url, share_url,
+ * public_photos, object_type, created_at.
+ */
+export interface ArticleSummary {
+  id: number;
+  name: string;
+  slug: string;
+  company_id: number;
+  folder_id: number;
+  draft: boolean;
+  enable_sharing: boolean;
+  updated_at: string;
+}
+
+/** Identifier kinds `articles.resolve` understands (policy §7). */
+export interface ArticleIdentifier {
+  id?: number;
+  name?: string;
+  slug?: string;
+  company_id?: number;
+}
+
+/** Bounded context bundle returned by `articles.getContext` (policy §9). */
+export interface ArticleContext {
+  article: ArticleSummary;
+  company: CompanySummary | null;
+  folder: Folder | null;
+}
+
+/** `articles.getContext(id, { expand: true })` — the article is the full typed record. */
+export interface ArticleContextExpand {
+  article: Article;
+  company: Company | null;
+  folder: Folder | null;
+}

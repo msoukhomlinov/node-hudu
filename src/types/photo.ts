@@ -38,3 +38,21 @@ export interface PhotoCreate {
  * Input for updating a Photo.
  */
 export type PhotoUpdate = Partial<Photo>;
+
+/**
+ * Compact projection of a Photo (agent-execution layer, policy §9).
+ * Keeps the identity (`id`), the photo's owning/attaching records (which is what a
+ * caller resolves a photo BY) and the revision field.
+ * Drops: `created_at` (available on the full record via `{ expand: true }`).
+ */
+export interface PhotoSummary {
+  id: number;
+  company_id: number;
+  folder_id: number;
+  photoable_type: string;
+  photoable_id: number;
+  caption: string;
+  pinned: boolean;
+  archived: boolean;
+  updated_at: string;
+}

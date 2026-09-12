@@ -210,6 +210,7 @@ export abstract class BaseResource<T = unknown> {
   protected async createOne<U = T>(data: unknown, query: Record<string, unknown> | undefined, opts: MutationOptions | undefined): Promise<U | DryRunResult<U>>;
   protected async createOne<U = T>(data: unknown, query?: Record<string, unknown>, opts?: MutationOptions): Promise<U | DryRunResult<U>> {
     const operation = `${this.resourcePath}.create`;
+    this.assertNoExpectedUpdatedAt('createOne', opts);
     if (opts?.dryRun) {
       return this.buildDryRunResult<U>({
         operation,
@@ -292,6 +293,7 @@ export abstract class BaseResource<T = unknown> {
   protected async deleteOne(id: number | string, opts?: MutationOptions): Promise<void | DryRunResult<void>> {
     const operation = `${this.resourcePath}.delete`;
     const ids = identifierIds(id);
+    this.assertNoExpectedUpdatedAt('deleteOne', opts);
     if (opts?.dryRun) {
       return this.buildDryRunResult<void>({
         operation,
@@ -323,6 +325,7 @@ export abstract class BaseResource<T = unknown> {
     const action = archive ? 'archive' : 'unarchive';
     const operation = `${this.resourcePath}.${action}`;
     const ids = identifierIds(id);
+    this.assertNoExpectedUpdatedAt('setArchived', opts);
     if (opts?.dryRun) {
       return this.buildDryRunResult<void>({
         operation,
@@ -376,6 +379,19 @@ export abstract class BaseResource<T = unknown> {
     };
     if (op.diff !== undefined) result.diff = op.diff;
     return result;
+  }
+
+  /**
+   * `expectedUpdatedAt` guards `updateOne` only. Passed to any other mutating
+   * primitive it would be a silent no-op, so the caller is told instead of
+   * believing a guard ran. No request is issued either way.
+   */
+  protected assertNoExpectedUpdatedAt(primitive: string, opts: MutationOptions | undefined): void {
+    if (opts?.expectedUpdatedAt !== undefined) {
+      throw new HuduConfigError(
+        `${primitive}: expectedUpdatedAt is not supported on create/delete/archive - it guards update only (updateOne)`,
+      );
+    }
   }
 
   /** Dry-run check: a create/update carried a request body. */
@@ -481,17 +497,35 @@ export abstract class BaseResource<T = unknown> {
    *
    * When `expectedUpdatedAt` is undefined this returns immediately — it must not cost
    * a request, and `updateOne` does not call it at all in that case.
+   *
+   * A fetched record with NO version field (undefined/null/empty `updated_at`) cannot
+   * be verified at all — several Hudu record types (rack_storage_items, ip_addresses,
+   * matchers, magic_dash, uploads) declare no `updated_at`. That is a configuration
+   * mismatch, not a conflict, so it raises `HuduConfigError` instead of inventing a
+   * false `STALE_OBJECT` that would tell the caller to re-read and retry forever.
    */
   protected async assertNotStale(
     op: string,
     resource: string,
     id: number | string,
     expectedUpdatedAt: string | undefined,
-    fetchCurrent: () => Promise<{ updated_at?: string } | undefined>,
+    fetchCurrent: () => Promise<{ updated_at?: string | null } | undefined>,
   ): Promise<void> {
     if (expectedUpdatedAt === undefined) return;
     const current = await fetchCurrent();
     const actual = current === undefined ? undefined : current.updated_at;
+    if (actual === undefined || actual === null || actual === '') {
+      throw new HuduConfigError(
+        `assertNotStale: the current ${resource} record for ${String(id)} carries no updated_at, ` +
+          'so the expectedUpdatedAt guard cannot be verified for this resource.',
+        {
+          operation: op,
+          resourceIds: identifierIds(id),
+          suggestedAction:
+            'Pass { expectedUpdatedAt } only for a resource whose record declares updated_at; drop it for records without a version field.',
+        },
+      );
+    }
     if (actual !== expectedUpdatedAt) {
       throw new StaleObjectError(
         `Stale object: ${resource} ${String(id)} was not at the expected revision for ${op} ` +

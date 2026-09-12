@@ -25,3 +25,29 @@ export type VlanZoneCreate = Partial<Omit<VlanZone, 'id' | 'created_at' | 'updat
  * Input for updating a VlanZone.
  */
 export type VlanZoneUpdate = Partial<VlanZone>;
+
+/**
+ * Identifier accepted by `vlan_zones.resolve` (policy §6). Accepted kinds: id, slug,
+ * exact name. The vendor declares no slug filter, so the slug kind is matched with a
+ * single complete read of the (non-paginated) collection.
+ */
+export interface VlanZoneIdentifier {
+  id?: number;
+  slug?: string;
+  name?: string;
+}
+
+/**
+ * Compact projection returned by the `vlan_zones` helper tier (policy §9).
+ * Drops: description, archived_at, created_at.
+ */
+export interface VlanZoneSummary {
+  id: number;
+  name: string;
+  slug: string;
+  vlan_id_ranges: string;
+  company_id: number;
+  vlans_count: number;
+  url: string;
+  updated_at: string;
+}

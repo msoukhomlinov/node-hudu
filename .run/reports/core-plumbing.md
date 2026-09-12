@@ -63,3 +63,53 @@ dry-run issues ZERO fetch calls for create/update/delete/archive and returns `si
 - `mapConcurrent` is not used by any bulk helper yet (none exists). UNVERIFIED under a real bulk operation.
 - The `looksLikeMutationOptions` guard rejects a query bag whose keys are only `dryRun`/`expectedUpdatedAt`; `grep -c "dryRun\|expectedUpdatedAt" api-docs.json` = 0, so no Hudu endpoint collides today. UNVERIFIED against future spec revisions.
 - `redact()` treats class instances (Date/Blob/Error) as opaque via a plain-prototype check; a resource returning a class instance with credential fields would not be redacted by that path. UNVERIFIED (no such resource exists today).
+
+---
+
+## 7. Follow-up fixes (coordinator message, after two implementers hit real defects)
+
+**FIX 1 — `expectedUpdatedAt` cannot be a silent no-op.** `createOne`, `deleteOne` and
+`setArchived` now throw `HuduConfigError` (`CONFIG_ERROR`, category `validation`, **no request
+issued**) when `opts.expectedUpdatedAt` is present, with the message
+`"<primitive>: expectedUpdatedAt is not supported on create/delete/archive - it guards update only (updateOne)"`.
+The guard runs before the dry-run branch in all three, so a caller who passed both gets the
+diagnostic, not a simulated pass. `updateOne` accepts `expectedUpdatedAt` exactly as before.
+Implemented once as `protected assertNoExpectedUpdatedAt(primitive, opts)`.
+
+**FIX 2 — `assertNotStale` no longer invents a false conflict.** When the fetched current
+record carries no usable version field (`updated_at` undefined / null / empty — e.g.
+`rack_storage_items`, `ip_addresses`, `matchers`, `magic_dash`, `uploads`) it throws
+`HuduConfigError` (`CONFIG_ERROR`, `validation`, `resourceIds`, `operation`, and a
+`suggestedAction` naming `updated_at`) instead of `StaleObjectError`. A real mismatch against a
+real `updated_at` still throws `StaleObjectError` (`STALE_OBJECT`). `HuduConfigError` gained an
+optional `HuduErrorOptions` argument so it can carry that `suggestedAction` (additive; the
+one-argument form is unchanged).
+
+**Also fixed in my lane:** `src/index.ts` — the coordinator's widened summaries plus the types
+barrel re-export made my `export type * from './types/common.js'` ambiguous (`TS2308:
+CompanySummary`). Replaced with an explicit named `export type { ... }` list of all 20
+`common.ts` names (explicit re-exports win over the barrel's star export).
+
+**Tests added:** `expectedUpdatedAt` rejected on create/delete/archive (6 call shapes, ZERO
+fetch, `updateOne` still accepted) and a no-version-field `assertNotStale` matrix
+(`undefined` record, `{}`, `updated_at: null`, `updated_at: ''`). 41 tests in
+`test/core-agent-layer.test.ts`.
+
+**Command results after the fixes**
+
+| Command | Exit | Result |
+|---------|------|--------|
+| `npx tsc --noEmit` | **0** | clean (after the `src/index.ts` ambiguity fix above) |
+| `npx vitest run test/core-agent-layer.test.ts` | **0** | 41 passed |
+| `npx eslint src/resources/base.ts src/http.ts src/errors.ts src/config.ts src/logger.ts src/types/common.ts test/core-agent-layer.test.ts` | **0** | clean |
+| `npm test` | 1 | **1437 passed, 4 failed** — see below |
+
+**Expected collateral (NOT mine to fix, NOT edited):** four other-agent test files still assert
+the pre-fix silent no-op and now fail on FIX 1:
+`test/resources/networks.test.ts`, `test/resources/rack_storages.test.ts`,
+`test/resources/vlan_zones.test.ts`, `test/resources/vlans.test.ts` — each with the single test
+`"does not read before a delete (the stale guard lives on update only)"`, which calls
+`delete(id, { expectedUpdatedAt })` and expects it to succeed. Each owner needs to assert
+`HuduConfigError` there instead (one line per file). Every other test file passes, including
+`test/public-surface.test.ts` (6) and the 116 tests of
+`public-surface/errors/config/base/http/logger`.

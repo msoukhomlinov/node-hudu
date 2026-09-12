@@ -39,3 +39,42 @@ export type ProcedureTaskCreate = Partial<Omit<ProcedureTask, 'id' | 'created_at
  * Input for updating a ProcedureTask.
  */
 export type ProcedureTaskUpdate = Partial<ProcedureTask>;
+
+/**
+ * Identifier accepted by `procedure_tasks.resolve` (policy §6). An id resolves
+ * directly; a name resolves through the vendor `name` list filter, optionally narrowed
+ * with `procedure_id` or `company_id`.
+ */
+export interface ProcedureTaskIdentifier {
+  id?: number;
+  name?: string;
+  procedure_id?: number;
+  company_id?: number;
+}
+
+/**
+ * Compact projection of a ProcedureTask (policy §9). Keeps identity, position, the
+ * completion state and the assignee NAME — enough to report progress without the base64
+ * description or the raw id arrays. Never drops `id`/`name`.
+ *
+ * Drops: description, completion_notes, formatted_due_date, user_id, user_name,
+ * assigned_users, first_assigned_user_id, first_assigned_user_initials, subtask_ids,
+ * created_at.
+ */
+export interface ProcedureTaskSummary {
+  id: number;
+  name: string;
+  position: number;
+  priority: 'unsure' | 'low' | 'normal' | 'high' | 'urgent';
+  completed: boolean;
+  completed_date: string;
+  due_date: string;
+  procedure_id: number;
+  optional: boolean;
+  parent_task_id: number | null;
+  has_subtasks: boolean;
+  subtask_count: number;
+  first_assigned_user_name: string;
+  url: string;
+  updated_at: string;
+}

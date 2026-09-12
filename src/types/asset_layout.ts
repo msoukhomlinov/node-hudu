@@ -31,3 +31,28 @@ export type AssetLayoutCreate = Partial<Omit<AssetLayout, 'id' | 'created_at' | 
 import type { AssetLayoutField } from './asset_layout_field.js';
 
 export type AssetLayoutUpdate = Partial<AssetLayout>;
+
+
+/**
+ * Compact agent-facing projection of `AssetLayout` (policy §9, SCOPING decision 6).
+ *
+ * Keeps: id, name, slug, active, icon, color.
+ * Drops (recorded in the registry `outputSchema.drops`): fields, include_passwords,
+ * include_photos, include_comments, include_files, sidebar_folder_id, icon_color,
+ * created_at, updated_at.
+ */
+export interface AssetLayoutSummary {
+  id: number;
+  name: string;
+  slug: string;
+  active: boolean;
+  icon: string;
+  color: string;
+}
+
+/** Identifier kinds `asset_layouts.resolve` understands (policy §7). */
+export interface AssetLayoutIdentifier {
+  id?: number;
+  name?: string;
+  slug?: string;
+}

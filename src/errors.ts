@@ -137,12 +137,13 @@ export class HuduError extends Error {
 }
 
 export class HuduConfigError extends HuduError {
-  constructor(message: string) {
+  constructor(message: string, options?: HuduErrorOptions) {
     super(message, {
+      ...options,
       code: 'CONFIG_ERROR',
       category: 'validation',
       retryable: false,
-      suggestedAction: 'Fix the client configuration; the message names the invalid option.',
+      suggestedAction: options?.suggestedAction ?? 'Fix the client configuration; the message names the invalid option.',
     });
   }
 }

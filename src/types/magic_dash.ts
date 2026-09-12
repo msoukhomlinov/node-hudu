@@ -25,3 +25,33 @@ export type MagicDashCreate = Partial<Omit<MagicDash, 'id' | 'created_at' | 'upd
  * Input for updating a MagicDash.
  */
 export type MagicDashUpdate = Partial<MagicDash>;
+
+/**
+ * Identifier accepted by `magic_dash.resolve` (policy §6). A title uses the vendor
+ * `title` filter with an exact compare (optionally narrowed with `company_id`); an id
+ * has no `GET /magic_dash/{id}` read endpoint, so it is resolved by a bounded client
+ * scan.
+ */
+export interface MagicDashIdentifier {
+  id?: number;
+  title?: string;
+  company_id?: number;
+}
+
+/**
+ * Compact projection of a MagicDash item (policy §9). Keeps the tile a dashboard shows
+ * (title, message, shade, icon, image, company, position); never drops `id`/`title`.
+ *
+ * Drops: content_link, content.
+ */
+export interface MagicDashSummary {
+  id: number;
+  title: string;
+  message: string;
+  shade: string | null;
+  icon: string | null;
+  image_url: string | null;
+  company_id: number;
+  company_name: string;
+  position: number;
+}
