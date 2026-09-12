@@ -7535,7 +7535,7 @@
       "dryRun": false,
       "metadata": {
         "purpose": "List the flags attached to one record.",
-        "usage": "Uses the vendor flagable_type + flagable_id filters. Returns FlagSummary records (bounded by limit, default 25, max 100).",
+        "usage": "Uses the vendor flagable_type + flagable_id filters. Returns FlagSummary records (bounded by limit, default 25, max 100). This helper reads server-filtered rows and returns them all; it does not scan, so it never raises a resolution error.",
         "preferredWhen": "Preferred over flags.listAll for the 'is this record flagged' question.",
         "related": [
           "flag_types.resolve",
@@ -7552,8 +7552,7 @@
       "redaction": "none",
       "errors": [
         "CONFIG_ERROR",
-        "NETWORK_ERROR",
-        "RESOLUTION_TRUNCATED"
+        "NETWORK_ERROR"
       ],
       "tests": [
         {
@@ -9195,7 +9194,7 @@
       "dryRun": false,
       "metadata": {
         "purpose": "List the activity log entries for one resource.",
-        "usage": "Uses the vendor resource_id + resource_type filters, optionally bounded by startDate. No scan is needed. Returns ActivityLogSummary records (limit default 25, max 100).",
+        "usage": "Uses the vendor resource_id + resource_type filters, optionally bounded by startDate. No scan is needed. Returns ActivityLogSummary records (limit default 25, max 100). This helper reads server-filtered rows and returns them all; it does not scan, so it never raises a resolution error.",
         "preferredWhen": "Preferred over activity_logs.listAll for 'what happened to this record'.",
         "related": [
           "activity_logs.list",
@@ -9212,8 +9211,7 @@
       "redaction": "none",
       "errors": [
         "CONFIG_ERROR",
-        "NETWORK_ERROR",
-        "RESOLUTION_TRUNCATED"
+        "NETWORK_ERROR"
       ],
       "tests": [
         {

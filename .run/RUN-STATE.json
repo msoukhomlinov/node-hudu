@@ -190,7 +190,8 @@
     "B.tests": "pass \u2014 npm test 1446/1446, lint 0, coverage 99.63/99.88/91.95/99.24 vs 97/94/83/97; all rows tested; --ship PASS",
     "C.tests": "pass \u2014 npm test 1446/1446, lint 0, coverage 99.63/99.88/91.95/99.24 vs 97/94/83/97; all rows tested; --ship PASS",
     "D.tests": "pass \u2014 npm test 1446/1446, lint 0, coverage 99.63/99.88/91.95/99.24 vs 97/94/83/97; all rows tested; --ship PASS",
-    "qa_lenses": "all four reported: qa-safety (cross-model claude-sonnet) 5 findings, qa-agent-layer 14, qa-registry 15, qa-contract 9"
+    "qa_lenses": "all four reported: qa-safety (cross-model claude-sonnet) 5 findings, qa-agent-layer 14, qa-registry 15, qa-contract 9",
+    "qa_final_agent_layer": "report at ca011f1: 0 CRITICAL, 0 HIGH, 1 MEDIUM, 5 LOW, 2 NIT; all three of its earlier HIGH findings proven CLOSED (manifest/registry agreement, opaque inputSchema 0, WebsiteSummary projection). Its MEDIUM (a committed pre-curation manifest + untracked overrides) was already fixed on the current head ec9b7e1. Triage: 2 rows corrected in the plan (flags.findByFlagable, activity_logs.findByResource declared a resolution code they cannot raise), users.search resolutionDetails dispatched to impl-D2, 3 LOWs accepted with rationale, NIT about the CHANGELOG date verified WRONG (the run crossed midnight; local date is 2026-09-13)"
   },
   "blockers": [
     {
@@ -246,6 +247,11 @@
       "what": "accepted the qa-safety LOW (the guard-refusal helper is duplicated in 17 resource files) as documented debt instead of a 17-file refactor at release time; the shared home now exists and 6 group-C files use it",
       "why": "no correctness bug, all instances behaviourally identical and tested, and the variants emit different messages that tests assert, so a full consolidation would change messages and touch 5 idle owners' files minutes before release",
       "reversal": "add refuseExpectedUpdatedAtOutsideUpdate to src/resources/agent-layer-helpers.ts and replace the remaining 11 local definitions, then re-run the affected resource tests"
+    },
+    {
+      "what": "accepted three qa-final-agent-layer LOWs instead of fixing them: (i) the compact-shape widening guard covers the 4 shapes impl-A2 owns rather than all 35 - the others are covered by the registry's derived outputSchema plus the static probe 'compact fields == TS summary interfaces 58/58'; (ii) resolveAny has no expand escape hatch (it returns candidates, not a projection); (iii) 3 generic output nodes (R / SearchableSummaryMap[R]) stay unresolved in the registry outputSchema of the 2 operations helpers because the generator cannot resolve a mapped-type generic, while their inputSchema and the MCP tool schemas are complete",
+      "why": "each is a LOW/NIT with no correctness effect; a 35-shape runtime guard and a generic-type resolver were judged not worth the release-time risk, and both are recorded for the review stage",
+      "reversal": "extend the sentinel test in each resource's test file to all 35 summary shapes; add a mapped-type resolver to scripts/generate-capabilities.mjs"
     }
   ],
   "metrics": {
