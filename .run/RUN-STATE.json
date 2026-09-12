@@ -120,6 +120,14 @@
       "since": "2026-09-12T23:34:01.267867+10:00",
       "needsUser": false,
       "action": "the mcp_project stage re-projects and curates after src/operations/ exists"
+    },
+    {
+      "id": "T2",
+      "step": "A-D.implement",
+      "what": "src/types/index.ts is a shared barrel and several implementers append to it; a later writer can clobber an earlier one",
+      "since": "2026-09-12T23:48:14.560488+10:00",
+      "needsUser": false,
+      "action": "steered all 7 implementers to stop editing it; the coordinator verifies and completes the barrel at the batch gate (a clobbered entry is cosmetic - nothing imports the summaries through the barrel)"
     }
   ],
   "autonomousDecisions": [
