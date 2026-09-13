@@ -68,6 +68,12 @@
 //                            registry record count that disagrees with src/capabilities.ts. A
 //                            stale manifest is a shipped lie about helper coverage, so it fails
 //                            here. Test it directly with --manifest <path>.
+//   catalog-planhash         the generated catalog is stale (planHash mismatch)
+//   catalog-reachability     a registry operation has no catalog row, or has no tool and no reason
+//   catalog-op-exists        a catalog row names an unknown operation, or a tool that is not curated
+//   invoke-refusals          an operation excluded by the projection rule is not refused with a reason
+//   core-workflow-coverage   CORE misses a group-A read entry, a META tool, or a cross-resource helper
+//   core-budget              the CORE tools/list payload exceeds its budget (~8k tokens)
 //   emission-missing         capabilities.json / capabilities.schema.json / src/capabilities.ts absent
 //
 // Warnings (never failures): a public source method in neither the plan nor the registry
@@ -637,6 +643,174 @@ if (IS_DEFAULT_PLAN) {
   }
 } else {
   console.log(`capabilities:check — --plan ${PLAN_ARG}: emission rules (planHash comparison, emitted-file presence) are SKIPPED by design so a fixture can exercise the other rules.`);
+}
+
+// ---------------------------------------------------------------- progressive disclosure (catalog / core profile)
+// Build-order step 4. The generated catalog (`examples/tool-catalog.generated.ts`, written by
+// `scripts/build-tool-catalog.mjs` from the projection) is what makes every registry operation
+// discoverable, and the CORE profile is what a client actually pays for on every turn. Both rot
+// silently unless they are gated, so they are gated here:
+//   catalog-planhash        the generated catalog is stale (planHash mismatch) — it was built from
+//                           a different plan than the registry this gate holds
+//   catalog-reachability    a registry operation has no catalog row, or a row with no tool and no
+//                           reason (an unexposed capability indistinguishable from a missing one)
+//   catalog-op-exists       a catalog row names an operation that is not a registry key, an exposed
+//                           tool that is not in the curated projection, or a refusal for an
+//                           operation that is in fact exposed
+//   invoke-refusals         an operation excluded by the projection rule (unbounded read, binary
+//                           surface) is not refused with a reason, so the escape hatch could call it
+//   core-workflow-coverage  CORE misses a read entry for a group-A workflow resource, or misses the
+//                           META tools / the cross-resource helpers (measured today: 9/9 resources)
+//   core-budget             the CORE tools/list payload exceeds its token budget (the whole point
+//                           of the profile: it cannot creep back to the flat 147-tool surface)
+const CATALOG_PATH = path.resolve(ROOT, argValue('--catalog', 'examples/tool-catalog.generated.ts'));
+const CORE_BUDGET_BYTES = 32000; // ~8,000 tokens at the measured ratio; today's CORE is far under it
+const catalogRel = path.relative(ROOT, CATALOG_PATH);
+let catalogData = null;
+if (!existsSync(CATALOG_PATH)) {
+  fail('catalog-reachability', catalogRel, 'not emitted — run `node scripts/build-tool-catalog.mjs`');
+} else {
+  const text = readFileSync(CATALOG_PATH, 'utf8');
+  const sf = ts.createSourceFile(CATALOG_PATH, text, ts.ScriptTarget.Latest, true);
+  const found = {};
+  const visit = (node) => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
+      if (['CATALOG', 'CATALOG_PLAN_HASH', 'EXPOSED', 'REFUSALS', 'CORE_TOOLS', 'META_TOOLS', 'CORE_RULE'].includes(node.name.text)) {
+        found[node.name.text] = literalToValue(node.initializer);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  const missing = ['CATALOG', 'CATALOG_PLAN_HASH', 'EXPOSED', 'REFUSALS', 'CORE_TOOLS', 'META_TOOLS'].filter((k) => found[k] === undefined);
+  if (missing.length) {
+    fail('catalog-reachability', catalogRel, `the generated catalog is missing ${missing.join(', ')} — regenerate with \`node scripts/build-tool-catalog.mjs\``);
+  } else {
+    catalogData = found;
+  }
+}
+// The curated projection, as the manifest publishes it (machine-readable block). One source: the
+// gate never re-derives the projection, it reads what `npm run mcp:project` emitted.
+const projectionRows = (() => {
+  if (!existsSync(MANIFEST_PATH)) return [];
+  const text = readFileSync(MANIFEST_PATH, 'utf8');
+  const at = text.indexOf('## Machine-readable projection');
+  if (at === -1) return [];
+  const fence = text.indexOf('```json', at);
+  if (fence === -1) return [];
+  const body = text.slice(fence + '```json'.length, text.indexOf('```', fence + 7));
+  try {
+    const parsed = JSON.parse(body);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+})();
+if (catalogData) {
+  if (!projectionRows.length) {
+    fail('catalog-op-exists', path.relative(ROOT, MANIFEST_PATH), 'no machine-readable projection block — regenerate with `npm run mcp:project`');
+  }
+  if (catalogData.CATALOG_PLAN_HASH !== planHash) {
+    fail('catalog-planhash', `${catalogRel} (planHash)`, `stale: pins ${catalogData.CATALOG_PLAN_HASH}, plan is ${planHash} — re-run \`node scripts/build-tool-catalog.mjs\``);
+  }
+  const registryNames = registry ? new Set(registry.keys()) : new Set();
+  const projectedNames = new Set(projectionRows.map((r) => r.name));
+  const projectedByOperation = new Map(projectionRows.map((r) => [r.backingOperation, r]));
+  const catalogOps = new Set();
+  for (const row of catalogData.CATALOG) {
+    catalogOps.add(row.op);
+    if (!registryNames.has(row.op)) {
+      fail('catalog-op-exists', `${catalogRel} (CATALOG)`, `${row.op}: not a CAPABILITY_REGISTRY key`);
+      continue;
+    }
+    if (row.tool !== null && !projectedNames.has(row.tool)) {
+      fail('catalog-op-exists', `${catalogRel} (CATALOG)`, `${row.op}: names tool ${row.tool}, which is not in the curated projection`);
+    }
+    if (projectedByOperation.has(row.op) && row.tool === null) {
+      fail('catalog-op-exists', `${catalogRel} (CATALOG)`, `${row.op}: has no tool, but the projection exposes ${projectedByOperation.get(row.op).name} for it`);
+    }
+    if (row.tool === null && (typeof row.reason !== 'string' || row.reason.length === 0)) {
+      fail('catalog-reachability', `${catalogRel} (CATALOG)`, `${row.op}: no tool and no reason — an unexposed capability must say why it is reachable, or be refused with a reason`);
+    }
+    if (row.dry_run !== (row.effect !== 'read')) {
+      fail('catalog-reachability', `${catalogRel} (CATALOG)`, `${row.op}: dry_run=${row.dry_run} disagrees with effect=${row.effect}`);
+    }
+  }
+  for (const name of registryNames) {
+    if (!catalogOps.has(name)) {
+      fail('catalog-reachability', `${catalogRel} (CATALOG)`, `${name}: no catalog row — an operation with no row is indistinguishable from one that does not exist`);
+    }
+  }
+  for (const [op, tool] of Object.entries(catalogData.EXPOSED)) {
+    if (!registryNames.has(op)) fail('catalog-op-exists', `${catalogRel} (EXPOSED)`, `${op}: not a CAPABILITY_REGISTRY key`);
+    if (!projectedNames.has(tool)) fail('catalog-op-exists', `${catalogRel} (EXPOSED)`, `${op} -> ${tool}: not in the curated projection`);
+    const row = catalogData.CATALOG.find((r) => r.op === op);
+    if (!row || row.tool !== tool) fail('catalog-op-exists', `${catalogRel} (EXPOSED)`, `${op} -> ${tool}: CATALOG does not agree (row tool=${row ? row.tool : '<no row>'})`);
+  }
+  // invoke refusals: every operation the projection excludes BY RULE must be refused, with a reason
+  for (const [op, refusal] of Object.entries(catalogData.REFUSALS)) {
+    if (!registryNames.has(op)) fail('catalog-op-exists', `${catalogRel} (REFUSALS)`, `${op}: not a CAPABILITY_REGISTRY key`);
+    if (refusal.reachable !== false) fail('invoke-refusals', `${catalogRel} (REFUSALS)`, `${op}: a refusal must carry reachable: false`);
+    if (typeof refusal.reason !== 'string' || refusal.reason.length === 0) fail('invoke-refusals', `${catalogRel} (REFUSALS)`, `${op}: refused with no reason`);
+    if (projectedNames.has(catalogData.EXPOSED[op])) fail('invoke-refusals', `${catalogRel} (REFUSALS)`, `${op}: refused, but it IS exposed as a tool`);
+    const row = catalogData.CATALOG.find((r) => r.op === op);
+    if (row && row.reachable !== false) fail('invoke-refusals', `${catalogRel} (CATALOG)`, `${op}: refused in REFUSALS but reachable in CATALOG`);
+  }
+  // the projection rule itself: unbounded reads and binary surfaces are never exposed, so they must
+  // always be refused through invoke — otherwise the escape hatch bypasses the rule.
+  const excludedByProjectionRule = projectionRows.length
+    ? [...registryNames].filter((op) => !projectedNames.has(op) && (op.split('.').slice(1).join('.').match(/^(listAll|listPages)$/) || ['photos', 'public_photos', 'uploads', 'exports', 's3_exports'].includes(op.split('.')[0])))
+    : [];
+  for (const op of excludedByProjectionRule) {
+    if (catalogData.REFUSALS[op] === undefined) {
+      fail('invoke-refusals', `${catalogRel} (REFUSALS)`, `${op}: excluded by the projection rule (unbounded read / binary surface) but not refused through the escape hatch`);
+    }
+  }
+  // CORE profile
+  const coreNames = catalogData.CORE_TOOLS;
+  const metaNames = catalogData.META_TOOLS.map((m) => m.name);
+  if (coreNames.length === 0) fail('core-workflow-coverage', `${catalogRel} (CORE_TOOLS)`, 'empty CORE profile');
+  for (const meta of metaNames) {
+    if (!coreNames.includes(meta)) fail('core-workflow-coverage', `${catalogRel} (CORE_TOOLS)`, `${meta}: the META tools are R1 of the core rule and must be in CORE`);
+    if (projectedNames.has(meta)) fail('core-workflow-coverage', `${catalogRel} (META_TOOLS)`, `${meta}: a META tool name collides with a curated tool`);
+    const spec = catalogData.META_TOOLS.find((m) => m.name === meta);
+    if (typeof spec.description !== 'string' || spec.description.length < 40) fail('core-workflow-coverage', `${catalogRel} (META_TOOLS)`, `${meta}: no usable description`);
+  }
+  if (!/SUBSET/.test(JSON.stringify(catalogData.META_TOOLS))) {
+    fail('core-workflow-coverage', `${catalogRel} (META_TOOLS)`, 'no META tool description states that the tool list is a SUBSET of the registry — the honesty contract of the catalog');
+  }
+  const groupAResources = [...new Set(operations.filter((row) => row.group === 'A').map((row) => String(row.primitive ?? '').split('.')[0]))].filter((r) => r && r !== 'undefined');
+  for (const resource of groupAResources) {
+    const covered = coreNames.some((name) => {
+      const row = projectionRows.find((r) => r.name === name);
+      return row && row.effect === 'read' && String(row.backingOperation).split('.')[0] === resource;
+    });
+    if (!covered) {
+      fail('core-workflow-coverage', `${catalogRel} (CORE_TOOLS)`, `${resource}: group A (workflow resource) has no read entry in CORE`);
+    }
+  }
+  const crossResource = coreNames.some((name) => {
+    const row = projectionRows.find((r) => r.name === name);
+    return row && String(row.backingOperation).startsWith('operations.');
+  });
+  if (!crossResource) fail('core-workflow-coverage', `${catalogRel} (CORE_TOOLS)`, 'no cross-resource helper in CORE (rule R3)');
+  // core budget: the client-visible tools/list payload for the core profile
+  const corePayload = coreNames.map((name) => {
+    const row = projectionRows.find((r) => r.name === name);
+    if (row) return { name: row.name, description: row.description, inputSchema: row.inputSchema, outputSchema: row.outputSchema, annotations: row.annotations };
+    const meta = catalogData.META_TOOLS.find((m) => m.name === name);
+    return meta ? { name: meta.name, title: meta.title, description: meta.description, inputSchema: meta.inputSchema } : null;
+  });
+  const unknownCoreTools = coreNames.filter((name) => corePayload[coreNames.indexOf(name)] === null);
+  for (const name of unknownCoreTools) {
+    fail('core-budget', `${catalogRel} (CORE_TOOLS)`, `${name}: not a curated tool and not a META tool`);
+  }
+  const payloadBytes = Buffer.byteLength(JSON.stringify(corePayload.filter((r) => r !== null)));
+  if (payloadBytes > CORE_BUDGET_BYTES) {
+    fail('core-budget', `${catalogRel} (CORE_TOOLS)`, `the CORE tools/list payload is ${payloadBytes} bytes (> ${CORE_BUDGET_BYTES} ≈ 8k tokens) — the profile is creeping back toward the flat surface`);
+  } else {
+    console.log(`capabilities:check — CORE profile: ${coreNames.length} tools, tools/list payload ${payloadBytes} bytes (budget ${CORE_BUDGET_BYTES}; the curated surface a client would otherwise carry is ${Buffer.byteLength(JSON.stringify(projectionRows))} bytes / ${projectionRows.length} tools)`);
+  }
 }
 
 // ---------------------------------------------------------------- report

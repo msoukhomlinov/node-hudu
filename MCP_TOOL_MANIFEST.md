@@ -11,7 +11,7 @@
 - excluded by rule: 22
 - excluded by curation: 56 (dropped through `MCP_TOOL_OVERRIDES.json` — one tool kept per distinct outcome)
 - overrides applied: 644
-- projection timestamp: 2026-09-13T03:32:54.338Z
+- projection timestamp: 2026-09-13T05:35:52.764Z
 
 > 147 projected tools is a projection, not a shipped tool list. MCP servers are
 > token-budgeted: tiering (core / extended) and trimming are curation, recorded in
@@ -2416,3 +2416,57 @@ Restore one by deleting its `exclude` override record and re-running `npm run mc
   {"name":"hudu_update_website","backingOperation":"websites.update","description":"Update a Website. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to create a record: call hudu_create_website.","inputSchema":{"id":{"name":"id","type":"number","required":true},"data":{"name":"data","type":"object","required":true,"fields":[{"name":"id","type":"number","required":false},{"name":"name","type":"string","required":false},{"name":"code","type":"number","required":false},{"name":"message","type":"string","required":false},{"name":"slug","type":"string","required":false},{"name":"keyword","type":"string","required":false},{"name":"monitor_type","type":"number","required":false},{"name":"status","type":"string","required":false},{"name":"monitoring_status","type":"string","required":false},{"name":"refreshed_at","type":"string","required":false},{"name":"monitored_at","type":"string","required":false},{"name":"headers","type":"object","additionalProperties":{"type":"unknown"},"keyType":"string","required":false},{"name":"paused","type":"boolean","required":false},{"name":"sent_notifications","type":"boolean","required":false},{"name":"account_id","type":"number","required":false},{"name":"asset_field_id","type":"number","required":false},{"name":"company_id","type":"number","required":false},{"name":"discarded_at","type":"string","required":false},{"name":"disable_ssl","type":"boolean","required":false},{"name":"disable_whois","type":"boolean","required":false},{"name":"disable_dns","type":"boolean","required":false},{"name":"enable_dmarc_tracking","type":"boolean","required":false},{"name":"enable_dkim_tracking","type":"boolean","required":false},{"name":"enable_spf_tracking","type":"boolean","required":false},{"name":"notes","type":"string","required":false},{"name":"object_type","type":"string","required":false},{"name":"icon","type":"string","required":false},{"name":"asset_type","type":"string","required":false},{"name":"company_name","type":"string","required":false},{"name":"archived","type":"boolean","required":false},{"name":"url","type":"string","required":false}]},"opts":{"name":"opts","type":"object","required":false,"fields":[{"name":"expectedUpdatedAt","type":"string","required":false}]},"dry_run":{"type":"boolean","required":false,"description":"Validate without issuing the write. Returns DryRunResult with simulated: true."}},"outputSchema":{"type":"union","fields":[{"name":"id","type":"number","required":true},{"name":"name","type":"string","required":true},{"name":"code","type":"number","required":true},{"name":"message","type":"string","required":true},{"name":"slug","type":"string","required":true},{"name":"keyword","type":"string","required":true},{"name":"monitor_type","type":"number","required":true},{"name":"status","type":"string","required":true},{"name":"monitoring_status","type":"string","required":true},{"name":"refreshed_at","type":"string","required":true},{"name":"monitored_at","type":"string","required":true},{"name":"headers","type":"object","additionalProperties":{"type":"unknown"},"keyType":"string","required":true},{"name":"paused","type":"boolean","required":true},{"name":"sent_notifications","type":"boolean","required":true},{"name":"account_id","type":"number","required":true},{"name":"asset_field_id","type":"number","required":true},{"name":"company_id","type":"number","required":true},{"name":"discarded_at","type":"string","required":true},{"name":"disable_ssl","type":"boolean","required":true},{"name":"disable_whois","type":"boolean","required":true},{"name":"disable_dns","type":"boolean","required":true},{"name":"enable_dmarc_tracking","type":"boolean","required":true},{"name":"enable_dkim_tracking","type":"boolean","required":true},{"name":"enable_spf_tracking","type":"boolean","required":true},{"name":"notes","type":"string","required":true},{"name":"object_type","type":"string","required":true},{"name":"icon","type":"string","required":true},{"name":"asset_type","type":"string","required":true},{"name":"company_name","type":"string","required":true},{"name":"archived","type":"boolean","required":true},{"name":"url","type":"string","required":true}]},"annotations":{"effect":"write","readOnlyHint":false,"destructiveHint":false,"idempotentHint":true,"openWorldHint":true,"sensitive":false,"requiresApproval":false,"dryRunAffordance":"dry_run","tier":"primitive-write"},"effect":"write","example":"await hudu.websites.update(1, { id: 1, name: 'example', code: 1, message: 'example', /* ... */ }, { dryRun: true, expectedUpdatedAt: '2026-01-01T00:00:00Z' })","registryKind":"primitive","flags":["idempotent"],"permissions":"unknown","dryRun":true,"compact":null,"errors":["CONFIG_ERROR","NETWORK_ERROR","NOT_FOUND","STALE_OBJECT","UNAUTHORIZED","UNPROCESSABLE_ENTITY"],"title":"Update Website"}
 ]
 ```
+
+## Core profile (progressive disclosure)
+
+The client-visible `tools/list` is a TOKEN BUDGET, not a security boundary. MCP has no
+per-call schema fetch, so a host holds every registered tool on every turn; a reference
+server therefore registers a CORE profile plus three META tools that make the whole registry
+reachable on demand (`.run/design/search/progressive-disclosure.md`).
+
+> **CORE inclusion rule (implemented in `scripts/project-mcp-tools.mjs`, not hand-listed):** CORE = every tool an agent needs to (R1) discover any capability, (R2) identify itself to the tenant, (R3) find a record it cannot name, and (R4) read one record of each workflow resource. A write is NOT in core: writes are reachable through `hudu_invoke`, which forces a dry run first and refuses a destructive operation without its confirmation flag. The workflow resources are the repo's own authored group A (scripts/derive-plan.mjs GROUPS.A), so the rule inherits an existing, versioned definition instead of a new opinion.
+
+- CORE tools: 15 (3 META + 12 typed)
+- workflow resources (group A): companies, articles, assets, asset_layouts, asset_passwords, websites, folders, password_folders, groups
+- every write is OUT of core and reachable through `hudu_invoke`, which forces `dry_run: true` first
+
+| # | tool | rule | backing operation |
+| --- | --- | --- | --- |
+| 1 | `hudu_catalog` | R1 discover/meta | — (serves the whole registry) |
+| 2 | `hudu_describe` | R1 discover/meta | — (serves the whole registry) |
+| 3 | `hudu_invoke` | R1 discover/meta | — (serves the whole registry) |
+| 4 | `hudu_search_across_resources` | R3 discover | `operations.searchAcrossResources` |
+| 5 | `hudu_resolve_any` | R3 discover | `operations.resolveAny` |
+| 6 | `hudu_get_api_info` | R2 tenant | `api_info.resolve` |
+| 7 | `hudu_get_company_context` | R4 companies | `companies.getContext` |
+| 8 | `hudu_get_article_context` | R4 articles | `articles.getContext` |
+| 9 | `hudu_get_asset_context` | R4 assets | `assets.getContext` |
+| 10 | `hudu_get_asset_layout` | R4 asset_layouts | `asset_layouts.resolve` |
+| 11 | `hudu_search_asset_passwords` | R4 asset_passwords | `asset_passwords.search` |
+| 12 | `hudu_search_websites` | R4 websites | `websites.search` |
+| 13 | `hudu_get_folder` | R4 folders | `folders.resolve` |
+| 14 | `hudu_search_password_folders` | R4 password_folders | `password_folders.search` |
+| 15 | `hudu_search_groups` | R4 groups | `groups.search` |
+
+### CORE gaps (a gate failure, reported here so it cannot be missed)
+
+- R3 discovery operations not in the projection yet: operations.searchKnowledge (a later build step adds `operations.searchKnowledge`)
+
+### META tools (R1 — discovery of a capability that has no tool)
+
+| tool | what it answers |
+| --- | --- |
+| `hudu_catalog` | every registry operation as a row: `op`, `tool`, `effect`, `requires`, `dry_run`, `reachable`, `reason` |
+| `hudu_describe` | one operation's full schema, flags, errors and guidance |
+| `hudu_invoke` | execute by canonical key, validated against the registry record before any request |
+
+The catalog is GENERATED from `capabilities.json` (see `examples/tool-catalog.generated.ts`,
+emitted by `scripts/build-tool-catalog.mjs`), so an operation that gains or loses a tool cannot
+become invisible: every operation has a row, and an operation the escape hatch refuses has
+`reachable: false` with the reason. An unexposed capability that is indistinguishable from a
+missing one is the defect this closes.
+
+Profiles a host may select (`HUDU_MCP_PROFILE=core|extended|all` in the reference server):
+`core` = the 15 tools above; `extended` = the whole curated projection
+(147 tools); `all` = both. The profile is a host knob, never a reachability boundary —
+every operation stays reachable through `hudu_invoke` under any profile.
