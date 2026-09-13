@@ -5,6 +5,12 @@
 #   node scripts/build-tool-catalog.mjs --check
 #   npm run verify:pack
 #
+# KNOWN BLOCKER (observed in this workflow's own first run, 2026-09-13):
+# `npm ci` fails on ubuntu-latest with EBADPLATFORM, because package.json pins
+# "@esbuild/darwin-arm64": "^0.28.2" as a REQUIRED devDependency (wanted darwin/arm64,
+# actual linux/x64). Drop or neutralize that pin (it should never have been a hard
+# dependency) or the install step can never pass on a Linux runner.
+#
 # ORDERING NOTE: the "Capability manifest checks" step and everything below it need
 # scripts/ and capabilities*.json, which are added by PR #18 (feat/agent-execution-layer).
 # Land this workflow with or after #18. On pre-#18 main those steps fail with MODULE_NOT_FOUND.
