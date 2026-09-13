@@ -66,14 +66,19 @@ describe('AssetsResource', () => {
     expect(spy.calls[0].init.body).toBe(JSON.stringify({ asset: { name: 'Laptop-001' } }));
   });
 
-  it('update (raw) returns raw body as-is', async () => {
+  // REWRITTEN, not weakened: this test previously encoded the OLD behaviour (the raw
+  // `{ asset: {...} }` body returned as-is, so `res.id` was `undefined`). Live evidence
+  // (Hudu 2.45.1) is that the vendor WRAPS the 200 body, so the record is now unwrapped;
+  // the request-shape assertions are unchanged.
+  it('update unwraps the live { asset } envelope and returns the record', async () => {
     const spy = stubFetch(() => json({ asset }));
     const r = makeClient().assets;
     const res = await r.update(1, 10, { name: 'New' });
-    expect(res).toEqual({ asset });
+    expect(res).toEqual(asset);
+    expect((res as { id?: number }).id).toBe(asset.id);
     expect(spy.calls[0].url).toBe('https://hudu.example.com/api/v1/companies/1/assets/10');
     expect(spy.calls[0].init.method).toBe('PUT');
-    // A-1: request body is wrapped in { asset }; response stays flat (pass-through).
+    // A-1: request body is wrapped in { asset }.
     expect(spy.calls[0].init.body).toBe(JSON.stringify({ asset: { name: 'New' } }));
   });
 
@@ -114,17 +119,20 @@ describe('AssetsResource', () => {
     expect((pages[0] as { items: unknown[] }).items).toEqual(assetsList.assets);
   });
 
-  it('update wraps the body in { asset } while moveLayout keeps its own shape (A-1/C1)', async () => {
+  // REWRITTEN, not weakened: both writers were asserted to return the raw `{ asset }`
+  // envelope. Unwrapping is the corrected contract (live: the vendor wraps the 200 body);
+  // the request-shape assertions are unchanged.
+  it('update writes { asset } and moveLayout writes its own shape, and both unwrap the { asset } envelope (A-1/C1)', async () => {
     const spy = stubFetch(() => json({ asset }));
     const r = makeClient().assets;
     const updated = await r.update(1, 10, { name: 'New' });
-    expect(updated).toEqual({ asset });
+    expect(updated).toEqual(asset);
     expect(spy.calls[0].url).toBe('https://hudu.example.com/api/v1/companies/1/assets/10');
     expect(spy.calls[0].init.method).toBe('PUT');
     expect(spy.calls[0].init.body).toBe(JSON.stringify({ asset: { name: 'New' } }));
     const spy2 = stubFetch(() => json({ wrapped: true, asset }));
     const moved = await r.moveLayout(1, 10, { asset_layout_id: 5 });
-    expect(moved).toEqual({ wrapped: true, asset });
+    expect(moved).toEqual(asset);
     expect(spy2.calls[0].url).toContain('/move_layout');
     expect(spy2.calls[0].init.body).toBe(JSON.stringify({ asset_layout_id: 5 }));
   });
@@ -837,5 +845,88 @@ describe('AssetsResource — company id guard (validated before any IO)', () => 
     const resolution = await makeClient().assets.resolve({ id: 10 });
     expect(asRecord(resolution).id).toBe(10);
     expect(spy.calls.some((c) => c.url.includes('/api/v1/assets?'))).toBe(true);
+  });
+});
+
+describe('AssetsResource write paths — expectedUpdatedAt refusal and response unwrap (live defects)', () => {
+  afterEach(() => clearFetch());
+
+  // The declared `AssetWriteOptions` omits `expectedUpdatedAt`, but the TYPE is not the guard: a JS caller
+  // (or an agent building the object) can still pass it, and it used to be silently dropped while the write
+  // LANDED. Each hand-rolled assets write path must refuse it by name and issue NO request.
+  const guarded: [string, (a: AssetsResource) => Promise<unknown>][] = [
+    ['assets.create', (a) => a.create(1, { name: 'X' }, { expectedUpdatedAt: '2000-01-01T00:00:00.000Z' } as unknown as never)],
+    ['assets.update', (a) => a.update(1, 10, { name: 'X' }, { expectedUpdatedAt: '2000-01-01T00:00:00.000Z' } as unknown as never)],
+    ['assets.delete', (a) => a.delete(1, 10, { expectedUpdatedAt: '2000-01-01T00:00:00.000Z' } as unknown as never)],
+    ['assets.archive', (a) => a.archive(1, 10, { expectedUpdatedAt: '2000-01-01T00:00:00.000Z' } as unknown as never)],
+    ['assets.unarchive', (a) => a.unarchive(1, 10, { expectedUpdatedAt: '2000-01-01T00:00:00.000Z' } as unknown as never)],
+    [
+      'assets.moveLayout',
+      (a) => a.moveLayout(1, 10, { asset_layout_id: 5 }, { expectedUpdatedAt: '2000-01-01T00:00:00.000Z' } as unknown as never),
+    ],
+  ];
+
+  for (const [operation, call] of guarded) {
+    it(`${operation} refuses expectedUpdatedAt with HuduConfigError and issues NO request`, async () => {
+      const spy = stubFetch(() => json({ asset }));
+      const err = (await call(makeClient().assets).catch((e: unknown) => e)) as HuduConfigError;
+      expect(err).toBeInstanceOf(HuduConfigError);
+      expect(err.code).toBe('CONFIG_ERROR');
+      // The refusal names the operation and tells the caller what to do instead.
+      expect(err.message).toContain(operation);
+      expect(err.message).toContain('expectedUpdatedAt');
+      expect(err.message).toContain('update');
+      expect(spy.calls).toHaveLength(0);
+    });
+  }
+
+  it('an asset update WITHOUT expectedUpdatedAt still works (no extra request, no refusal)', async () => {
+    const spy = stubFetch(() => json({ asset }));
+    const updated = await makeClient().assets.update(1, 10, { name: 'New' });
+    expect(updated).toEqual(asset);
+    expect(spy.calls).toHaveLength(1);
+    expect(spy.calls[0].init.method).toBe('PUT');
+  });
+
+  it('update with a MATCHING expectedUpdatedAt is still refused on assets (staleCheck: unavailable)', async () => {
+    // The guard is not implemented on this hand-rolled path, so a caller passing the CURRENT revision is
+    // refused too: pretending the guard ran would be the same silent lie.
+    const spy = stubFetch(() => json({ asset }));
+    await expect(
+      makeClient().assets.update(1, 10, { name: 'New' }, { expectedUpdatedAt: asset.updated_at } as unknown as never),
+    ).rejects.toBeInstanceOf(HuduConfigError);
+    expect(spy.calls).toHaveLength(0);
+  });
+
+  it('create/update/moveLayout return a record with a real id for a WRAPPED body', async () => {
+    const createSpy = stubFetch(() => json({ asset }, 201));
+    const created = (await makeClient().assets.create(1, { name: 'X' })) as unknown as Record<string, unknown>;
+    expect(created.id).toBe(asset.id);
+    expect(createSpy.calls).toHaveLength(1);
+
+    const updateSpy = stubFetch(() => json({ asset }));
+    const updated = (await makeClient().assets.update(1, 10, { name: 'X' })) as unknown as Record<string, unknown>;
+    expect(updated.id).toBe(asset.id);
+    expect(updated.asset).toBeUndefined();
+    expect(updateSpy.calls).toHaveLength(1);
+
+    const moveSpy = stubFetch(() => json({ asset }));
+    const moved = (await makeClient().assets.moveLayout(1, 10, { asset_layout_id: 5 })) as unknown as Record<string, unknown>;
+    expect(moved.id).toBe(asset.id);
+    expect(moveSpy.calls).toHaveLength(1);
+  });
+
+  it('create/update/moveLayout return a record with a real id for a FLAT body', async () => {
+    stubFetch(() => json(asset, 201));
+    const created = (await makeClient().assets.create(1, { name: 'X' })) as unknown as Record<string, unknown>;
+    expect(created.id).toBe(asset.id);
+
+    stubFetch(() => json(asset));
+    const updated = (await makeClient().assets.update(1, 10, { name: 'X' })) as unknown as Record<string, unknown>;
+    expect(updated.id).toBe(asset.id);
+
+    stubFetch(() => json(asset));
+    const moved = (await makeClient().assets.moveLayout(1, 10, { asset_layout_id: 5 })) as unknown as Record<string, unknown>;
+    expect(moved.id).toBe(asset.id);
   });
 });

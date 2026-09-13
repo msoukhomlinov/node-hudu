@@ -9,7 +9,7 @@ import type { Asset, AssetCreate, AssetUpdate } from '../types/index.js';
 import type { AssetContext, AssetContextExpand, AssetIdentifier, AssetSummary } from '../types/asset.js';
 import type { DryRunResult, HelperOptions, Resolution, ResolutionCandidate } from '../types/common.js';
 import { HuduConfigError, HuduError, NotFoundError, ResolutionError } from '../errors.js';
-import { assertScanDecided, refuseDryRunInPayload } from './agent-layer-helpers.js';
+import { assertScanDecided, refuseDryRunInPayload, refuseExpectedUpdatedAtOutsideUpdate } from './agent-layer-helpers.js';
 import { AssetLayoutsResource } from './asset_layouts.js';
 import { ExpirationsResource } from './expirations.js';
 import { RelationsResource } from './relations.js';
@@ -32,9 +32,13 @@ export interface AssetSearchOptions {
 /**
  * Options of the asset writers that have no prior revision and no stale guard
  * (`create`, `update`, `delete`, `archive`, `unarchive`, `moveLayout`). The asset
- * update is hand-rolled (the resource path is company-scoped and the vendor PUT
- * returns a flat record), so `expectedUpdatedAt` is not offered here at all: it is
- * deliberately absent rather than declared and ignored.
+ * writers are hand-rolled (the resource path is company-scoped), so no write path
+ * here runs `updateOne`'s opt-in guard and `expectedUpdatedAt` is not offered in the
+ * declared type. The type is not the guard: a JS (or agent-built) options object can
+ * still carry the key, so every one of these paths REFUSES it with `HuduConfigError`
+ * (`refuseExpectedUpdatedAtOutsideUpdate`) rather than dropping it and landing the
+ * write. Callers that need the guard read `updated_at` themselves and compare before
+ * deciding to write.
  */
 export interface AssetWriteOptions {
   dryRun?: boolean;
@@ -188,11 +192,14 @@ export class AssetsResource extends BaseResource<Asset> {
    * POST /companies/{companyId}/assets.
    * A-1/QA: the live n8n node and the PUT example wrap the body in { asset };
    * POST example in the spec is flat but the working live node wraps it too.
-   * The 201 response is a flat Asset, so no unwrap is applied.
-   * The `expectedUpdatedAt` guard is an UPDATE guard and is ignored here.
+   * Live-verified (Hudu 2.45.1): the 201 response is `{ asset: {...} }`, so it is
+   * unwrapped defensively by `unwrapCreated` — a bare record passes through unchanged.
+   * `expectedUpdatedAt` is an UPDATE guard and cannot be honoured here, so it is refused
+   * rather than silently ignored.
    */
   async create(companyId: number, data: AssetCreate, opts?: AssetWriteOptions): Promise<Asset | DryRunResult<Asset>> {
     const operation = 'assets.create';
+    refuseExpectedUpdatedAtOutsideUpdate(operation, opts);
     const company = requireCompanyId(companyId, operation);
     const path = `/companies/${company}/assets`;
     if (opts?.dryRun === true) {
@@ -207,10 +214,10 @@ export class AssetsResource extends BaseResource<Asset> {
       });
     }
     const body = await this.http.request<unknown>({ method: 'POST', path, body: { asset: data }, operation });
-    return body as Asset;
+    return this.unwrapCreated<Asset>(body);
   }
 
-  /** PUT /companies/{companyId}/assets/{id}. Wraps the body in { asset } — the api-docs.json PUT example and the live n8n node (_assetFieldUtils_ ~L522) both nest it; the 200 response is a flat Asset, so no unwrap is applied (A-1/R6). */
+  /** PUT /companies/{companyId}/assets/{id}. Wraps the body in { asset } — the api-docs.json PUT example and the live n8n node (_assetFieldUtils_ ~L522) both nest it; live-verified (Hudu 2.45.1) the 200 response is `{ asset: {...} }` too, so it is unwrapped by `unwrapSingle` (A-1/R6). */
   async update(companyId: number, id: number, data: AssetUpdate): Promise<Asset>;
   /** Dry-run: describe the update without issuing it. */
   async update(companyId: number, id: number, data: AssetUpdate, opts: { dryRun: true }): Promise<DryRunResult<Asset>>;
@@ -218,11 +225,15 @@ export class AssetsResource extends BaseResource<Asset> {
   /**
    * PUT /companies/{companyId}/assets/{id}. `{ dryRun: true }` describes the
    * update without issuing it. `staleCheck` is "unavailable" for assets: the
-   * vendor's flat PUT response and the hand-rolled request path are not routed
-   * through `updateOne`, so no `{ expectedUpdatedAt }` guard is offered.
+   * hand-rolled request path is not routed through `updateOne`, so no
+   * `{ expectedUpdatedAt }` guard is offered — and because the guard cannot run,
+   * the option is REFUSED with `HuduConfigError` (naming the operation) instead of
+   * being silently dropped. Re-read the record's `updated_at` and compare it in the
+   * caller before issuing the write.
    */
   async update(companyId: number, id: number, data: AssetUpdate, opts?: AssetWriteOptions): Promise<Asset | DryRunResult<Asset>> {
     const operation = 'assets.update';
+    refuseExpectedUpdatedAtOutsideUpdate(operation, opts);
     const company = requireCompanyId(companyId, operation);
     const path = `/companies/${company}/assets/${id}`;
     if (opts?.dryRun === true) {
@@ -238,7 +249,7 @@ export class AssetsResource extends BaseResource<Asset> {
       });
     }
     const body = await this.http.request<unknown>({ method: 'PUT', path, body: { asset: data }, operation, resourceIds: [id] });
-    return body as Asset;
+    return this.unwrapSingle<Asset>(body);
   }
 
   async delete(companyId: number, id: number): Promise<void>;
@@ -247,6 +258,7 @@ export class AssetsResource extends BaseResource<Asset> {
   async delete(companyId: number, id: number, opts?: AssetWriteOptions): Promise<void | DryRunResult<void>>;
   async delete(companyId: number, id: number, opts?: AssetWriteOptions): Promise<void | DryRunResult<void>> {
     const operation = 'assets.delete';
+    refuseExpectedUpdatedAtOutsideUpdate(operation, opts);
     const company = requireCompanyId(companyId, operation);
     const path = `/companies/${company}/assets/${id}`;
     if (opts?.dryRun === true) {
@@ -288,6 +300,7 @@ export class AssetsResource extends BaseResource<Asset> {
   async moveLayout(companyId: number, id: number, data: { asset_layout_id: number }, opts?: AssetWriteOptions): Promise<Asset | DryRunResult<Asset>> {
     const operation = 'assets.moveLayout';
     refuseDryRunInPayload(operation, data);
+    refuseExpectedUpdatedAtOutsideUpdate(operation, opts);
     const company = requireCompanyId(companyId, operation);
     const path = `/companies/${company}/assets/${id}/move_layout`;
     if (opts?.dryRun === true) {
@@ -304,7 +317,7 @@ export class AssetsResource extends BaseResource<Asset> {
       });
     }
     const body = await this.http.request<unknown>({ method: 'PUT', path, body: data, operation, resourceIds: [id] });
-    return body as Asset;
+    return this.unwrapSingle<Asset>(body);
   }
 
   async listAllAcrossCompanies(params?: AccountAssetsListParams): Promise<Asset[]> {
@@ -582,6 +595,7 @@ export class AssetsResource extends BaseResource<Asset> {
   ): Promise<void | DryRunResult<void>> {
     const action = archive ? 'archive' : 'unarchive';
     const operation = `assets.${action}`;
+    refuseExpectedUpdatedAtOutsideUpdate(operation, opts);
     const company = requireCompanyId(companyId, operation);
     const path = `/companies/${company}/assets/${id}/${action}`;
     if (opts?.dryRun === true) {
