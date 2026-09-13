@@ -77,8 +77,16 @@ re-deriving the projection rules.
   Diff: 25 insertions / 25 deletions.
 * `capabilities.plan.json` — 16 prose strings rewritten (the 17 refused-operation refs, one string covering two):
   each now says the sibling form is **client-only** and that the resource backs no MCP tool. Diff: 16/16 lines.
-* `warnings` after cleanup: **255** (the two WARN classes). They are printed on every run, so the drift is visible
-  and cannot grow silently; they never fail the build.
+* signal-to-noise: the 189 non-failing hits are now an **INFO count**, not warnings, because a name that is
+  callable another way is not a lie — 135 refs to curated-out operations (callable through `hudu_invoke`) and 54
+  to documented SDK methods with no registry record (162 passing mentions, 27 presented as call targets). The
+  verdict is `mention`, decided by a CONTRAST-first classifier (a mention preceded by "over / rather than /
+  instead of / not / never / avoid / without / versus / compared to" is informative prose; every contrast
+  contains a directive verb, so contrasts are checked first) and it is never warned on.
+* the remaining warnings are **66, all pre-existing `unplanned-surface`**, and the warning block is now grouped
+  per rule: a COUNT plus the first 3 examples per rule, the full list under `--verbose`. Every FAIL is still one
+  line per failure: failures are never grouped away. Warning count **255 → 66**; the summary line reads
+  `warnings=66 info=189`.
 
 ### Injection proof (both FAIL classes)
 

@@ -115,6 +115,10 @@ const REGISTRY_PATH = path.resolve(ROOT, argValue('--registry', 'src/capabilitie
 const MANIFEST_PATH = path.resolve(ROOT, argValue('--manifest', 'MCP_TOOL_MANIFEST.md'));
 const failures = [];
 const warnings = [];
+// Non-failing, non-warning: prose that mentions a name which is not an exposed tool but IS callable
+// (through hudu_invoke, or as a documented SDK method). Counted in the summary; listed with --verbose.
+const mentions = [];
+const VERBOSE = argv.includes('--verbose');
 function fail(rule, jsonPath, reason) {
   failures.push({ rule, path: jsonPath, reason });
 }
@@ -825,7 +829,10 @@ if (catalogData) {
 
 // ---------------------------------------------------------------- prose vs the PROJECTION
 //   prose-dangling-projection  prose that reaches an MCP client names a tool or an operation no
-//                            client can call. Two surfaces are scanned, because both are text an
+//                            client can call. A name that IS callable another way (through
+//                            hudu_invoke, or as a documented SDK method of this package) is
+//                            COUNTED, not warned — a tool description saying what it wraps is not a
+//                            defect (measured: warning on it added 189 lines to every run). Two surfaces are scanned, because both are text an
 //                            agent actually reads:
 //                              (1) the curated projection's OWN tool descriptions (the
 //                                  machine-readable block of MCP_TOOL_MANIFEST.md) — the text a
@@ -868,11 +875,23 @@ if (catalogData) {
     const row = catalogByOp.get(ref);
     if (row) {
       if (row.reachable === false) return { verdict: 'fail', why: `the generated catalog REFUSES it (${row.reason}) and hudu_invoke refuses it too, so no MCP client can call it` };
-      if (row.tool === null) return { verdict: 'warn', why: 'it has no tool of its own (curated out as a duplicate outcome) — reachable only through hudu_invoke, so the name is not a tool name' };
+      // Curated out as a duplicate outcome: the capability is real and `hudu_invoke` reaches it, so
+      // naming it is not a lie — only its SHAPE (a method name, not a tool name) is worth counting.
+      if (row.tool === null) return { verdict: 'mention', note: 'no tool of its own (curated out as a duplicate outcome) — callable through hudu_invoke' };
       return { verdict: 'ok' };
     }
-    if (sourceMethod(ref).ok) return { verdict: 'warn', why: 'it is a client method with no registry record, so it is not a capability any client can reach' };
+    if (sourceMethod(ref).ok) return { verdict: 'mention', note: 'a documented SDK method of this package with no registry record' };
     return { verdict: 'fail', why: 'it is neither a client method nor a registry operation' };
+  }
+  // Is this mention a CALL TARGET (an instruction to call it), or a passing reference? A caller is
+  // only MISLED by the former, and a bare mention ("backed by X", "preferred over X") is informative
+  // prose, not a defect. Contrasts are checked first: every one of them contains a directive verb.
+  const CONTRAST_BEFORE = /(?:\bover|\brather than|\binstead of|\bnot|\bnever|\bavoid|\bdo not|\bdon't|\bwithout|\bother than|\bversus|\bvs\.?|\bcompared (?:to|with))\s+(?:calling\s+|call\s+|use\s+|using\s+)?$/;
+  const DIRECTIVE_BEFORE = /(?:\bcall|\bcalls|\bcalling|\buse|\buses|\busing|\bprefer|\bprefers|\binvoke|\bswitch to|\breach for|\btry)\s+(?:the\s+|a\s+)?$/;
+  function presentedAsCallTarget(text, index) {
+    const before = text.slice(Math.max(0, index - 40), index).toLowerCase().replace(/\s+/g, ' ');
+    if (CONTRAST_BEFORE.test(before)) return false;
+    return DIRECTIVE_BEFORE.test(before);
   }
   function checkProseProjection(text, jsonPath, label, field) {
     if (typeof text !== 'string' || text.length === 0) return;
@@ -888,10 +907,18 @@ if (catalogData) {
       if (projectedToolNames.has(ref)) continue;
       const v = refAgainstProjection(ref);
       if (v.verdict === 'ok') continue;
-      if (v.verdict === 'warn') { warn('prose-dangling-projection', jsonPath, `${label}: ${field} names "${ref}", which is not an exposed tool — ${v.why}`); continue; }
+      // FAIL unchanged: a name no client can call is a defect whether it is a mention or an
+      // instruction. The mention class is COUNTED, never warned: it is callable another way, so
+      // warning on it buried the 66 meaningful unplanned-surface warnings under 189 lines of
+      // "this tool's description says what it wraps" (measured before this change).
+      if (v.verdict === 'mention') {
+        mentions.push({ jsonPath, label, field, ref, directive: presentedAsCallTarget(text, m.index), note: v.note });
+        continue;
+      }
       fail('prose-dangling-projection', jsonPath, `${label}: ${field} names "${ref}", which no client can call — ${v.why}`);
     }
   }
+
   for (const row of projectionRows) {
     checkProseProjection(row.description, `${manifestRel} (${row.name})`, row.name, 'description');
   }
@@ -1052,9 +1079,35 @@ if (searchModeTable !== null) {
 const scopeLabel = SHIP ? 'ship gate (all groups, every row tested)' : GROUP ? `batch gate, group ${GROUP}` : 'all groups (planned tolerated)';
 console.log(`capabilities:check — plan ${PLAN_ARG} planHash=${planHash}; rows=${operations.length}; scoped=${scoped.length}; scope=${scopeLabel}`);
 if (registry) console.log(`capabilities:check — registry ${path.relative(ROOT, REGISTRY_PATH)} records=${registry.size}`);
+// Signal-to-noise: a rule that fires 66 times on a healthy tree is a rule nobody reads. Every WARNING
+// is still shown — as a per-rule COUNT with a few examples, with the full list under --verbose — so a
+// 66-line dump cannot bury the one line that changed. Failures are never grouped away.
+const EXAMPLES = VERBOSE ? Infinity : 3;
 if (warnings.length) {
-  console.log(`\nWARNINGS (${warnings.length}) — not failures:`);
-  for (const w of warnings) console.log(`  ! [${w.rule}] ${w.path}: ${w.reason}`);
+  const byWarnRule = new Map();
+  for (const w of warnings) {
+    const bucket = byWarnRule.get(w.rule) ?? [];
+    bucket.push(w);
+    byWarnRule.set(w.rule, bucket);
+  }
+  console.log(`\nWARNINGS (${warnings.length}) — not failures${VERBOSE ? '' : ' (first 3 per rule; --verbose for every line)'}:`);
+  for (const [rule, list] of byWarnRule) {
+    console.log(`  ! [${rule}] ${list.length} warning(s)`);
+    for (const w of list.slice(0, EXAMPLES)) console.log(`      ${w.path}: ${w.reason}`);
+  }
+}
+if (mentions.length) {
+  // Informational, never a warning: prose that names a capability reachable another way (through
+  // hudu_invoke) or a documented SDK method. Counted so the drift stays measurable, quiet so it does
+  // not compete with a real warning.
+  const byNote = new Map();
+  for (const m of mentions) byNote.set(m.note, (byNote.get(m.note) ?? 0) + 1);
+  const asTargets = mentions.filter((m) => m.directive).length;
+  console.log(`\nINFO: ${mentions.length} prose mention(s) of a non-tool name that is callable another way (${asTargets} as a call target) — not warnings:`);
+  for (const [note, count] of byNote) console.log(`      ${count} x ${note}`);
+  for (const m of mentions.slice(0, EXAMPLES)) console.log(`      e.g. ${m.label} ${m.field} -> ${m.ref}${m.directive ? ' (told to call it)' : ' (passing mention)'}`);
+  if (!VERBOSE) console.log('      (--verbose lists every mention)');
+  if (VERBOSE) for (const m of mentions) console.log(`      [${m.jsonPath}] ${m.label} ${m.field} -> ${m.ref}${m.directive ? ' (target)' : ''}`);
 }
 if (failures.length) {
   console.log(`\nFAILURES (${failures.length}):`);
@@ -1064,5 +1117,5 @@ if (failures.length) {
   console.log(`\nFAIL — ${failures.length} failure(s) in ${Object.keys(byRule).length} distinct rule(s): ${Object.entries(byRule).map(([k, v]) => `${k}=${v}`).join(', ')}`);
   process.exit(1);
 }
-console.log(`\nPASS — 0 failures; rows=${operations.length} scoped=${scoped.length} registryRecords=${registry ? registry.size : 0} warnings=${warnings.length}`);
+console.log(`\nPASS — 0 failures; rows=${operations.length} scoped=${scoped.length} registryRecords=${registry ? registry.size : 0} warnings=${warnings.length} info=${mentions.length}`);
 process.exit(0);
