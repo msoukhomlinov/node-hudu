@@ -584,7 +584,15 @@ function outputSchema(row, method) {
   if (!method) return { type: rt, unresolved: true };
   if (method.stream) {
     const item = jsonType(rt);
-    return { type: 'AsyncIterable', itemType: item.typeName ?? item.type, note: 'streams items one page at a time' };
+    const schema = { type: 'AsyncIterable', itemType: item.typeName ?? item.type, note: 'streams items one page at a time' };
+    if (item.variants) {
+      // The implementation signature (TS 2394) returns the UNION of the public returns — e.g.
+      // `list` with optional `include` is `AsyncIterable<Asset | AssetWithIncludes>`. A bare
+      // `itemType: "union"` strips the prior item contract, so keep the concrete variants
+      // (name + fields) so schema-driven callers can discover the included output shape.
+      schema.itemVariants = item.variants;
+    }
+    return schema;
   }
   const jt = jsonType(rt);
   if (row.compact) {
