@@ -86,6 +86,21 @@ describe('BaseResource helpers', () => {
       await expect(make(RawNoKeyResource).create({ name: 'x' })).resolves.toEqual({ probe: { id: 9 } });
     });
 
+    it('refuses dryRun in the payload slot on the create path', async () => {
+      // Live-verified: a payload-slot `dryRun` is forwarded to the vendor, which ignores it, so a real
+      // write executes while the caller believes it simulated.
+      const spy = stubFetch(() => json({ probe: { id: 1 } }));
+      await expect(make(RawProbeResource).create({ name: 'x', dryRun: true }))
+        .rejects.toBeInstanceOf(HuduConfigError);
+      expect(spy.calls).toHaveLength(0);
+    });
+
+    it('still writes for a payload that carries no dryRun key', async () => {
+      const spy = stubFetch(() => json({ probe: { id: 1 } }));
+      await expect(make(RawProbeResource).create({ name: 'x' })).resolves.toEqual({ id: 1 });
+      expect(spy.calls).toHaveLength(1);
+    });
+
     it('still unwraps unconditionally for a resource that declares createType wrapped', async () => {
       stubFetch(() => json({ probe: { id: 4 } }));
       const r = new ProbeResource(new HttpClient(resolveConfig({ baseUrl: 'https://x', apiKey: 'k' })));

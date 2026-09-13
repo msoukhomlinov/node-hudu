@@ -7,6 +7,7 @@ import { isRecord } from '../utils.js';
 import type { ListParams, Page } from '../pagination.js';
 import { collectAll, paginate, paginateItems } from '../pagination.js';
 import { HuduConfigError, ResolutionError, StaleObjectError } from '../errors.js';
+import { refuseDryRunInPayload } from './agent-layer-helpers.js';
 import type {
   DryRunCheck,
   DryRunResult,
@@ -215,6 +216,8 @@ export abstract class BaseResource<T = unknown> {
   protected async createOne<U = T>(data: unknown, query?: Record<string, unknown>, opts?: MutationOptions): Promise<U | DryRunResult<U>> {
     const operation = `${this.resourcePath}.create`;
     this.assertNoExpectedUpdatedAt('createOne', opts);
+    // `dryRun` in the payload slot is sent to the vendor (which ignores it) and the write executes.
+    refuseDryRunInPayload(operation, data);
     // One impact statement in both channels: the dry-run result and the audit event
     // that carries the executed-result metadata (policy §7.2/§7.3).
     const impact: OperationImpact = { affected: 1, scope: 'single', reversible: true };
@@ -287,6 +290,8 @@ export abstract class BaseResource<T = unknown> {
         'Mutation options must be the 4th argument: updateOne(id, data, query, { dryRun: true })',
       );
     }
+    // Same trap as createOne: a `dryRun` in the payload is forwarded, not honoured.
+    refuseDryRunInPayload(operation, data);
     if (opts?.dryRun) {
       return this.buildDryRunResult<U>({
         operation,

@@ -9,6 +9,7 @@ import type { Asset, AssetCreate, AssetUpdate } from '../types/index.js';
 import type { AssetContext, AssetContextExpand, AssetIdentifier, AssetSummary } from '../types/asset.js';
 import type { DryRunResult, HelperOptions, Resolution, ResolutionCandidate } from '../types/common.js';
 import { HuduConfigError, HuduError, NotFoundError, ResolutionError } from '../errors.js';
+import { refuseDryRunInPayload } from './agent-layer-helpers.js';
 import { AssetLayoutsResource } from './asset_layouts.js';
 import { ExpirationsResource } from './expirations.js';
 import { RelationsResource } from './relations.js';
@@ -286,6 +287,7 @@ export class AssetsResource extends BaseResource<Asset> {
   async moveLayout(companyId: number, id: number, data: { asset_layout_id: number }, opts?: AssetWriteOptions): Promise<Asset | DryRunResult<Asset>>;
   async moveLayout(companyId: number, id: number, data: { asset_layout_id: number }, opts?: AssetWriteOptions): Promise<Asset | DryRunResult<Asset>> {
     const operation = 'assets.moveLayout';
+    refuseDryRunInPayload(operation, data);
     const company = requireCompanyId(companyId, operation);
     const path = `/companies/${company}/assets/${id}/move_layout`;
     if (opts?.dryRun === true) {

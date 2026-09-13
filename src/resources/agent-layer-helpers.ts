@@ -177,3 +177,25 @@ export function refuseExpectedUpdatedAtOutsideUpdate(
       'this path records staleCheck "unavailable" and would never run the guard.',
   );
 }
+
+/**
+ * Refuse `dryRun` placed in the BUSINESS payload slot instead of the options slot.
+ *
+ * Live-verified on Hudu 2.45.1: `procedures.duplicate(id, { company_id, dryRun: true })` puts `dryRun` in the
+ * second argument, which is the request BODY/params, not `MutationOptions`. The SDK then issues a real POST
+ * with an ignored `dryRun` parameter and **the mutation executes** while the caller believes it only
+ * simulated. Anything that accepts a business object before an `opts` object has this trap, so every such
+ * path refuses the key by name instead of performing a write the caller did not ask for.
+ */
+export function refuseDryRunInPayload(operation: string, payload: unknown): void {
+  if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) return;
+  const record = payload as Record<string, unknown>;
+  for (const key of ['dryRun', 'dry_run'] as const) {
+    if (record[key] === undefined) continue;
+    throw new HuduConfigError(
+      `${operation}: \`${key}\` belongs in the OPTIONS argument, not the request payload — ` +
+        'passed here it is sent to the vendor, which ignores it, so a real write would execute. ' +
+        `Call ${operation}(..., { ${key}: true }) with the options object as the LAST argument.`,
+    );
+  }
+}

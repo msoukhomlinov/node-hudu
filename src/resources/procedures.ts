@@ -14,7 +14,7 @@ import type {
 import { ProcedureTasksResource, toProcedureTaskSummary } from './procedure_tasks.js';
 import {
   decideResolution, helperLimit, identifierError, numericIds,
-  refuseExpectedUpdatedAtOutsideUpdate, requirePositiveId,
+  refuseDryRunInPayload, refuseExpectedUpdatedAtOutsideUpdate, requirePositiveId,
 } from './agent-layer-helpers.js';
 
 export interface ProceduresListParams extends ListParams {
@@ -141,6 +141,8 @@ export class ProceduresResource extends BaseResource<Procedure> {
   ): Promise<Procedure | DryRunResult<Procedure>> {
     const operation = 'procedures.duplicate';
     refuseExpectedUpdatedAtOutsideUpdate(operation, options);
+    // A `dryRun` here would sit in the request payload/params: the vendor ignores it and the action RUNS.
+    refuseDryRunInPayload(operation, opts);
     // ONE impact statement in both channels: the dry-run result and the audit event of the
     // executed call (policy §7.3). Undo: procedures.delete on the returned copy's id.
     const impact: OperationImpact = { affected: 1, scope: 'single', reversible: true };
@@ -188,6 +190,8 @@ export class ProceduresResource extends BaseResource<Procedure> {
   ): Promise<Procedure | DryRunResult<Procedure>> {
     const operation = 'procedures.createFromTemplate';
     refuseExpectedUpdatedAtOutsideUpdate(operation, options);
+    // A `dryRun` here would sit in the request payload/params: the vendor ignores it and the action RUNS.
+    refuseDryRunInPayload(operation, opts);
     // Undo: procedures.delete on the id of the process the 201 response returns.
     const impact: OperationImpact = { affected: 1, scope: 'single', reversible: true };
     if (options?.dryRun === true) {
@@ -231,6 +235,8 @@ export class ProceduresResource extends BaseResource<Procedure> {
   ): Promise<{ message: string } | DryRunResult<{ message: string }>> {
     const operation = 'procedures.kickoff';
     refuseExpectedUpdatedAtOutsideUpdate(operation, options);
+    // A `dryRun` here would sit in the request payload/params: the vendor ignores it and the action RUNS.
+    refuseDryRunInPayload(operation, opts);
     // Undo: `DELETE /procedures/{id}` is documented as "Delete a Process or Run ... remove a
     // process or run by its ID", so the created RUN is removable. The kickoff response carries
     // only { message }, so the run id must be discovered first (procedures.list of the runs of

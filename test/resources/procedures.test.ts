@@ -703,3 +703,32 @@ describe('ProceduresResource — executed audit impact equals the dry-run impact
     expect(kickoff.warnings.join(' ')).toContain('discover the new run id with procedures.list');
   });
 });
+
+
+describe('dryRun in the payload slot is refused (it would execute a real write)', () => {
+  // Live-verified on Hudu 2.45.1: `duplicate(id, { company_id, dryRun: true })` puts dryRun in the BUSINESS
+  // object, so the SDK issued a real POST and the vendor ignored the parameter - the mutation executed while
+  // the caller believed it had only simulated.
+  afterEach(() => clearFetch());
+
+  it('refuses dryRun in the business object of duplicate, kickoff and createFromTemplate', async () => {
+    const spy: FetchSpy = stubFetch(() => json({ procedure: { id: 1 } }));
+    const client = makeClient();
+    await expect(client.procedures.duplicate(7, { company_id: 3, dryRun: true } as never))
+      .rejects.toBeInstanceOf(HuduConfigError);
+    await expect(client.procedures.kickoff(7, { dryRun: true } as never)).rejects.toBeInstanceOf(HuduConfigError);
+    await expect(client.procedures.createFromTemplate(7, { dryRun: true } as never))
+      .rejects.toBeInstanceOf(HuduConfigError);
+    // The snake_case spelling is the same trap.
+    await expect(client.procedures.duplicate(7, { company_id: 3, dry_run: true } as never))
+      .rejects.toBeInstanceOf(HuduConfigError);
+    expect(spy.calls).toHaveLength(0);
+  });
+
+  it('still accepts dryRun in the OPTIONS slot and writes nothing', async () => {
+    const spy: FetchSpy = stubFetch(() => json({ procedure: { id: 1 } }));
+    const res = await makeClient().procedures.duplicate(7, { company_id: 3 }, { dryRun: true });
+    expect((res as { simulated?: boolean }).simulated).toBe(true);
+    expect(spy.calls).toHaveLength(0);
+  });
+});
