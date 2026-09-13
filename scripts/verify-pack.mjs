@@ -66,11 +66,13 @@ check('tarball does not ship src/', ![...listing].some((f) => f.startsWith('src/
 
 // 4. the compiled registry must agree with the emitted JSON
 const extract = (member) => run('tar', ['-xzOf', tarball, `package/${member}`]);
-const distRegistry = extract('dist/capabilities.js');
+// Search the WHOLE packed dist, not just dist/capabilities.js: the bundler hoists the registry data into a
+// shared chunk once other modules import it, leaving the entry file a few hundred bytes that merely re-imports
+// the constant. A check pinned to one filename then reports a stale registry when nothing is wrong.
 const emittedJson = JSON.parse(extract('capabilities.json'));
-// tsup emits the constant with double quotes; accept both.
-const distHash = (distRegistry.match(/CAPABILITIES_PLAN_HASH\s*=\s*["']([0-9a-f]{16,})["']/) ?? [])[1];
-check('dist registry is not stale', Boolean(distHash), 'no CAPABILITIES_PLAN_HASH found in the packed dist');
+const distText = [...listing].filter((f) => /^dist\/.*\.c?js$/.test(f)).map(extract).join('\n');
+const distHash = (distText.match(/CAPABILITIES_PLAN_HASH\s*=\s*["']([0-9a-f]{16,})["']/) ?? [])[1];
+check('dist registry is not stale', Boolean(distHash), 'no CAPABILITIES_PLAN_HASH found anywhere in the packed dist');
 check(
   'dist registry agrees with capabilities.json',
   distHash === emittedJson.planHash,
@@ -104,6 +106,16 @@ try {
   ok.push(out);
 } catch (err) {
   failures.push(`ESM import failed: ${String(err.stderr || err.message).split('\n')[0]}`);
+}
+// The strongest form of the registry check: read the hash out of the INSTALLED package rather than out of the
+// tarball's text, so it survives any bundling shape.
+try {
+  const probe = `const m = await import('node-hudu/capabilities');process.stdout.write(String(m.CAPABILITIES_PLAN_HASH ?? ''));`;
+  const shippedHash = run('node', ['--input-type=module', '-e', probe], consumer).trim();
+  check('the installed package reports the registry hash that ships beside it', shippedHash === emittedJson.planHash,
+    `installed ${shippedHash.slice(0, 12)} vs capabilities.json ${String(emittedJson.planHash).slice(0, 12)}`);
+} catch (err) {
+  failures.push(`could not read CAPABILITIES_PLAN_HASH from the installed package: ${String(err.stderr || err.message).split('\n')[0]}`);
 }
 try {
   const out = run('node', ['-e', cjs], consumer).trim();
