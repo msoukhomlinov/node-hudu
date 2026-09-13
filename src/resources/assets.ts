@@ -795,27 +795,41 @@ export class AssetsResource extends BaseResource<Asset> {
     }
   }
 
-  /** Attach the named groups to a collected array of assets (or summaries). */
+  /**
+   * Attach the named groups to a collected array of assets (or summaries). One task per
+   * (asset, group) pair, run through the client's bounded-concurrency pool (`mapConcurrent`)
+   * so a large tenant's asset set cannot start a relation fetch per asset at once: at most
+   * `concurrency` requests are in flight. Order is preserved, and a failing group fetch
+   * rejects the whole call — the same contract as the unbounded `Promise.all` it replaced
+   * (no partial include results are ever returned).
+   */
   private async withIncludesAll<T extends AssetIncludeSource>(
     items: T[],
     groups: AssetIncludeGroup[],
     pageSize: number,
   ): Promise<(T & AssetIncludes)[]> {
-    return Promise.all(items.map(async (item) => ({ ...item, ...(await this.fetchAssetIncludes(item, groups, pageSize)) })));
+    const tasks = items.flatMap((item, index) => groups.map((group) => ({ item, group, index })));
+    const partials: Array<Partial<AssetIncludes>> = items.map(() => ({}));
+    await this.mapConcurrent(tasks, async (task) => {
+      const extra = await this.fetchOneInclude(task.item, task.group, pageSize);
+      Object.assign(partials[task.index] as Partial<AssetIncludes>, extra);
+    });
+    return items.map((item, index) => ({ ...item, ...partials[index] }) as T & AssetIncludes);
+  }
+
+  /** Fetch a single include group for one asset; each group is its own fetch. */
+  private fetchOneInclude(asset: AssetIncludeSource, group: AssetIncludeGroup, pageSize: number): Promise<Partial<AssetIncludes>> {
+    switch (group) {
+      case 'layout': return this.fetchLayoutInclude(asset);
+      case 'expirations': return this.fetchExpirationsInclude(asset, pageSize);
+      case 'relations': return this.fetchRelationsInclude(asset, pageSize);
+      case 'photos': return this.fetchPhotosInclude(asset, pageSize);
+    }
   }
 
   /** Fetch the named groups for one asset, in parallel; each group is its own fetch. */
   private async fetchAssetIncludes(asset: AssetIncludeSource, groups: AssetIncludeGroup[], pageSize: number): Promise<AssetIncludes> {
-    const results = await Promise.all(
-      groups.map(async (group): Promise<Partial<AssetIncludes>> => {
-        switch (group) {
-          case 'layout': return this.fetchLayoutInclude(asset);
-          case 'expirations': return this.fetchExpirationsInclude(asset, pageSize);
-          case 'relations': return this.fetchRelationsInclude(asset, pageSize);
-          case 'photos': return this.fetchPhotosInclude(asset, pageSize);
-        }
-      }),
-    );
+    const results = await Promise.all(groups.map((group) => this.fetchOneInclude(asset, group, pageSize)));
     return Object.assign({}, ...results);
   }
 
