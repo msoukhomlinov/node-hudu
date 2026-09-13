@@ -606,6 +606,20 @@ function outputSchema(row, method) {
     // loudly instead of the registry lying.
     const drops = compactProps && fullProps ? fullProps.filter((n) => !compactProps.includes(n)) : [];
     const dropsUnresolved = !(compactProps && fullProps);
+    // include-aware variants (F1): a helper whose options advertise `include` returns the compact
+    // and full shapes WITH the named include groups — e.g. assets.search resolves to
+    // `AssetSummary | Asset | AssetSummaryWithIncludes | AssetWithIncludes`. The base modeling
+    // above keeps the compact projection (`type`) and the plain full record (`fullType`), so the
+    // remaining concrete named variants (name + fields) are preserved next to them — the same
+    // mechanism as the stream `itemVariants` (D1), adapted to this record model. A union holding
+    // only the base shapes (every other helper) emits nothing, so this is a no-op outside the
+    // include rows and the base `fullType` pick (C3) is untouched.
+    const includeVariants = compactProps
+      ? splitTopLevel(rt)
+          .map(unwrapArrayMember)
+          .filter((m) => m && !['null', 'undefined', 'void'].includes(m) && !isResolutionMember(m) && m !== compactName && (!full || m !== full.name) && resolveProps(m))
+          .map((m) => ({ type: 'object', typeName: m, fields: fieldsForType(m) }))
+      : [];
     return {
       type: compactName,
       drops,
@@ -613,6 +627,7 @@ function outputSchema(row, method) {
       fields: compactProps ? fieldsForType(compactName) : null,
       fullType: full ? full.name : rt,
       expand: 'expand: true returns the full typed record',
+      ...(includeVariants.length ? { includeVariants } : {}),
     };
   }
   const fields = fieldsForType(rt);
