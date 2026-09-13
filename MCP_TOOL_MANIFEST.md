@@ -11,7 +11,7 @@
 - excluded by rule: 22
 - excluded by curation: 56 (dropped through `MCP_TOOL_OVERRIDES.json` — one tool kept per distinct outcome)
 - overrides applied: 644
-- projection timestamp: 2026-09-13T01:00:21.912Z
+- projection timestamp: 2026-09-13T02:47:15.247Z
 
 > 147 projected tools is a projection, not a shipped tool list. MCP servers are
 > token-budgeted: tiering (core / extended) and trimming are curation, recorded in
