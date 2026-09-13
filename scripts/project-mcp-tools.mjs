@@ -395,6 +395,21 @@ if (unresolvedOverrides.length) {
 }
 writeFileSync(OUT, lines.join('\n'));
 console.log(`mcp:project — wrote ${path.relative(ROOT, OUT)}`);
+// A machine-readable projection of the SAME tools the manifest describes. The manifest's tool table only
+// lists the curated exclusions, so nothing could verify MCP coverage mechanically; this lets a coverage or
+// audit script map every projected tool to the registry operation that backs it.
+const toolsJson = argValue('--list-tools', '');
+if (toolsJson) {
+  const rows = tools.map((t) => ({
+    name: t.name,
+    backingOperation: t.backingOperation,
+    effect: t.effect,
+    tier: t.annotations?.tier ?? null,
+    registryKind: t.registryKind ?? null,
+  }));
+  writeFileSync(path.resolve(ROOT, toolsJson), JSON.stringify(rows, null, 2));
+  console.log(`mcp:project — wrote ${toolsJson} (${rows.length} tools)`);
+}
 
 // ---------------------------------------------------------------- --check-example
 // The example MCP server is a REFERENCE CONSUMER generated from the curated projection. This gate
