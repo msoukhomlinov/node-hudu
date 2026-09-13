@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { HuduClient } from '../../src/client.js';
-import { stubFetch, json, empty, clearFetch } from '../helpers.js';
+import { stubFetch, json, empty, clearFetch, expectRequests } from '../helpers.js';
 import { HuduConfigError } from '../../src/errors.js';
 import type { AssetsResource } from '../../src/resources/assets.js';
 
@@ -938,5 +938,179 @@ describe('AssetsResource write paths — expectedUpdatedAt refusal and response 
     stubFetch(() => json(asset));
     const moved = (await makeClient().assets.moveLayout(1, 10, { asset_layout_id: 5 })) as unknown as Record<string, unknown>;
     expect(moved.id).toBe(asset.id);
+  });
+});
+
+describe('AssetsResource include groups (issue #24)', () => {
+  afterEach(() => clearFetch());
+
+  /** Route a stubbed fetch to the right envelope per endpoint. */
+  function routeFetch(url: string): Response {
+    if (url.includes('/companies/1/assets')) return json(assetsList);
+    if (url.includes('/asset_layouts/')) return json({ asset_layout: { id: 7, name: 'Server', slug: 'server', active: true, icon: 'server', color: '#fff' } });
+    if (url.includes('/expirations')) return json([{ id: 61, date: '2026-01-01', expiration_type: 'warranty', company_id: 1, expirationable_type: 'Asset', expirationable_id: 10, asset_field_id: null, asset_layout_field_id: null, sync_id: null, updated_at: '2026-01-01' }]);
+    if (url.includes('/relations')) return json({ relations: [{ id: 71, name: 'r', description: null, is_inverse: false, fromable_id: 10, fromable_type: 'Asset', fromable_url: '/a', toable_id: 20, toable_type: 'Asset', toable_url: '/b' }] });
+    if (url.includes('/photos')) return json({ photos: [{ id: 81, company_id: 1, folder_id: 2, photoable_type: 'Asset', photoable_id: 10, caption: 'c', pinned: false, archived: false, updated_at: '2026-01-01' }] });
+    return json({});
+  }
+
+  it('default (no include) makes no extra fetches and returns the plain assets', async () => {
+    const spy = stubFetch(routeFetch);
+    const res = await makeClient().assets.listAll(1, {});
+    expect(res).toEqual(assetsList.assets);
+    expect(spy.calls).toHaveLength(1);
+    expect(spy.calls[0].url).toContain('/companies/1/assets');
+  });
+
+  it('empty include array equals the default (no extra fetches)', async () => {
+    const spy = stubFetch(routeFetch);
+    const res = await makeClient().assets.listAll(1, { include: [] });
+    expect(res).toEqual(assetsList.assets);
+    expect(spy.calls).toHaveLength(1);
+  });
+
+  it('include: [expirations] fetches only expirations', async () => {
+    const spy = stubFetch(routeFetch);
+    expectRequests(spy, [
+      { method: 'GET', url: /\/companies\/1\/assets\?/ },
+      { method: 'GET', url: /\/expirations\?/ },
+    ]);
+    const res = await makeClient().assets.listAll(1, { include: ['expirations'] });
+    expect(res).toHaveLength(1);
+    expect(res[0].expirations).toHaveLength(1);
+    expect(res[0].relations).toBeUndefined();
+    expect(res[0].photos).toBeUndefined();
+    expect(res[0].layout).toBeUndefined();
+  });
+
+  it('include: [relations] fetches only relations', async () => {
+    const spy = stubFetch(routeFetch);
+    expectRequests(spy, [
+      { method: 'GET', url: /\/companies\/1\/assets\?/ },
+      { method: 'GET', url: /\/relations\?/ },
+    ]);
+    const res = await makeClient().assets.listAll(1, { include: ['relations'] });
+    expect(res[0].relations).toHaveLength(1);
+    expect(res[0].expirations).toBeUndefined();
+    expect(res[0].photos).toBeUndefined();
+    expect(res[0].layout).toBeUndefined();
+  });
+
+  it('include: [photos] fetches only photos', async () => {
+    const spy = stubFetch(routeFetch);
+    expectRequests(spy, [
+      { method: 'GET', url: /\/companies\/1\/assets\?/ },
+      { method: 'GET', url: /\/photos\?/ },
+    ]);
+    const res = await makeClient().assets.listAll(1, { include: ['photos'] });
+    expect(res[0].photos).toHaveLength(1);
+    expect(res[0].expirations).toBeUndefined();
+    expect(res[0].relations).toBeUndefined();
+    expect(res[0].layout).toBeUndefined();
+  });
+
+  it('include: [layout] fetches only the layout', async () => {
+    const spy = stubFetch(routeFetch);
+    expectRequests(spy, [
+      { method: 'GET', url: /\/companies\/1\/assets\?/ },
+      { method: 'GET', url: /\/asset_layouts\/7/ },
+    ]);
+    const res = await makeClient().assets.listAll(1, { include: ['layout'] });
+    expect(res[0].layout).toMatchObject({ id: 7, name: 'Server' });
+    expect(res[0].expirations).toBeUndefined();
+    expect(res[0].relations).toBeUndefined();
+    expect(res[0].photos).toBeUndefined();
+  });
+
+  it('include: [expirations, relations] fetches exactly those two groups', async () => {
+    const spy = stubFetch(routeFetch);
+    expectRequests(spy, [
+      { method: 'GET', url: /\/companies\/1\/assets\?/ },
+      { method: 'GET', url: /\/expirations\?/ },
+      { method: 'GET', url: /\/relations\?/ },
+    ]);
+    const res = await makeClient().assets.listAll(1, { include: ['expirations', 'relations'] });
+    expect(res[0].expirations).toHaveLength(1);
+    expect(res[0].relations).toHaveLength(1);
+    expect(res[0].photos).toBeUndefined();
+    expect(res[0].layout).toBeUndefined();
+  });
+
+  it('included groups are compact summaries, not full records', async () => {
+    stubFetch(routeFetch);
+    const res = await makeClient().assets.listAll(1, { include: ['expirations', 'relations', 'photos'] });
+    expect(Object.keys(res[0].expirations[0]).sort()).toEqual([
+      'asset_field_id', 'asset_layout_field_id', 'company_id', 'date', 'expiration_type',
+      'expirationable_id', 'expirationable_type', 'id', 'sync_id', 'updated_at',
+    ]);
+    expect(Object.keys(res[0].relations[0]).sort()).toEqual([
+      'description', 'fromable_id', 'fromable_type', 'fromable_url', 'id', 'is_inverse',
+      'name', 'toable_id', 'toable_type', 'toable_url',
+    ]);
+    expect(Object.keys(res[0].photos[0]).sort()).toEqual([
+      'archived', 'caption', 'company_id', 'folder_id', 'id', 'photoable_id',
+      'photoable_type', 'pinned', 'updated_at',
+    ]);
+  });
+
+  it('unknown include group throws a structured HuduConfigError before any IO (listAll)', async () => {
+    const spy = stubFetch(routeFetch);
+    await expect(makeClient().assets.listAll(1, { include: ['passwords'] })).rejects.toMatchObject({
+      code: 'CONFIG_ERROR',
+      category: 'validation',
+      retryable: false,
+    });
+    expect(spy.calls).toHaveLength(0);
+  });
+
+  it('unknown include group throws synchronously before any IO (list)', () => {
+    const spy = stubFetch(routeFetch);
+    expect(() => makeClient().assets.list(1, { include: ['passwords'] })).toThrow(/unknown include group "passwords"/);
+    expect(spy.calls).toHaveLength(0);
+  });
+
+  it('the error names the valid groups in suggestedAction', async () => {
+    stubFetch(routeFetch);
+    await expect(makeClient().assets.listAll(1, { include: ['files'] })).rejects.toMatchObject({
+      code: 'CONFIG_ERROR',
+      suggestedAction: expect.stringContaining('layout, expirations, relations, photos'),
+    });
+  });
+
+  it('search include attaches compact groups to the compact summaries', async () => {
+    const spy = stubFetch((url) => {
+      if (url.includes('search=')) return json({ assets: [asset] });
+      if (url.includes('/expirations')) return json([{ id: 61, date: '2026-01-01', expiration_type: 'warranty', company_id: 1, expirationable_type: 'Asset', expirationable_id: 10, asset_field_id: null, asset_layout_field_id: null, sync_id: null, updated_at: '2026-01-01' }]);
+      return json({});
+    });
+    const res = await makeClient().assets.search('laptop', { include: ['expirations'] });
+    expect(res).toHaveLength(1);
+    expect(res[0].fields).toBeUndefined();
+    expect(res[0].expirations).toHaveLength(1);
+    expect(spy.calls).toHaveLength(2);
+  });
+
+  it('search include + expand: full records, each carrying the named groups (orthogonal)', async () => {
+    const spy = stubFetch((url) => {
+      if (url.includes('search=')) return json({ assets: [asset] });
+      if (url.includes('/expirations')) return json([{ id: 61, date: '2026-01-01', expiration_type: 'warranty', company_id: 1, expirationable_type: 'Asset', expirationable_id: 10, asset_field_id: null, asset_layout_field_id: null, sync_id: null, updated_at: '2026-01-01' }]);
+      return json({});
+    });
+    const res = await makeClient().assets.search('laptop', { expand: true, include: ['expirations'] });
+    expect(res).toHaveLength(1);
+    expect(res[0].fields).toBeDefined();
+    expect(res[0].expirations).toHaveLength(1);
+    expect(spy.calls).toHaveLength(2);
+  });
+
+  it('listPages include attaches the groups to each asset in each page', async () => {
+    const spy = stubFetch(routeFetch);
+    const pages: unknown[] = [];
+    for await (const p of makeClient().assets.listPages(1, { include: ['expirations'] })) pages.push(p);
+    expect(pages).toHaveLength(1);
+    const page = pages[0] as { items: Array<Record<string, unknown>> };
+    expect(page.items).toHaveLength(1);
+    expect(page.items[0].expirations).toHaveLength(1);
+    expect(spy.calls).toHaveLength(2);
   });
 });

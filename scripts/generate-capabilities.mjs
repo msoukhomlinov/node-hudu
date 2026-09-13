@@ -219,7 +219,9 @@ for (const f of [...resourceFiles, ...operationFiles]) {
 const PRIMITIVES = new Set(['string', 'number', 'boolean', 'unknown', 'any', 'void', 'null']);
 function jsonType(typeText) {
   const t = typeText.replace(/\s+/g, ' ');
-  const m = /^['"`](.*)['"`]$/.exec(t);
+  // A single string literal has no top-level `|`; a union of literals (`'a' | 'b'`) must fall
+  // through to the union branch so each member is surfaced, not the whole text as one value.
+  const m = /^['"`]([^'"`|]*)['"`]$/.exec(t);
   if (m) return { type: 'string', enum: [m[1]] };
   if (t === 'true' || t === 'false') return { type: 'boolean', enum: [t === 'true'] };
   if (t.endsWith('[]')) {

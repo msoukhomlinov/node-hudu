@@ -40,8 +40,9 @@ export type AssetCreate = Partial<Omit<Asset, 'id' | 'created_at' | 'updated_at'
 import type { IntegratorCard } from './integrator_card.js';
 
 import type { AssetLayout, AssetLayoutSummary } from './asset_layout.js';
-import type { Expiration } from './expiration.js';
-import type { Relation } from './relation.js';
+import type { Expiration, ExpirationSummary } from './expiration.js';
+import type { PhotoSummary } from './photo.js';
+import type { Relation, RelationSummary } from './relation.js';
 
 export type AssetUpdate = Partial<Asset>;
 
@@ -95,3 +96,30 @@ export interface AssetContextExpand {
   expirations: Expiration[];
   relations: Relation[];
 }
+
+/**
+ * The relation groups an asset can opt into via `include` on its list-shaped calls.
+ * Each named group triggers ONLY its own extra fetch (see `AssetsResource`); an
+ * unrequested group is never fetched. `passwords` is deliberately absent: the vendor
+ * exposes no server-side filter for asset passwords by asset, so it would force an
+ * unbounded full-table client scan.
+ */
+export type AssetIncludeGroup = 'layout' | 'expirations' | 'relations' | 'photos';
+
+/**
+ * The optional relation groups attached to an asset when `include` names them.
+ * Each present field is a compact summary (token cost is the binding constraint);
+ * `layout` is a single record, or `null` when the asset has no layout.
+ */
+export interface AssetIncludes {
+  layout?: AssetLayoutSummary | null;
+  expirations?: ExpirationSummary[];
+  relations?: RelationSummary[];
+  photos?: PhotoSummary[];
+}
+
+/** A full asset with its opted-in relation groups attached. */
+export type AssetWithIncludes = Asset & AssetIncludes;
+
+/** A compact asset summary with its opted-in relation groups attached. */
+export type AssetSummaryWithIncludes = AssetSummary & AssetIncludes;
