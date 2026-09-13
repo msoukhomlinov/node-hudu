@@ -92,7 +92,6 @@
   },
   "homepage": "https://github.com/msoukhomlinov/node-hudu#readme",
   "devDependencies": {
-    "@esbuild/darwin-arm64": "^0.28.2",
     "@eslint/js": "^9.17.0",
     "@modelcontextprotocol/server": "^2.0.0",
     "@types/node": "^22.10.0",
