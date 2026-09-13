@@ -108,11 +108,33 @@ function deriveOperation(method: string, path: string): string {
   return `${resource}.delete`;
 }
 
-/** Parse a Retry-After header. Returns undefined when absent or not finite. */
-function retryAfterSeconds(header: string | null): number | undefined {
+/**
+ * Parse a Retry-After header into a delay in seconds.
+ *
+ * RFC 7231 allows BOTH forms:
+ * - `delta-seconds`: an integer (or, leniently, any numeric string the previous
+ *   implementation accepted — fractional values are common in practice);
+ * - `HTTP-date`: e.g. "Wed, 21 Oct 2015 07:28:00 GMT", for which the delay is the
+ *   distance from now, CLAMPED AT 0 (a date already in the past means "retry now").
+ *
+ * Returns undefined when the header is absent or matches neither form, so the
+ * caller falls back to the exponential backoff exactly as before. This also fixes
+ * a real timing bug: an HTTP-date used to become NaN, read as "no hint", and a
+ * backoff SHORTER than the server asked for could retry too early.
+ *
+ * `now` exists for deterministic tests; production callers omit it.
+ */
+function retryAfterSeconds(header: string | null, now: number = Date.now()): number | undefined {
   if (header === null) return undefined;
+  // Numeric form first, on the raw header: preserves the existing delta-seconds
+  // behaviour (including fractional and whitespace-padded values) byte for byte.
   const seconds = Number(header);
-  return Number.isFinite(seconds) ? seconds : undefined;
+  if (Number.isFinite(seconds)) return seconds;
+  // HTTP-date form. Date.parse tolerates the leading/trailing whitespace and the
+  // obsolete RFC 850 / asctime shapes the HTTP grammar still permits.
+  const when = Date.parse(header);
+  if (Number.isNaN(when)) return undefined;
+  return Math.max(0, (when - now) / 1000);
 }
 
 /**
@@ -221,6 +243,32 @@ interface TokenBucket {
   refillPerMs: number;
 }
 
+/**
+ * Read-only snapshot of the transport's LOCAL limiter/queue state, for callers
+ * that need to apply backpressure of their own (e.g. an MCP tool layer deciding
+ * whether to enqueue more work). Every field is measured from state the transport
+ * really keeps — nothing here is estimated for effect.
+ */
+export interface RateLimitStatus {
+  /** True when a client-side token bucket is configured (`rateLimit`). */
+  readonly enabled: boolean;
+  /** True only when `enabled` and no whole token is available right now. */
+  readonly throttled: boolean;
+  /**
+   * Estimated tokens available right now, with the bucket refill applied at read
+   * time (may be fractional). 0 when `enabled` is false.
+   */
+  readonly availableTokens: number;
+  /** Bucket capacity in tokens, i.e. the configured burst. 0 when `enabled` is false. */
+  readonly burst: number;
+  /** Callers waiting for a limiter token. Always 0 when `enabled` is false. */
+  readonly queued: number;
+  /** Requests in progress in the transport, retries and their backoff sleeps included. */
+  readonly inFlight: number;
+  /** The last `Retry-After` hint the transport actually waited for, in seconds. */
+  readonly lastRetryAfterSeconds?: number;
+}
+
 export class HttpClient {
   private readonly config: ResolvedConfig;
   /** Client-scan caps shared with BaseResource.boundedScan (policy §6). */
@@ -230,6 +278,12 @@ export class HttpClient {
   private bucket?: TokenBucket;
   /** Serialises concurrent token acquisitions so the configured burst is really enforced (B11). */
   private consumeTail: Promise<void> = Promise.resolve();
+  /** Callers waiting for a limiter token; read (never mutated) by `getRateLimitStatus`. */
+  private queued = 0;
+  /** Requests in progress inside the transport, retries included; read by `getRateLimitStatus`. */
+  private inFlight = 0;
+  /** Last Retry-After hint the transport waited for, in seconds; read by `getRateLimitStatus`. */
+  private lastRetryAfterSeconds?: number;
 
   constructor(config: ResolvedConfig) {
     this.config = config;
@@ -268,6 +322,8 @@ export class HttpClient {
       this.emitAudit(correlationId, opts, 'success', undefined);
       return marker as unknown as T;
     }
+    // A dry run never reaches the transport, so it is not counted as in flight.
+    this.inFlight += 1;
     try {
       const result = await this.execute<T>(opts);
       this.emitAudit(correlationId, opts, 'success', undefined);
@@ -280,7 +336,48 @@ export class HttpClient {
       }
       this.emitAudit(correlationId, opts, 'error', err instanceof HuduError ? err.httpStatus : undefined);
       throw err;
+    } finally {
+      this.inFlight -= 1;
     }
+  }
+
+  /**
+   * Read-only snapshot of the local limiter/queue state (see `RateLimitStatus`).
+   *
+   * Synchronous and side-effect free: it reads the token bucket (applying the
+   * pending refill to the returned estimate, never to the bucket itself) plus the
+   * live queue and in-flight counters, and returns a plain object. Use it to
+   * apply backpressure — e.g. hold new MCP tool calls while `throttled` or while
+   * `queued > 0` — never to acquire capacity.
+   */
+  getRateLimitStatus(): RateLimitStatus {
+    const status: {
+      enabled: boolean;
+      throttled: boolean;
+      availableTokens: number;
+      burst: number;
+      queued: number;
+      inFlight: number;
+      lastRetryAfterSeconds?: number;
+    } = {
+      enabled: this.bucket !== undefined,
+      throttled: false,
+      availableTokens: 0,
+      burst: 0,
+      queued: this.queued,
+      inFlight: this.inFlight,
+    };
+    if (this.bucket !== undefined) {
+      const refilled = Math.min(
+        this.bucket.capacity,
+        this.bucket.tokens + (Date.now() - this.bucket.lastRefill) * this.bucket.refillPerMs,
+      );
+      status.availableTokens = Math.max(0, refilled);
+      status.burst = this.bucket.capacity;
+      status.throttled = refilled < 1;
+    }
+    if (this.lastRetryAfterSeconds !== undefined) status.lastRetryAfterSeconds = this.lastRetryAfterSeconds;
+    return status;
   }
 
   /**
@@ -397,6 +494,7 @@ export class HttpClient {
         // B6: release the connection body before retrying so the socket can be reused.
         response.body?.cancel();
         const retryAfter = response.status === 429 ? retryAfterSeconds(response.headers.get('retry-after')) : undefined;
+        if (retryAfter !== undefined) this.lastRetryAfterSeconds = retryAfter;
         // Cap the delay and never sleep past the whole-call deadline (B6/B8).
         const bounded = Math.min(retryDelayMs(attempt, retryAfter), Math.max(deadline - Date.now(), 0));
         this.config.logger.warn(`HTTP ${response.status}; retrying in ${bounded}ms (attempt ${attempt + 1})`);
@@ -489,6 +587,10 @@ export class HttpClient {
     // which can be far past our own deadline when a request ahead of us (e.g. a
     // retry) is refill-waiting. Race the serialised turn against an expiry timer
     // and reject if the deadline fires while we are still queued.
+    // Only count queued callers while a limiter is configured: with no bucket the
+    // chain resolves immediately, so there is no real queue to report.
+    const tracked = this.bucket !== undefined;
+    if (tracked) this.queued += 1;
     return new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => {
         reject(
@@ -505,6 +607,8 @@ export class HttpClient {
           reject(err);
         },
       );
+    }).finally(() => {
+      if (tracked) this.queued -= 1;
     });
   }
 

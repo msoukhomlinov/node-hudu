@@ -2,7 +2,7 @@
  * HuduClient — top-level facade wiring all resource clients.
  */
 import { resolveConfig, type HuduConfig, type ResolvedConfig } from './config.js';
-import { HttpClient } from './http.js';
+import { HttpClient, type RateLimitStatus } from './http.js';
 import { Operations } from './operations/index.js';
 import {
   ActivityLogsResource, ApiInfoResource, ArticlesResource, AssetLayoutsResource,
@@ -103,5 +103,17 @@ export class HuduClient {
     this.activityLogs = new ActivityLogsResource(this.http);
     this.cards = new CardsResource(this.http);
     this.operations = new Operations(this);
+  }
+
+  /**
+   * Read-only snapshot of the client-side rate limiter and request queue, for callers that
+   * apply their own backpressure — e.g. an MCP tool layer deciding whether to enqueue more work.
+   *
+   * Synchronous and side-effect free (see `RateLimitStatus`): it reports the transport's actual
+   * local state (token-bucket estimate, queued callers, in-flight requests, the last honoured
+   * `Retry-After`) and never acquires capacity. Purely additive.
+   */
+  getRateLimitStatus(): RateLimitStatus {
+    return this.http.getRateLimitStatus();
   }
 }
