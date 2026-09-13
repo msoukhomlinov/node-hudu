@@ -363,11 +363,14 @@ if (CHECK_EXAMPLE) {
   console.log('mcp:project --check-example — PASS: every projected example is a call the SDK accepts and no schema advertises an operation-invalid field');
   process.exit(0);
 }
-writeFileSync(OUT, lines.join('\n'));
+// NOTE: the manifest is written only AFTER the violation checks below. Writing first meant a projection
+// that failed its own operation-invalid-field gate still overwrote the published manifest with the invalid
+// schema - which is exactly how 43 tools came to advertise `expectedUpdatedAt` on create/delete operations
+// that reject it (live-verified: the SDK throws CONFIG_ERROR). A failing projection must change nothing.
 
 console.log(`mcp:project — registry ${path.relative(ROOT, REGISTRY)} planHash=${registry.planHash}; records=${records.length}`);
 console.log(`mcp:project — tools projected=${tools.length}; excluded=${excluded.length}; overrides applied=${overrideLog.length}`);
-console.log(`mcp:project — wrote ${path.relative(ROOT, OUT)}`);
+// (the write happens after the violation gate; see the note above)
 console.log(`mcp:project — read tools missing helper-tier backing: ${readToolsMissingHelperBacking.length}${readToolsMissingHelperBacking.length ? ' (first 10: ' + readToolsMissingHelperBacking.slice(0, 10).join(', ') + ')' : ''}`);
 // Two different things, reported separately (never conflated):
 //   re-pointed — a PRIMITIVE registry record the curation backs with a helper operation (curation);
@@ -390,6 +393,8 @@ if (unresolvedOverrides.length) {
   for (const u of unresolvedOverrides) console.error(`  ✗ ${JSON.stringify(u.ov)}: ${u.why}`);
   process.exit(1);
 }
+writeFileSync(OUT, lines.join('\n'));
+console.log(`mcp:project — wrote ${path.relative(ROOT, OUT)}`);
 
 // ---------------------------------------------------------------- --check-example
 // The example MCP server is a REFERENCE CONSUMER generated from the curated projection. This gate

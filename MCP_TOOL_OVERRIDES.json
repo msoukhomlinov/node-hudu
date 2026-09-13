@@ -14,25 +14,14 @@
  {
   "tool": "hudu_delete_all_activity_logs",
   "field": "description",
-  "newValue": "Delete activity logs. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: BULK \u2014 removes every activity log from the given datetime on; there is no narrower endpoint, and an unbounded call is refused (POLICY_DENIED). Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff).",
+  "newValue": "Delete activity logs. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: BULK — removes every activity log from the given datetime on; there is no narrower endpoint, and an unbounded call is refused (POLICY_DENIED). Irreversible — dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff).",
   "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
  },
  {
   "tool": "hudu_delete_all_activity_logs",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_activity_logs_findByResource",
@@ -49,7 +38,7 @@
  {
   "tool": "hudu_find_activity_logs_by_resource",
   "field": "description",
-  "newValue": "List the activity log entries for one resource. Preferred over activity_logs.listAll for 'what happened to this record'. Returns one record: a compact ActivityLogSummary (updated_at, \u2026 dropped); expand: true returns the full ActivityLog. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_activity_logs or hudu_get_activity_log for that).",
+  "newValue": "List the activity log entries for one resource. Preferred over activity_logs.listAll for 'what happened to this record'. Returns one record: a compact ActivityLogSummary (updated_at, … dropped); expand: true returns the full ActivityLog. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_activity_logs or hudu_get_activity_log for that).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -79,7 +68,7 @@
  {
   "tool": "hudu_get_activity_log",
   "field": "description",
-  "newValue": "Resolve an activity log entry by its id. Use activity_logs.findByResource instead whenever the resource is known - it uses server filters and needs no scan. Returns one record: a compact ActivityLogSummary (updated_at, \u2026 dropped); expand: true returns the full ActivityLog. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_activity_logs (or hudu_search_across_resources when the resource type is unknown).",
+  "newValue": "Resolve an activity log entry by its id. Use activity_logs.findByResource instead whenever the resource is known - it uses server filters and needs no scan. Returns one record: a compact ActivityLogSummary (updated_at, … dropped); expand: true returns the full ActivityLog. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_activity_logs (or hudu_search_across_resources when the resource type is unknown).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -139,12 +128,7 @@
  {
   "tool": "hudu_archive_article",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": []
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -168,12 +152,7 @@
  {
   "tool": "hudu_create_article",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": []
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -191,18 +170,13 @@
  {
   "tool": "hudu_delete_article",
   "field": "description",
-  "newValue": "Delete a Knowledge Base Article. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_article keeps it.",
+  "newValue": "Delete a Knowledge Base Article. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible — dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_article keeps it.",
   "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
  },
  {
   "tool": "hudu_delete_article",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": []
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -220,7 +194,7 @@
  {
   "tool": "hudu_find_articles_by_slug",
   "field": "description",
-  "newValue": "Find one article by its URL slug. Preferred over articles.list for a slug lookup. Returns one record: a compact ArticleSummary (content, url, object_type, \u2026 dropped); expand: true returns the full Article. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_articles or hudu_get_article for that).",
+  "newValue": "Find one article by its URL slug. Preferred over articles.list for a slug lookup. Returns one record: a compact ArticleSummary (content, url, object_type, … dropped); expand: true returns the full Article. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_articles or hudu_get_article for that).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -250,7 +224,7 @@
  {
   "tool": "hudu_get_article_context",
   "field": "description",
-  "newValue": "Fetch an article with its company and folder context. Preferred over three separate calls when an agent starts from an article. Returns ArticleContext. Bounded: every sub-list is fetched with limit, default 25, hard maximum 100 \u2014 no sub-fetch walks the account. Do not use it to page a resource: call hudu_search_articles. It issues several bounded reads per call.",
+  "newValue": "Fetch an article with its company and folder context. Preferred over three separate calls when an agent starts from an article. Returns ArticleContext. Bounded: every sub-list is fetched with limit, default 25, hard maximum 100 — no sub-fetch walks the account. Do not use it to page a resource: call hudu_search_articles. It issues several bounded reads per call.",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -280,7 +254,7 @@
  {
   "tool": "hudu_get_article",
   "field": "description",
-  "newValue": "Resolve a knowledge-base article from an id, name or slug. Use when the article identifier is a name or slug; articles.get is cheaper for a known id. Returns one record: a compact ArticleSummary (content, url, object_type, \u2026 dropped); expand: true returns the full Article. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_articles (or hudu_search_across_resources when the resource type is unknown).",
+  "newValue": "Resolve a knowledge-base article from an id, name or slug. Use when the article identifier is a name or slug; articles.get is cheaper for a known id. Returns one record: a compact ArticleSummary (content, url, object_type, … dropped); expand: true returns the full Article. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_articles (or hudu_search_across_resources when the resource type is unknown).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -304,7 +278,7 @@
  {
   "tool": "hudu_search_articles",
   "field": "description",
-  "newValue": "Search knowledge-base articles by a free-text query. Preferred over articles.list for any text search. Returns rows: a compact ArticleSummary (content, url, object_type, \u2026 dropped); expand: true returns the full Article. Bounded: limit defaults to 25 and is hard-capped at 100; a larger value throws CONFIG_ERROR and is never silently clamped. Do not use it when you already have an id, slug or domain: call hudu_get_article instead.",
+  "newValue": "Search knowledge-base articles by a free-text query. Preferred over articles.list for any text search. Returns rows: a compact ArticleSummary (content, url, object_type, … dropped); expand: true returns the full Article. Bounded: limit defaults to 25 and is hard-capped at 100; a larger value throws CONFIG_ERROR and is never silently clamped. Do not use it when you already have an id, slug or domain: call hudu_get_article instead.",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -334,12 +308,7 @@
  {
   "tool": "hudu_unarchive_article",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": []
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -363,18 +332,7 @@
  {
   "tool": "hudu_update_article",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": [{"name": "expectedUpdatedAt", "type": "string", "required": false}]},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -398,12 +356,7 @@
  {
   "tool": "hudu_create_asset_layout",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": []
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -433,7 +386,7 @@
  {
   "tool": "hudu_get_asset_layout",
   "field": "description",
-  "newValue": "Resolve an asset layout from an id, name or slug. Use when the identifier is a layout name or slug; asset_layouts.get is cheaper for a known id. Returns one record: a compact AssetLayoutSummary (icon_color, sidebar_folder_id, include_passwords, \u2026 dropped); expand: true returns the full AssetLayout. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_asset_layouts (or hudu_search_across_resources when the resource type is unknown).",
+  "newValue": "Resolve an asset layout from an id, name or slug. Use when the identifier is a layout name or slug; asset_layouts.get is cheaper for a known id. Returns one record: a compact AssetLayoutSummary (icon_color, sidebar_folder_id, include_passwords, … dropped); expand: true returns the full AssetLayout. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_asset_layouts (or hudu_search_across_resources when the resource type is unknown).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -463,18 +416,7 @@
  {
   "tool": "hudu_update_asset_layout",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": [{"name": "expectedUpdatedAt", "type": "string", "required": false}]},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -492,18 +434,13 @@
  {
   "tool": "hudu_archive_asset_password",
   "field": "description",
-  "newValue": "Archive a Password. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record. Sensitive: it handles credential material \u2014 never echo a secret value into a log, a description or an error (the SDK redacts those fields by default). Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to erase: hudu_delete_asset_password is the destructive path.",
+  "newValue": "Archive a Password. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record. Sensitive: it handles credential material — never echo a secret value into a log, a description or an error (the SDK redacts those fields by default). Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to erase: hudu_delete_asset_password is the destructive path.",
   "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
  },
  {
   "tool": "hudu_archive_asset_password",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": []
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -521,18 +458,13 @@
  {
   "tool": "hudu_create_asset_password",
   "field": "description",
-  "newValue": "Create a Password. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record. Sensitive: it handles credential material \u2014 never echo a secret value into a log, a description or an error (the SDK redacts those fields by default). Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to change an existing record: call hudu_update_asset_password.",
+  "newValue": "Create a Password. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record. Sensitive: it handles credential material — never echo a secret value into a log, a description or an error (the SDK redacts those fields by default). Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to change an existing record: call hudu_update_asset_password.",
   "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
  },
  {
   "tool": "hudu_create_asset_password",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": []
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -550,18 +482,13 @@
  {
   "tool": "hudu_delete_asset_password",
   "field": "description",
-  "newValue": "Delete a Password. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Sensitive: it handles credential material \u2014 never echo a secret value into a log, a description or an error (the SDK redacts those fields by default). Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_asset_password keeps it.",
+  "newValue": "Delete a Password. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible — dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Sensitive: it handles credential material — never echo a secret value into a log, a description or an error (the SDK redacts those fields by default). Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_asset_password keeps it.",
   "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
  },
  {
   "tool": "hudu_delete_asset_password",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": []
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -579,7 +506,7 @@
  {
   "tool": "hudu_find_asset_passwords_by_slug",
   "field": "description",
-  "newValue": "Find one password record by its URL slug. Preferred over asset_passwords.list for a slug lookup. Returns one record: a compact AssetPasswordSummary (passwordable_id, passwordable_type, description, \u2026 dropped); expand: true returns the full AssetPassword. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_asset_passwords or hudu_get_asset_password for that). Sensitive: it returns credential-shaped fields; the SDK redacts them from logs and audit payloads by default.",
+  "newValue": "Find one password record by its URL slug. Preferred over asset_passwords.list for a slug lookup. Returns one record: a compact AssetPasswordSummary (passwordable_id, passwordable_type, description, … dropped); expand: true returns the full AssetPassword. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_asset_passwords or hudu_get_asset_password for that). Sensitive: it returns credential-shaped fields; the SDK redacts them from logs and audit payloads by default.",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -615,7 +542,7 @@
  {
   "tool": "hudu_get_asset_password",
   "field": "description",
-  "newValue": "Resolve a password record from an id, name or slug. Use when the identifier is a name or slug; asset_passwords.get returns the full record including the secret. Returns one record: a compact AssetPasswordSummary (passwordable_id, passwordable_type, description, \u2026 dropped); expand: true returns the full AssetPassword. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_asset_passwords (or hudu_search_across_resources when the resource type is unknown). Sensitive: it returns credential-shaped fields; the SDK redacts them from logs and audit payloads by default.",
+  "newValue": "Resolve a password record from an id, name or slug. Use when the identifier is a name or slug; asset_passwords.get returns the full record including the secret. Returns one record: a compact AssetPasswordSummary (passwordable_id, passwordable_type, description, … dropped); expand: true returns the full AssetPassword. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_asset_passwords (or hudu_search_across_resources when the resource type is unknown). Sensitive: it returns credential-shaped fields; the SDK redacts them from logs and audit payloads by default.",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -639,7 +566,7 @@
  {
   "tool": "hudu_search_asset_passwords",
   "field": "description",
-  "newValue": "Search password records by a free-text query. Preferred over asset_passwords.list for any text search. Returns rows: a compact AssetPasswordSummary (passwordable_id, passwordable_type, description, \u2026 dropped); expand: true returns the full AssetPassword. Bounded: limit defaults to 25 and is hard-capped at 100; a larger value throws CONFIG_ERROR and is never silently clamped. Do not use it when you already have an id, slug or domain: call hudu_get_asset_password instead. Sensitive: it returns credential-shaped fields; the SDK redacts them from logs and audit payloads by default.",
+  "newValue": "Search password records by a free-text query. Preferred over asset_passwords.list for any text search. Returns rows: a compact AssetPasswordSummary (passwordable_id, passwordable_type, description, … dropped); expand: true returns the full AssetPassword. Bounded: limit defaults to 25 and is hard-capped at 100; a larger value throws CONFIG_ERROR and is never silently clamped. Do not use it when you already have an id, slug or domain: call hudu_get_asset_password instead. Sensitive: it returns credential-shaped fields; the SDK redacts them from logs and audit payloads by default.",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -663,18 +590,13 @@
  {
   "tool": "hudu_unarchive_asset_password",
   "field": "description",
-  "newValue": "Unarchive a Password. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record. Sensitive: it handles credential material \u2014 never echo a secret value into a log, a description or an error (the SDK redacts those fields by default). Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it on a record that is not archived: call hudu_update_asset_password to change fields.",
+  "newValue": "Unarchive a Password. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record. Sensitive: it handles credential material — never echo a secret value into a log, a description or an error (the SDK redacts those fields by default). Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it on a record that is not archived: call hudu_update_asset_password to change fields.",
   "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
  },
  {
   "tool": "hudu_unarchive_asset_password",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": []
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -692,24 +614,13 @@
  {
   "tool": "hudu_update_asset_password",
   "field": "description",
-  "newValue": "Update a Password. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record. Sensitive: it handles credential material \u2014 never echo a secret value into a log, a description or an error (the SDK redacts those fields by default). Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to create a record: call hudu_create_asset_password.",
+  "newValue": "Update a Password. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record. Sensitive: it handles credential material — never echo a secret value into a log, a description or an error (the SDK redacts those fields by default). Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to create a record: call hudu_create_asset_password.",
   "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
  },
  {
   "tool": "hudu_update_asset_password",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": [{"name": "expectedUpdatedAt", "type": "string", "required": false}]},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -733,12 +644,7 @@
  {
   "tool": "hudu_archive_asset",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": []
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -762,12 +668,7 @@
  {
   "tool": "hudu_create_asset",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": []
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -785,18 +686,13 @@
  {
   "tool": "hudu_delete_asset",
   "field": "description",
-  "newValue": "Delete an Asset. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_asset keeps it.",
+  "newValue": "Delete an Asset. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible — dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_asset keeps it.",
   "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
  },
  {
   "tool": "hudu_delete_asset",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": []
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -814,7 +710,7 @@
  {
   "tool": "hudu_find_assets_by_serial",
   "field": "description",
-  "newValue": "Find one asset by its primary serial number. Preferred over assets.listAllAcrossCompanies for any serial lookup. Returns one record: a compact AssetSummary (slug, primary_mail, primary_model, \u2026 dropped); expand: true returns the full Asset. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_assets or hudu_get_asset for that).",
+  "newValue": "Find one asset by its primary serial number. Preferred over assets.listAllAcrossCompanies for any serial lookup. Returns one record: a compact AssetSummary (slug, primary_mail, primary_model, … dropped); expand: true returns the full Asset. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_assets or hudu_get_asset for that).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -844,7 +740,7 @@
  {
   "tool": "hudu_get_asset_context",
   "field": "description",
-  "newValue": "Fetch an asset with the context an agent needs about it. Preferred over four separate calls when an agent starts from an asset. Returns AssetContext. Bounded: every sub-list is fetched with limit, default 25, hard maximum 100 \u2014 no sub-fetch walks the account. Do not use it to page a resource: call hudu_search_assets. It issues several bounded reads per call.",
+  "newValue": "Fetch an asset with the context an agent needs about it. Preferred over four separate calls when an agent starts from an asset. Returns AssetContext. Bounded: every sub-list is fetched with limit, default 25, hard maximum 100 — no sub-fetch walks the account. Do not use it to page a resource: call hudu_search_assets. It issues several bounded reads per call.",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -886,12 +782,7 @@
  {
   "tool": "hudu_move_layout_assets",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": []
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -909,7 +800,7 @@
  {
   "tool": "hudu_get_asset",
   "field": "description",
-  "newValue": "Resolve an asset from an id, serial, name or slug. Use when the identifier is a serial or a name; assets.get is cheaper for a known id. Returns one record: a compact AssetSummary (slug, primary_mail, primary_model, \u2026 dropped); expand: true returns the full Asset. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_assets (or hudu_search_across_resources when the resource type is unknown).",
+  "newValue": "Resolve an asset from an id, serial, name or slug. Use when the identifier is a serial or a name; assets.get is cheaper for a known id. Returns one record: a compact AssetSummary (slug, primary_mail, primary_model, … dropped); expand: true returns the full Asset. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_assets (or hudu_search_across_resources when the resource type is unknown).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -933,7 +824,7 @@
  {
   "tool": "hudu_search_assets",
   "field": "description",
-  "newValue": "Search assets by a free-text query, optionally scoped to one company. Preferred over the asset list endpoints for any text search. Returns rows: a compact AssetSummary (slug, primary_mail, primary_model, \u2026 dropped); expand: true returns the full Asset. Bounded: limit defaults to 25 and is hard-capped at 100; a larger value throws CONFIG_ERROR and is never silently clamped. Do not use it when you already have an id, slug or domain: call hudu_get_asset instead.",
+  "newValue": "Search assets by a free-text query, optionally scoped to one company. Preferred over the asset list endpoints for any text search. Returns rows: a compact AssetSummary (slug, primary_mail, primary_model, … dropped); expand: true returns the full Asset. Bounded: limit defaults to 25 and is hard-capped at 100; a larger value throws CONFIG_ERROR and is never silently clamped. Do not use it when you already have an id, slug or domain: call hudu_get_asset instead.",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -963,12 +854,7 @@
  {
   "tool": "hudu_unarchive_asset",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": []
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -992,12 +878,7 @@
  {
   "tool": "hudu_update_asset",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": []
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -1027,7 +908,7 @@
  {
   "tool": "hudu_get_card",
   "field": "description",
-  "newValue": "Resolve an integrator card from an integration identifier. Preferred over calling cards.lookup and cards.jump directly when the goal is 'give me the card for this integration record'. Returns one record: a compact IntegratorCardSummary (data, office_365_assigned_products, exchange_license_assign_date, \u2026 dropped); expand: true returns the full IntegratorCard. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_cards (or hudu_search_across_resources when the resource type is unknown).",
+  "newValue": "Resolve an integrator card from an integration identifier. Preferred over calling cards.lookup and cards.jump directly when the goal is 'give me the card for this integration record'. Returns one record: a compact IntegratorCardSummary (data, office_365_assigned_products, exchange_license_assign_date, … dropped); expand: true returns the full IntegratorCard. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_cards (or hudu_search_across_resources when the resource type is unknown).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -1057,12 +938,7 @@
  {
   "tool": "hudu_archive_company",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": []
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -1086,12 +962,7 @@
  {
   "tool": "hudu_create_company",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": []
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -1109,18 +980,13 @@
  {
   "tool": "hudu_delete_company",
   "field": "description",
-  "newValue": "Delete a specific company. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_company keeps it.",
+  "newValue": "Delete a specific company. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible — dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_company keeps it.",
   "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
  },
  {
   "tool": "hudu_delete_company",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": []
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -1138,7 +1004,7 @@
  {
   "tool": "hudu_find_companies_by_domain",
   "field": "description",
-  "newValue": "Find one company by its website/domain. Preferred over companies.list for any domain lookup. Returns one record: a compact CompanySummary (address_line_1, address_line_2, zip, \u2026 dropped); expand: true returns the full Company. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_companies or hudu_get_company for that).",
+  "newValue": "Find one company by its website/domain. Preferred over companies.list for any domain lookup. Returns one record: a compact CompanySummary (address_line_1, address_line_2, zip, … dropped); expand: true returns the full Company. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_companies or hudu_get_company for that).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -1162,7 +1028,7 @@
  {
   "tool": "hudu_find_companies_by_slug",
   "field": "description",
-  "newValue": "Find one company by its URL slug. Preferred over companies.list for a slug lookup. Returns one record: a compact CompanySummary (address_line_1, address_line_2, zip, \u2026 dropped); expand: true returns the full Company. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_companies or hudu_get_company for that).",
+  "newValue": "Find one company by its URL slug. Preferred over companies.list for a slug lookup. Returns one record: a compact CompanySummary (address_line_1, address_line_2, zip, … dropped); expand: true returns the full Company. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_companies or hudu_get_company for that).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -1192,7 +1058,7 @@
  {
   "tool": "hudu_get_company_context",
   "field": "description",
-  "newValue": "Fetch a company together with the bounded context an agent needs about it. Preferred over four separate list calls when an agent starts work on a company. Returns CompanyContext. Bounded: every sub-list is fetched with limit, default 25, hard maximum 100 \u2014 no sub-fetch walks the account. Do not use it to page a resource: call hudu_search_companies. It issues several bounded reads per call.",
+  "newValue": "Fetch a company together with the bounded context an agent needs about it. Preferred over four separate list calls when an agent starts work on a company. Returns CompanyContext. Bounded: every sub-list is fetched with limit, default 25, hard maximum 100 — no sub-fetch walks the account. Do not use it to page a resource: call hudu_search_companies. It issues several bounded reads per call.",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -1228,7 +1094,7 @@
  {
   "tool": "hudu_get_company",
   "field": "description",
-  "newValue": "Resolve a company from an id, name, slug or domain. Use when the caller has an identifier rather than a numeric id; companies.get is cheaper when the id is known. Returns one record: a compact CompanySummary (address_line_1, address_line_2, zip, \u2026 dropped); expand: true returns the full Company. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_companies (or hudu_search_across_resources when the resource type is unknown).",
+  "newValue": "Resolve a company from an id, name, slug or domain. Use when the caller has an identifier rather than a numeric id; companies.get is cheaper when the id is known. Returns one record: a compact CompanySummary (address_line_1, address_line_2, zip, … dropped); expand: true returns the full Company. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_companies (or hudu_search_across_resources when the resource type is unknown).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -1252,7 +1118,7 @@
  {
   "tool": "hudu_search_companies",
   "field": "description",
-  "newValue": "Search companies by a free-text query. Preferred over companies.list for any text search. Returns rows: a compact CompanySummary (address_line_1, address_line_2, zip, \u2026 dropped); expand: true returns the full Company. Bounded: limit defaults to 25 and is hard-capped at 100; a larger value throws CONFIG_ERROR and is never silently clamped. Do not use it when you already have an id, slug or domain: call hudu_get_company instead.",
+  "newValue": "Search companies by a free-text query. Preferred over companies.list for any text search. Returns rows: a compact CompanySummary (address_line_1, address_line_2, zip, … dropped); expand: true returns the full Company. Bounded: limit defaults to 25 and is hard-capped at 100; a larger value throws CONFIG_ERROR and is never silently clamped. Do not use it when you already have an id, slug or domain: call hudu_get_company instead.",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -1282,12 +1148,7 @@
  {
   "tool": "hudu_unarchive_company",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": []
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -1311,18 +1172,7 @@
  {
   "tool": "hudu_update_company",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": [{"name": "expectedUpdatedAt", "type": "string", "required": false}]},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -1340,25 +1190,14 @@
  {
   "tool": "hudu_delete_expiration",
   "field": "description",
-  "newValue": "Delete an expiration. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_expiration keeps it.",
+  "newValue": "Delete an expiration. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible — dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_expiration keeps it.",
   "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
  },
  {
   "tool": "hudu_delete_expiration",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_expirations_findByResource",
@@ -1375,7 +1214,7 @@
  {
   "tool": "hudu_find_expirations_by_resource",
   "field": "description",
-  "newValue": "List the expirations attached to one resource. Preferred over expirations.listAll for 'when does this record expire'. Returns one record: a compact ExpirationSummary (account_id, archived_at, created_at, \u2026 dropped); expand: true returns the full Expiration. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_expirations or hudu_get_expiration for that).",
+  "newValue": "List the expirations attached to one resource. Preferred over expirations.listAll for 'when does this record expire'. Returns one record: a compact ExpirationSummary (account_id, archived_at, created_at, … dropped); expand: true returns the full Expiration. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_expirations or hudu_get_expiration for that).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -1405,7 +1244,7 @@
  {
   "tool": "hudu_get_expiration",
   "field": "description",
-  "newValue": "Resolve an expiration from an id or from its resource. Use when the identifier is a resource pair; expirations.get is cheaper for a known id. Returns one record: a compact ExpirationSummary (account_id, archived_at, created_at, \u2026 dropped); expand: true returns the full Expiration. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_expirations (or hudu_search_across_resources when the resource type is unknown).",
+  "newValue": "Resolve an expiration from an id or from its resource. Use when the identifier is a resource pair; expirations.get is cheaper for a known id. Returns one record: a compact ExpirationSummary (account_id, archived_at, created_at, … dropped); expand: true returns the full Expiration. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_expirations (or hudu_search_across_resources when the resource type is unknown).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -1435,18 +1274,7 @@
  {
   "tool": "hudu_update_expiration",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": [{"name": "expectedUpdatedAt", "type": "string", "required": false}]},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -1470,19 +1298,8 @@
  {
   "tool": "hudu_create_flag_type",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_flag_types_delete",
@@ -1499,25 +1316,14 @@
  {
   "tool": "hudu_delete_flag_type",
   "field": "description",
-  "newValue": "Delete a Flag Type. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_flag_type keeps it.",
+  "newValue": "Delete a Flag Type. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible — dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_flag_type keeps it.",
   "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
  },
  {
   "tool": "hudu_delete_flag_type",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_flag_types_get",
@@ -1546,7 +1352,7 @@
  {
   "tool": "hudu_get_flag_type",
   "field": "description",
-  "newValue": "Resolve a flag type from an id, name or slug. Use when the identifier is a flag-type name; flag_types.get is cheaper for a known id. Returns one record: a compact FlagTypeSummary (created_at, updated_at, \u2026 dropped); expand: true returns the full FlagType. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_flag_types (or hudu_search_across_resources when the resource type is unknown).",
+  "newValue": "Resolve a flag type from an id, name or slug. Use when the identifier is a flag-type name; flag_types.get is cheaper for a known id. Returns one record: a compact FlagTypeSummary (created_at, updated_at, … dropped); expand: true returns the full FlagType. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_flag_types (or hudu_search_across_resources when the resource type is unknown).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -1576,18 +1382,7 @@
  {
   "tool": "hudu_update_flag_type",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": [{"name": "expectedUpdatedAt", "type": "string", "required": false}]},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -1611,19 +1406,8 @@
  {
   "tool": "hudu_create_flag",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_flags_delete",
@@ -1640,25 +1424,14 @@
  {
   "tool": "hudu_delete_flag",
   "field": "description",
-  "newValue": "Delete a Flag. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_flag keeps it.",
+  "newValue": "Delete a Flag. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible — dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_flag keeps it.",
   "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
  },
  {
   "tool": "hudu_delete_flag",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_flags_findByFlagable",
@@ -1675,7 +1448,7 @@
  {
   "tool": "hudu_find_flags_by_flagable",
   "field": "description",
-  "newValue": "List the flags attached to one record. Preferred over flags.listAll for the 'is this record flagged' question. Returns one record: a compact FlagSummary (created_at, \u2026 dropped); expand: true returns the full Flag. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_flags or hudu_get_flag for that).",
+  "newValue": "List the flags attached to one record. Preferred over flags.listAll for the 'is this record flagged' question. Returns one record: a compact FlagSummary (created_at, … dropped); expand: true returns the full Flag. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_flags or hudu_get_flag for that).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -1711,7 +1484,7 @@
  {
   "tool": "hudu_get_flag",
   "field": "description",
-  "newValue": "Resolve a flag by its id. Prefer flags.findByFlagable when the flagged record is known; resolve is for a known flag id. Returns one record: a compact FlagSummary (created_at, \u2026 dropped); expand: true returns the full Flag. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_flags (or hudu_search_across_resources when the resource type is unknown).",
+  "newValue": "Resolve a flag by its id. Prefer flags.findByFlagable when the flagged record is known; resolve is for a known flag id. Returns one record: a compact FlagSummary (created_at, … dropped); expand: true returns the full Flag. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_flags (or hudu_search_across_resources when the resource type is unknown).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -1741,18 +1514,7 @@
  {
   "tool": "hudu_update_flag",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": [{"name": "expectedUpdatedAt", "type": "string", "required": false}]},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -1776,19 +1538,8 @@
  {
   "tool": "hudu_create_folder",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_folders_delete",
@@ -1805,25 +1556,14 @@
  {
   "tool": "hudu_delete_folder",
   "field": "description",
-  "newValue": "Delete a folder. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_folder keeps it.",
+  "newValue": "Delete a folder. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible — dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_folder keeps it.",
   "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
  },
  {
   "tool": "hudu_delete_folder",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_folders_get",
@@ -1852,7 +1592,7 @@
  {
   "tool": "hudu_get_folder",
   "field": "description",
-  "newValue": "Resolve a folder from an id or name, optionally scoped to a company. Use when the identifier is a folder name; folders.get is cheaper for a known id. Returns one record: a compact FolderSummary (description, created_at, \u2026 dropped); expand: true returns the full Folder. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_folders (or hudu_search_across_resources when the resource type is unknown).",
+  "newValue": "Resolve a folder from an id or name, optionally scoped to a company. Use when the identifier is a folder name; folders.get is cheaper for a known id. Returns one record: a compact FolderSummary (description, created_at, … dropped); expand: true returns the full Folder. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_folders (or hudu_search_across_resources when the resource type is unknown).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -1882,18 +1622,7 @@
  {
   "tool": "hudu_update_folder",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": [{"name": "expectedUpdatedAt", "type": "string", "required": false}]},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -1923,7 +1652,7 @@
  {
   "tool": "hudu_get_group",
   "field": "description",
-  "newValue": "Resolve a user group from an id, name or slug. Use when the identifier is a group name; groups.get is cheaper for a known id. Returns one record: a compact GroupSummary (url, created_at, members, \u2026 dropped); expand: true returns the full Group. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_groups (or hudu_search_across_resources when the resource type is unknown).",
+  "newValue": "Resolve a user group from an id, name or slug. Use when the identifier is a group name; groups.get is cheaper for a known id. Returns one record: a compact GroupSummary (url, created_at, members, … dropped); expand: true returns the full Group. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_groups (or hudu_search_across_resources when the resource type is unknown).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -1947,7 +1676,7 @@
  {
   "tool": "hudu_search_groups",
   "field": "description",
-  "newValue": "Search groups by name. Preferred over groups.list for any group-name search. Returns rows: a compact GroupSummary (url, created_at, members, \u2026 dropped); expand: true returns the full Group. Bounded: limit defaults to 25 and is hard-capped at 100; a larger value throws CONFIG_ERROR and is never silently clamped. Do not use it when you already have an id, slug or domain: call hudu_get_group instead.",
+  "newValue": "Search groups by name. Preferred over groups.list for any group-name search. Returns rows: a compact GroupSummary (url, created_at, members, … dropped); expand: true returns the full Group. Bounded: limit defaults to 25 and is hard-capped at 100; a larger value throws CONFIG_ERROR and is never silently clamped. Do not use it when you already have an id, slug or domain: call hudu_get_group instead.",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -1977,19 +1706,8 @@
  {
   "tool": "hudu_create_ip_address",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_ip_addresses_delete",
@@ -2006,25 +1724,14 @@
  {
   "tool": "hudu_delete_ip_address",
   "field": "description",
-  "newValue": "Delete an IP address. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_ip_address keeps it.",
+  "newValue": "Delete an IP address. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible — dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_ip_address keeps it.",
   "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
  },
  {
   "tool": "hudu_delete_ip_address",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_ip_addresses_findByAddress",
@@ -2041,7 +1748,7 @@
  {
   "tool": "hudu_find_ip_addresses_by_address",
   "field": "description",
-  "newValue": "Find one IP address record by its address. Preferred over ip_addresses.listAll for any address lookup. Returns one record: a compact IpAddressSummary (notes, skip_dns_validation, \u2026 dropped); expand: true returns the full IpAddress. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_ip_addresses or hudu_get_ip_address for that).",
+  "newValue": "Find one IP address record by its address. Preferred over ip_addresses.listAll for any address lookup. Returns one record: a compact IpAddressSummary (notes, skip_dns_validation, … dropped); expand: true returns the full IpAddress. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_ip_addresses or hudu_get_ip_address for that).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -2077,7 +1784,7 @@
  {
   "tool": "hudu_get_ip_address",
   "field": "description",
-  "newValue": "Resolve an IP address record from an id, the address, or its FQDN. Use when the identifier is a CIDR address or an FQDN; ip_addresses.get is cheaper for a known id. Returns one record: a compact IpAddressSummary (notes, skip_dns_validation, \u2026 dropped); expand: true returns the full IpAddress. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_ip_addresses (or hudu_search_across_resources when the resource type is unknown).",
+  "newValue": "Resolve an IP address record from an id, the address, or its FQDN. Use when the identifier is a CIDR address or an FQDN; ip_addresses.get is cheaper for a known id. Returns one record: a compact IpAddressSummary (notes, skip_dns_validation, … dropped); expand: true returns the full IpAddress. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_ip_addresses (or hudu_search_across_resources when the resource type is unknown).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -2107,18 +1814,7 @@
  {
   "tool": "hudu_update_ip_address",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": [{"name": "expectedUpdatedAt", "type": "string", "required": false}]},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -2142,19 +1838,8 @@
  {
   "tool": "hudu_create_label_type",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_label_types_delete",
@@ -2171,25 +1856,14 @@
  {
   "tool": "hudu_delete_label_type",
   "field": "description",
-  "newValue": "Delete a Label Type. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_label_type keeps it.",
+  "newValue": "Delete a Label Type. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible — dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_label_type keeps it.",
   "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
  },
  {
   "tool": "hudu_delete_label_type",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_label_types_get",
@@ -2218,7 +1892,7 @@
  {
   "tool": "hudu_get_label_type",
   "field": "description",
-  "newValue": "Resolve a label type from an id, slug or exact name. Use when the identifier is a label-type name; label_types.get is cheaper for a known id. Returns one record: a compact LabelTypeSummary (allowed_company_ids, created_at, updated_at, \u2026 dropped); expand: true returns the full LabelType. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_label_types (or hudu_search_across_resources when the resource type is unknown).",
+  "newValue": "Resolve a label type from an id, slug or exact name. Use when the identifier is a label-type name; label_types.get is cheaper for a known id. Returns one record: a compact LabelTypeSummary (allowed_company_ids, created_at, updated_at, … dropped); expand: true returns the full LabelType. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_label_types (or hudu_search_across_resources when the resource type is unknown).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -2248,18 +1922,7 @@
  {
   "tool": "hudu_update_label_type",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": [{"name": "expectedUpdatedAt", "type": "string", "required": false}]},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -2283,19 +1946,8 @@
  {
   "tool": "hudu_create_label",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_labels_delete",
@@ -2312,25 +1964,14 @@
  {
   "tool": "hudu_delete_label",
   "field": "description",
-  "newValue": "Delete a Label. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_label keeps it.",
+  "newValue": "Delete a Label. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible — dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_label keeps it.",
   "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
  },
  {
   "tool": "hudu_delete_label",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_labels_findByLabelable",
@@ -2347,7 +1988,7 @@
  {
   "tool": "hudu_find_labels_by_labelable",
   "field": "description",
-  "newValue": "List the labels attached to one record. Preferred over labels.listAll for 'what is this record tagged with'. Returns one record: a compact LabelSummary (created_at, \u2026 dropped); expand: true returns the full Label. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_labels or hudu_get_label for that).",
+  "newValue": "List the labels attached to one record. Preferred over labels.listAll for 'what is this record tagged with'. Returns one record: a compact LabelSummary (created_at, … dropped); expand: true returns the full Label. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_labels or hudu_get_label for that).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -2383,7 +2024,7 @@
  {
   "tool": "hudu_get_label",
   "field": "description",
-  "newValue": "Resolve a label by its id or by the record it is attached to. Use labels.findByLabelable for the list form; resolve is for a single known label. Returns one record: a compact LabelSummary (created_at, \u2026 dropped); expand: true returns the full Label. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_labels (or hudu_search_across_resources when the resource type is unknown).",
+  "newValue": "Resolve a label by its id or by the record it is attached to. Use labels.findByLabelable for the list form; resolve is for a single known label. Returns one record: a compact LabelSummary (created_at, … dropped); expand: true returns the full Label. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_labels (or hudu_search_across_resources when the resource type is unknown).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -2413,18 +2054,7 @@
  {
   "tool": "hudu_update_label",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": [{"name": "expectedUpdatedAt", "type": "string", "required": false}]},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -2448,19 +2078,8 @@
  {
   "tool": "hudu_create_list",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_lists_delete",
@@ -2477,25 +2096,14 @@
  {
   "tool": "hudu_delete_list",
   "field": "description",
-  "newValue": "Delete a List. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_list keeps it.",
+  "newValue": "Delete a List. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible — dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_list keeps it.",
   "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
  },
  {
   "tool": "hudu_delete_list",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_lists_findByName",
@@ -2578,18 +2186,7 @@
  {
   "tool": "hudu_update_list",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": [{"name": "expectedUpdatedAt", "type": "string", "required": false}]},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -2613,19 +2210,8 @@
  {
   "tool": "hudu_create_magic_dash",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_magic_dash_delete",
@@ -2642,25 +2228,14 @@
  {
   "tool": "hudu_delete_magic_dash",
   "field": "description",
-  "newValue": "Delete a Magic Dash Item without an ID. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_magic_dash keeps it.",
+  "newValue": "Delete a Magic Dash Item without an ID. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible — dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_magic_dash keeps it.",
   "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
  },
  {
   "tool": "hudu_delete_magic_dash",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_magic_dash_deleteById",
@@ -2677,25 +2252,14 @@
  {
   "tool": "hudu_delete_magic_dash_by_id",
   "field": "description",
-  "newValue": "Delete a Magic Dash item with the specified ID. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: BULK by title \u2014 deletes every Magic Dash item carrying that title for the company. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff).",
+  "newValue": "Delete a Magic Dash item with the specified ID. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: BULK by title — deletes every Magic Dash item carrying that title for the company. Irreversible — dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff).",
   "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
  },
  {
   "tool": "hudu_delete_magic_dash_by_id",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_magic_dash_findByCompany",
@@ -2712,7 +2276,7 @@
  {
   "tool": "hudu_find_magic_dash_by_company",
   "field": "description",
-  "newValue": "List the Magic Dash items of one company. Preferred over magic_dash.listAll for the per-company dashboard read. Returns one record: a compact MagicDashSummary (content_link, content, \u2026 dropped); expand: true returns the full MagicDash. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_magic_dash or hudu_get_magic_dash for that).",
+  "newValue": "List the Magic Dash items of one company. Preferred over magic_dash.listAll for the per-company dashboard read. Returns one record: a compact MagicDashSummary (content_link, content, … dropped); expand: true returns the full MagicDash. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_magic_dash or hudu_get_magic_dash for that).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -2742,7 +2306,7 @@
  {
   "tool": "hudu_get_magic_dash",
   "field": "description",
-  "newValue": "Resolve a Magic Dash item from an id or a title. Use when the identifier is a dashboard title; magic_dash.findByCompany is the company-scoped path. Returns one record: a compact MagicDashSummary (content_link, content, \u2026 dropped); expand: true returns the full MagicDash. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_magic_dash (or hudu_search_across_resources when the resource type is unknown).",
+  "newValue": "Resolve a Magic Dash item from an id or a title. Use when the identifier is a dashboard title; magic_dash.findByCompany is the company-scoped path. Returns one record: a compact MagicDashSummary (content_link, content, … dropped); expand: true returns the full MagicDash. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_magic_dash (or hudu_search_across_resources when the resource type is unknown).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -2766,25 +2330,14 @@
  {
   "tool": "hudu_update_magic_dash_positions",
   "field": "description",
-  "newValue": "Update positions of multiple Magic Dash Items. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: BULK \u2014 rewrites the position of every item in the submitted array in one call. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff).",
+  "newValue": "Update positions of multiple Magic Dash Items. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: BULK — rewrites the position of every item in the submitted array in one call. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff).",
   "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
  },
  {
   "tool": "hudu_update_magic_dash_positions",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_matchers_delete",
@@ -2801,25 +2354,14 @@
  {
   "tool": "hudu_delete_matcher",
   "field": "description",
-  "newValue": "Delete a Matcher. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_matcher keeps it.",
+  "newValue": "Delete a Matcher. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible — dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_matcher keeps it.",
   "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
  },
  {
   "tool": "hudu_delete_matcher",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_matchers_findBySyncId",
@@ -2896,18 +2438,7 @@
  {
   "tool": "hudu_update_matcher",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": [{"name": "expectedUpdatedAt", "type": "string", "required": false}]},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -2931,19 +2462,8 @@
  {
   "tool": "hudu_create_network",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_networks_delete",
@@ -2960,25 +2480,14 @@
  {
   "tool": "hudu_delete_network",
   "field": "description",
-  "newValue": "Delete a network. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_network keeps it.",
+  "newValue": "Delete a network. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible — dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_network keeps it.",
   "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
  },
  {
   "tool": "hudu_delete_network",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_networks_findByAddress",
@@ -2995,7 +2504,7 @@
  {
   "tool": "hudu_find_networks_by_address",
   "field": "description",
-  "newValue": "Find one network by its CIDR address. Preferred over networks.list for any CIDR lookup. Returns one record: a compact NetworkSummary (description, notes, ancestry, \u2026 dropped); expand: true returns the full Network. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_networks or hudu_get_network for that).",
+  "newValue": "Find one network by its CIDR address. Preferred over networks.list for any CIDR lookup. Returns one record: a compact NetworkSummary (description, notes, ancestry, … dropped); expand: true returns the full Network. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_networks or hudu_get_network for that).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -3031,7 +2540,7 @@
  {
   "tool": "hudu_get_network",
   "field": "description",
-  "newValue": "Resolve a network from an id, name, slug or address. Use when the identifier is a name, slug or CIDR; networks.get is cheaper for a known id. Returns one record: a compact NetworkSummary (description, notes, ancestry, \u2026 dropped); expand: true returns the full Network. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_networks (or hudu_search_across_resources when the resource type is unknown).",
+  "newValue": "Resolve a network from an id, name, slug or address. Use when the identifier is a name, slug or CIDR; networks.get is cheaper for a known id. Returns one record: a compact NetworkSummary (description, notes, ancestry, … dropped); expand: true returns the full Network. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_networks (or hudu_search_across_resources when the resource type is unknown).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -3061,18 +2570,7 @@
  {
   "tool": "hudu_update_network",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": [{"name": "expectedUpdatedAt", "type": "string", "required": false}]},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -3138,25 +2636,14 @@
  {
   "tool": "hudu_create_password_folder",
   "field": "description",
-  "newValue": "Create a new password folder. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record. Sensitive: it handles credential material \u2014 never echo a secret value into a log, a description or an error (the SDK redacts those fields by default). Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to change an existing record: call hudu_update_password_folder.",
+  "newValue": "Create a new password folder. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record. Sensitive: it handles credential material — never echo a secret value into a log, a description or an error (the SDK redacts those fields by default). Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to change an existing record: call hudu_update_password_folder.",
   "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
  },
  {
   "tool": "hudu_create_password_folder",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_password_folders_delete",
@@ -3173,25 +2660,14 @@
  {
   "tool": "hudu_delete_password_folder",
   "field": "description",
-  "newValue": "Delete a password folder. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Sensitive: it handles credential material \u2014 never echo a secret value into a log, a description or an error (the SDK redacts those fields by default). Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_password_folder keeps it.",
+  "newValue": "Delete a password folder. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible — dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Sensitive: it handles credential material — never echo a secret value into a log, a description or an error (the SDK redacts those fields by default). Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_password_folder keeps it.",
   "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
  },
  {
   "tool": "hudu_delete_password_folder",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_password_folders_get",
@@ -3220,7 +2696,7 @@
  {
   "tool": "hudu_get_password_folder",
   "field": "description",
-  "newValue": "Resolve a password folder from an id or name, optionally scoped to a company. Use when the identifier is a folder name; password_folders.get is cheaper for a known id. Returns one record: a compact PasswordFolderSummary (description, allowed_groups, created_at, \u2026 dropped); expand: true returns the full PasswordFolder. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_password_folders (or hudu_search_across_resources when the resource type is unknown). Sensitive: it returns credential-shaped fields; the SDK redacts them from logs and audit payloads by default.",
+  "newValue": "Resolve a password folder from an id or name, optionally scoped to a company. Use when the identifier is a folder name; password_folders.get is cheaper for a known id. Returns one record: a compact PasswordFolderSummary (description, allowed_groups, created_at, … dropped); expand: true returns the full PasswordFolder. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_password_folders (or hudu_search_across_resources when the resource type is unknown). Sensitive: it returns credential-shaped fields; the SDK redacts them from logs and audit payloads by default.",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -3244,7 +2720,7 @@
  {
   "tool": "hudu_search_password_folders",
   "field": "description",
-  "newValue": "Search password folders by a free-text query. Preferred over password_folders.list for any text search. Returns rows: a compact PasswordFolderSummary (description, allowed_groups, created_at, \u2026 dropped); expand: true returns the full PasswordFolder. Bounded: limit defaults to 25 and is hard-capped at 100; a larger value throws CONFIG_ERROR and is never silently clamped. Do not use it when you already have an id, slug or domain: call hudu_get_password_folder instead. Sensitive: it returns credential-shaped fields; the SDK redacts them from logs and audit payloads by default.",
+  "newValue": "Search password folders by a free-text query. Preferred over password_folders.list for any text search. Returns rows: a compact PasswordFolderSummary (description, allowed_groups, created_at, … dropped); expand: true returns the full PasswordFolder. Bounded: limit defaults to 25 and is hard-capped at 100; a larger value throws CONFIG_ERROR and is never silently clamped. Do not use it when you already have an id, slug or domain: call hudu_get_password_folder instead. Sensitive: it returns credential-shaped fields; the SDK redacts them from logs and audit payloads by default.",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -3268,24 +2744,13 @@
  {
   "tool": "hudu_update_password_folder",
   "field": "description",
-  "newValue": "Update an existing password folder. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record. Sensitive: it handles credential material \u2014 never echo a secret value into a log, a description or an error (the SDK redacts those fields by default). Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to create a record: call hudu_create_password_folder.",
+  "newValue": "Update an existing password folder. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record. Sensitive: it handles credential material — never echo a secret value into a log, a description or an error (the SDK redacts those fields by default). Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to create a record: call hudu_create_password_folder.",
   "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
  },
  {
   "tool": "hudu_update_password_folder",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": [{"name": "expectedUpdatedAt", "type": "string", "required": false}]},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -3309,19 +2774,8 @@
  {
   "tool": "hudu_create_procedure_task",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_procedure_tasks_delete",
@@ -3338,25 +2792,14 @@
  {
   "tool": "hudu_delete_procedure_task",
   "field": "description",
-  "newValue": "Delete a Task from a Process. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_procedure_task keeps it.",
+  "newValue": "Delete a Task from a Process. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible — dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_procedure_task keeps it.",
   "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
  },
  {
   "tool": "hudu_delete_procedure_task",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_procedure_tasks_get",
@@ -3385,7 +2828,7 @@
  {
   "tool": "hudu_get_procedure_task",
   "field": "description",
-  "newValue": "Resolve a procedure task from an id or an exact name inside a procedure. Use when the identifier is a task name inside a known procedure; procedure_tasks.get is cheaper for a known id. Returns one record: a compact ProcedureTaskSummary (description, completion_notes, formatted_due_date, \u2026 dropped); expand: true returns the full ProcedureTask. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_procedure_tasks (or hudu_search_across_resources when the resource type is unknown).",
+  "newValue": "Resolve a procedure task from an id or an exact name inside a procedure. Use when the identifier is a task name inside a known procedure; procedure_tasks.get is cheaper for a known id. Returns one record: a compact ProcedureTaskSummary (description, completion_notes, formatted_due_date, … dropped); expand: true returns the full ProcedureTask. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_procedure_tasks (or hudu_search_across_resources when the resource type is unknown).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -3415,18 +2858,7 @@
  {
   "tool": "hudu_update_procedure_task",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": [{"name": "expectedUpdatedAt", "type": "string", "required": false}]},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -3450,19 +2882,8 @@
  {
   "tool": "hudu_create_procedure",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_procedures_createFromTemplate",
@@ -3485,19 +2906,8 @@
  {
   "tool": "hudu_create_procedure_from_template",
   "field": "inputSchema.options",
-  "newValue": {
-   "name": "options",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "options", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_procedures_delete",
@@ -3514,25 +2924,14 @@
  {
   "tool": "hudu_delete_procedure",
   "field": "description",
-  "newValue": "Delete a Process or Run. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_procedure keeps it.",
+  "newValue": "Delete a Process or Run. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible — dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_procedure keeps it.",
   "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
  },
  {
   "tool": "hudu_delete_procedure",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_procedures_duplicate",
@@ -3555,19 +2954,8 @@
  {
   "tool": "hudu_duplicate_procedure",
   "field": "inputSchema.options",
-  "newValue": {
-   "name": "options",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "options", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_procedures_get",
@@ -3590,7 +2978,7 @@
  {
   "tool": "hudu_get_procedure_with_tasks",
   "field": "description",
-  "newValue": "Fetch a procedure together with its tasks in one call. Preferred over calling procedures.get and procedure_tasks.listAll yourself whenever the goal is to read or report on a process. Returns one record: a compact ProcedureWithTasks (limit, \u2026 dropped); expand: true returns the full ProcedureWithTasksFull. Bounded: every sub-list is fetched with limit, default 25, hard maximum 100 \u2014 no sub-fetch walks the account. Do not use it to page every procedure: it fetches one procedure plus its bounded task list.",
+  "newValue": "Fetch a procedure together with its tasks in one call. Preferred over calling procedures.get and procedure_tasks.listAll yourself whenever the goal is to read or report on a process. Returns one record: a compact ProcedureWithTasks (limit, … dropped); expand: true returns the full ProcedureWithTasksFull. Bounded: every sub-list is fetched with limit, default 25, hard maximum 100 — no sub-fetch walks the account. Do not use it to page every procedure: it fetches one procedure plus its bounded task list.",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -3620,19 +3008,8 @@
  {
   "tool": "hudu_kickoff_procedure",
   "field": "inputSchema.options",
-  "newValue": {
-   "name": "options",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "options", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_procedures_list",
@@ -3655,7 +3032,7 @@
  {
   "tool": "hudu_get_procedure",
   "field": "description",
-  "newValue": "Resolve a procedure/process from an id, slug or exact name. Use when the identifier is a name or slug; procedures.get is cheaper for a known id. Returns one record: a compact ProcedureSummary (description, object_type, created_at, \u2026 dropped); expand: true returns the full Procedure. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_procedures (or hudu_search_across_resources when the resource type is unknown).",
+  "newValue": "Resolve a procedure/process from an id, slug or exact name. Use when the identifier is a name or slug; procedures.get is cheaper for a known id. Returns one record: a compact ProcedureSummary (description, object_type, created_at, … dropped); expand: true returns the full Procedure. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_procedures (or hudu_search_across_resources when the resource type is unknown).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -3685,18 +3062,7 @@
  {
   "tool": "hudu_update_procedure",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": [{"name": "expectedUpdatedAt", "type": "string", "required": false}]},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -3720,19 +3086,8 @@
  {
   "tool": "hudu_create_rack_storage_item",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_rack_storage_items_delete",
@@ -3749,25 +3104,14 @@
  {
   "tool": "hudu_delete_rack_storage_item",
   "field": "description",
-  "newValue": "Delete a Rack Storage Item. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_rack_storage_item keeps it.",
+  "newValue": "Delete a Rack Storage Item. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible — dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_rack_storage_item keeps it.",
   "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
  },
  {
   "tool": "hudu_delete_rack_storage_item",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_rack_storage_items_get",
@@ -3796,7 +3140,7 @@
  {
   "tool": "hudu_get_rack_storage_item",
   "field": "description",
-  "newValue": "Resolve a rack storage item from an id. Use when the item id is known; rack_storage_items.listAll is the enumeration path. Returns one record: a compact RackStorageItemSummary (max_wattage, power_draw, reserved_message, \u2026 dropped); expand: true returns the full RackStorageItem. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_rack_storage_items (or hudu_search_across_resources when the resource type is unknown).",
+  "newValue": "Resolve a rack storage item from an id. Use when the item id is known; rack_storage_items.listAll is the enumeration path. Returns one record: a compact RackStorageItemSummary (max_wattage, power_draw, reserved_message, … dropped); expand: true returns the full RackStorageItem. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_rack_storage_items (or hudu_search_across_resources when the resource type is unknown).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -3826,18 +3170,7 @@
  {
   "tool": "hudu_update_rack_storage_item",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": [{"name": "expectedUpdatedAt", "type": "string", "required": false}]},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -3861,19 +3194,8 @@
  {
   "tool": "hudu_create_rack_storage",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_rack_storages_delete",
@@ -3890,25 +3212,14 @@
  {
   "tool": "hudu_delete_rack_storage",
   "field": "description",
-  "newValue": "Delete a Rack Storage. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_rack_storage keeps it.",
+  "newValue": "Delete a Rack Storage. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible — dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_rack_storage keeps it.",
   "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
  },
  {
   "tool": "hudu_delete_rack_storage",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_rack_storages_get",
@@ -3937,7 +3248,7 @@
  {
   "tool": "hudu_get_rack_storage",
   "field": "description",
-  "newValue": "Resolve a rack storage from an id or name. Use when the identifier is a rack name; rack_storages.get is cheaper for a known id. Returns one record: a compact RackStorageSummary (description, created_at, discarded_at, \u2026 dropped); expand: true returns the full RackStorage. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_rack_storages (or hudu_search_across_resources when the resource type is unknown).",
+  "newValue": "Resolve a rack storage from an id or name. Use when the identifier is a rack name; rack_storages.get is cheaper for a known id. Returns one record: a compact RackStorageSummary (description, created_at, discarded_at, … dropped); expand: true returns the full RackStorage. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_rack_storages (or hudu_search_across_resources when the resource type is unknown).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -3967,18 +3278,7 @@
  {
   "tool": "hudu_update_rack_storage",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": [{"name": "expectedUpdatedAt", "type": "string", "required": false}]},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -4002,19 +3302,8 @@
  {
   "tool": "hudu_create_relation",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_relations_delete",
@@ -4031,25 +3320,14 @@
  {
   "tool": "hudu_delete_relation",
   "field": "description",
-  "newValue": "Delete a Relation. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_relation keeps it.",
+  "newValue": "Delete a Relation. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible — dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_relation keeps it.",
   "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
  },
  {
   "tool": "hudu_delete_relation",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_relations_findByEndpoints",
@@ -4066,7 +3344,7 @@
  {
   "tool": "hudu_find_relations_by_endpoints",
   "field": "description",
-  "newValue": "List the relations that connect two records. Preferred over relations.listAll for the 'what is this record related to' question. Returns one record: a compact RelationSummary (created_at, updated_at, \u2026 dropped); expand: true returns the full Relation. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_relations or hudu_get_relation for that).",
+  "newValue": "List the relations that connect two records. Preferred over relations.listAll for the 'what is this record related to' question. Returns one record: a compact RelationSummary (created_at, updated_at, … dropped); expand: true returns the full Relation. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_relations or hudu_get_relation for that).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -4096,7 +3374,7 @@
  {
   "tool": "hudu_get_relation",
   "field": "description",
-  "newValue": "Resolve a relation by its id. Prefer relations.findByEndpoints whenever the endpoints are known; resolve is only for a known relation id. Returns one record: a compact RelationSummary (created_at, updated_at, \u2026 dropped); expand: true returns the full Relation. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_relations (or hudu_search_across_resources when the resource type is unknown).",
+  "newValue": "Resolve a relation by its id. Prefer relations.findByEndpoints whenever the endpoints are known; resolve is only for a known relation id. Returns one record: a compact RelationSummary (created_at, updated_at, … dropped); expand: true returns the full Relation. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_relations (or hudu_search_across_resources when the resource type is unknown).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -4120,7 +3398,7 @@
  {
   "tool": "hudu_find_users_by_email",
   "field": "description",
-  "newValue": "Find one user by their exact email address. Preferred over users.listAll for any email lookup. Returns one record: a compact UserSummary (otp_required_for_login, phone_number, time_zone, \u2026 dropped); expand: true returns the full User. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_users or hudu_get_user for that).",
+  "newValue": "Find one user by their exact email address. Preferred over users.listAll for any email lookup. Returns one record: a compact UserSummary (otp_required_for_login, phone_number, time_zone, … dropped); expand: true returns the full User. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_users or hudu_get_user for that).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -4156,7 +3434,7 @@
  {
   "tool": "hudu_get_user",
   "field": "description",
-  "newValue": "Resolve a user from an id, email, slug or exact name. Use when the identifier is an email or a name; users.get is cheaper for a known id. Returns one record: a compact UserSummary (otp_required_for_login, phone_number, time_zone, \u2026 dropped); expand: true returns the full User. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_users (or hudu_search_across_resources when the resource type is unknown).",
+  "newValue": "Resolve a user from an id, email, slug or exact name. Use when the identifier is an email or a name; users.get is cheaper for a known id. Returns one record: a compact UserSummary (otp_required_for_login, phone_number, time_zone, … dropped); expand: true returns the full User. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_users (or hudu_search_across_resources when the resource type is unknown).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -4180,7 +3458,7 @@
  {
   "tool": "hudu_search_users",
   "field": "description",
-  "newValue": "Search users by a free-text query. Preferred over users.listAll for any text search. Returns rows: a compact UserSummary (otp_required_for_login, phone_number, time_zone, \u2026 dropped); expand: true returns the full User. Bounded: limit defaults to 25 and is hard-capped at 100; a larger value throws CONFIG_ERROR and is never silently clamped. Do not use it when you already have an id, slug or domain: call hudu_get_user instead.",
+  "newValue": "Search users by a free-text query. Preferred over users.listAll for any text search. Returns rows: a compact UserSummary (otp_required_for_login, phone_number, time_zone, … dropped); expand: true returns the full User. Bounded: limit defaults to 25 and is hard-capped at 100; a larger value throws CONFIG_ERROR and is never silently clamped. Do not use it when you already have an id, slug or domain: call hudu_get_user instead.",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -4210,19 +3488,8 @@
  {
   "tool": "hudu_create_vlan_zone",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_vlan_zones_delete",
@@ -4239,25 +3506,14 @@
  {
   "tool": "hudu_delete_vlan_zone",
   "field": "description",
-  "newValue": "Delete a VLAN Zone. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_vlan_zone keeps it.",
+  "newValue": "Delete a VLAN Zone. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible — dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_vlan_zone keeps it.",
   "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
  },
  {
   "tool": "hudu_delete_vlan_zone",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_vlan_zones_get",
@@ -4286,7 +3542,7 @@
  {
   "tool": "hudu_get_vlan_zone",
   "field": "description",
-  "newValue": "Resolve a VLAN zone from an id, name or slug. Use when the identifier is a name or slug; vlan_zones.get is cheaper for a known id. Returns one record: a compact VlanZoneSummary (description, archived_at, created_at, \u2026 dropped); expand: true returns the full VlanZone. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_vlan_zones (or hudu_search_across_resources when the resource type is unknown).",
+  "newValue": "Resolve a VLAN zone from an id, name or slug. Use when the identifier is a name or slug; vlan_zones.get is cheaper for a known id. Returns one record: a compact VlanZoneSummary (description, archived_at, created_at, … dropped); expand: true returns the full VlanZone. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_vlan_zones (or hudu_search_across_resources when the resource type is unknown).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -4316,18 +3572,7 @@
  {
   "tool": "hudu_update_vlan_zone",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": [{"name": "expectedUpdatedAt", "type": "string", "required": false}]},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -4351,19 +3596,8 @@
  {
   "tool": "hudu_create_vlan",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_vlans_delete",
@@ -4380,25 +3614,14 @@
  {
   "tool": "hudu_delete_vlan",
   "field": "description",
-  "newValue": "Delete a VLAN. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_vlan keeps it.",
+  "newValue": "Delete a VLAN. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible — dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_vlan keeps it.",
   "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
  },
  {
   "tool": "hudu_delete_vlan",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_vlans_findByVlanId",
@@ -4415,7 +3638,7 @@
  {
   "tool": "hudu_find_vlans_by_vlan_id",
   "field": "description",
-  "newValue": "Find one VLAN by its vendor VLAN number. Preferred over vlans.list for a VLAN-number lookup. Returns one record: a compact VlanSummary (description, notes, archived_at, \u2026 dropped); expand: true returns the full Vlan. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_vlans or hudu_get_vlan for that).",
+  "newValue": "Find one VLAN by its vendor VLAN number. Preferred over vlans.list for a VLAN-number lookup. Returns one record: a compact VlanSummary (description, notes, archived_at, … dropped); expand: true returns the full Vlan. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_vlans or hudu_get_vlan for that).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -4451,7 +3674,7 @@
  {
   "tool": "hudu_get_vlan",
   "field": "description",
-  "newValue": "Resolve a VLAN from an id, name or VLAN number. Use when the identifier is a name or VLAN number; vlans.get is cheaper for a known id. Returns one record: a compact VlanSummary (description, notes, archived_at, \u2026 dropped); expand: true returns the full Vlan. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_vlans (or hudu_search_across_resources when the resource type is unknown).",
+  "newValue": "Resolve a VLAN from an id, name or VLAN number. Use when the identifier is a name or VLAN number; vlans.get is cheaper for a known id. Returns one record: a compact VlanSummary (description, notes, archived_at, … dropped); expand: true returns the full Vlan. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_vlans (or hudu_search_across_resources when the resource type is unknown).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -4481,18 +3704,7 @@
  {
   "tool": "hudu_update_vlan",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": [{"name": "expectedUpdatedAt", "type": "string", "required": false}]},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  },
  {
@@ -4516,19 +3728,8 @@
  {
   "tool": "hudu_create_website",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_websites_delete",
@@ -4545,25 +3746,14 @@
  {
   "tool": "hudu_delete_website",
   "field": "description",
-  "newValue": "Delete a Website. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_website keeps it.",
+  "newValue": "Delete a Website. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible — dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_website keeps it.",
   "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
  },
  {
   "tool": "hudu_delete_website",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
-  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": []},
+  "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate. The registry does not advertise `expectedUpdatedAt` on this operation (the SDK rejects it outside an update), so the replacement carries no fields: the override exists only to drop the duplicated `dryRun`."
  },
  {
   "tool": "hudu_websites_findBySlug",
@@ -4580,7 +3770,7 @@
  {
   "tool": "hudu_find_websites_by_slug",
   "field": "description",
-  "newValue": "Find one website by its URL slug. Preferred over websites.list for a slug lookup. Returns one record: a compact WebsiteSummary (code, message, keyword, \u2026 dropped); expand: true returns the full Website. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_websites or hudu_get_website for that).",
+  "newValue": "Find one website by its URL slug. Preferred over websites.list for a slug lookup. Returns one record: a compact WebsiteSummary (code, message, keyword, … dropped); expand: true returns the full Website. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_websites or hudu_get_website for that).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -4616,7 +3806,7 @@
  {
   "tool": "hudu_get_website",
   "field": "description",
-  "newValue": "Resolve a website from an id, name or slug. Use when the identifier is a name or slug; websites.get is cheaper for a known id. Returns one record: a compact WebsiteSummary (code, message, keyword, \u2026 dropped); expand: true returns the full Website. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_websites (or hudu_search_across_resources when the resource type is unknown).",
+  "newValue": "Resolve a website from an id, name or slug. Use when the identifier is a name or slug; websites.get is cheaper for a known id. Returns one record: a compact WebsiteSummary (code, message, keyword, … dropped); expand: true returns the full Website. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_websites (or hudu_search_across_resources when the resource type is unknown).",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -4640,7 +3830,7 @@
  {
   "tool": "hudu_search_websites",
   "field": "description",
-  "newValue": "Search monitored websites by a free-text query. Preferred over websites.list for any text search. Returns rows: a compact WebsiteSummary (code, message, keyword, \u2026 dropped); expand: true returns the full Website. Bounded: limit defaults to 25 and is hard-capped at 100; a larger value throws CONFIG_ERROR and is never silently clamped. Do not use it when you already have an id, slug or domain: call hudu_get_website instead.",
+  "newValue": "Search monitored websites by a free-text query. Preferred over websites.list for any text search. Returns rows: a compact WebsiteSummary (code, message, keyword, … dropped); expand: true returns the full Website. Bounded: limit defaults to 25 and is hard-capped at 100; a larger value throws CONFIG_ERROR and is never silently clamped. Do not use it when you already have an id, slug or domain: call hudu_get_website instead.",
   "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
  },
  {
@@ -4670,18 +3860,7 @@
  {
   "tool": "hudu_update_website",
   "field": "inputSchema.opts",
-  "newValue": {
-   "name": "opts",
-   "type": "object",
-   "required": false,
-   "fields": [
-    {
-     "name": "expectedUpdatedAt",
-     "type": "string",
-     "required": false
-    }
-   ]
-  },
+  "newValue": {"name": "opts", "type": "object", "required": false, "fields": [{"name": "expectedUpdatedAt", "type": "string", "required": false}]},
   "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
  }
 ]
