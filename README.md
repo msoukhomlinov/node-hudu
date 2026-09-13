@@ -112,6 +112,66 @@ const matches = await hudu.articles.listAll({ search: 'firewall', page_size: 100
 
 ---
 
+## Agent helpers
+
+0.3.0 adds a helper tier so an agent does not have to re-implement matching, paging and ID resolution
+in a prompt. Every helper is additive — the primitives below them are unchanged.
+
+```ts
+import { HuduClient } from 'node-hudu';
+
+const hudu = new HuduClient({ baseUrl, apiKey });
+
+// Resolve by anything: an id fetches directly, a name/slug/domain is looked up.
+const company = await hudu.companies.resolve('acme.com');          // CompanySummary | null
+const full = await hudu.companies.resolve({ name: 'Acme' }, { expand: true }); // Company | null
+
+// Vendor filters, bounded, compact by default.
+await hudu.assets.findBySerial('SN-1234');
+await hudu.websites.search('intranet', { limit: 10 });
+await hudu.companies.getContext(42);           // company + its assets, articles, websites, passwords
+
+// Across resources, one bounded call.
+await hudu.operations.searchAcrossResources('vpn', { resources: ['companies', 'articles'] });
+await hudu.operations.resolveAny('10.0.0.5');
+
+// Dry-run never writes: it validates, checks and reports, then you decide.
+const plan = await hudu.companies.delete(42, { dryRun: true });
+// { simulated: true, impact: { affected: 1, scope: 'single', reversible: false }, request: {…}, checks: […] }
+```
+
+**What the helpers guarantee**
+
+- `resolve` never lies: an `{ id }` miss throws `NOT_FOUND`; `null` means a *complete* scan found nothing;
+  a cap that stopped the search throws `RESOLUTION_TRUNCATED`; several exact matches throw
+  `RESOLUTION_AMBIGUOUS` with the candidate ids. `{ resolutionDetails: true }` returns a `Resolution<T>`
+  with `resolutionCost`, `scanned` and `scanTruncated`.
+- Scans are bounded (500 records / 4 pages by default, configurable on the client) and never unbounded.
+- `limit` defaults to 25 and throws above 100 instead of silently clamping.
+- Helpers return compact summaries and declare which fields they drop; `expand: true` returns the full record.
+- Repeated lookups can opt into a TTL cache, and bulk work can bound its concurrency (default 4).
+
+**Mutation safety**
+
+- Every mutation accepts `{ dryRun: true }` and a dry run cannot issue the write.
+- Classification lives in the capability registry: `effect` (`read`/`write`/`destructive`) plus
+  `sensitive`, `idempotent`, `requiresApproval`. Bulk deletes refuse to run unconfirmed.
+- `{ expectedUpdatedAt }` on an `update()` raises `STALE_OBJECT` if the record changed under you.
+- `onAudit(event)` receives a correlation id, the operation, the effect, the outcome and the impact;
+  `redact()` strips credential-shaped fields from anything you log.
+
+**Discover it all from the capability registry**
+
+```ts
+import { getCapability, CAPABILITY_NAMES } from 'node-hudu/capabilities';
+
+getCapability('companies.resolve');
+// { purpose, inputSchema, outputSchema, effect, flags, dryRun, resolution, errors, preferredWhen, usage, … }
+```
+
+`capabilities.json` and `capabilities.schema.json` ship at the package root for non-TypeScript
+consumers, and `MCP_TOOL_MANIFEST.md` is projected from the same registry.
+
 ## Model Context Protocol (MCP) motivation
 
 `node-hudu` was built to power **MCP servers**. Three design decisions make it a natural fit:

@@ -1,7 +1,12 @@
 node_modules/
 dist/
 coverage/
+coverage-*/
 *.log
+# unattended-run state must survive; the log is part of the run record
+!/.run/PROGRESS.log
+.run/logs/
+.run/qa/*/tmp/
 .DS_Store
 .env
 .env.*

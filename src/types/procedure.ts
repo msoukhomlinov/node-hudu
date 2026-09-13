@@ -35,3 +35,60 @@ export type ProcedureCreate = Partial<Omit<Procedure, 'id' | 'created_at' | 'upd
  * Input for updating a Procedure.
  */
 export type ProcedureUpdate = Partial<Procedure>;
+
+import type { ProcedureTask, ProcedureTaskSummary } from './procedure_task.js';
+
+/**
+ * Identifier accepted by `procedures.resolve` (policy §6). Every kind here maps onto
+ * a real lookup the vendor supports: an id (`GET /procedures/{id}`), the `slug` list
+ * filter and the `name` list filter (optionally narrowed with `company_id`).
+ */
+export interface ProcedureIdentifier {
+  id?: number;
+  slug?: string;
+  name?: string;
+  company_id?: number;
+}
+
+/**
+ * Compact projection of a Procedure (policy §9). Keeps the identity, the company, the
+ * completion counters and the URL an agent reports on; never drops `id`/`name`, the
+ * fields a caller resolves by.
+ *
+ * Drops: description, object_type, created_at, parent_procedure, run, parent_process_id,
+ * asset, share_url, procedure_tasks_attributes.
+ */
+export interface ProcedureSummary {
+  id: number;
+  name: string;
+  slug: string;
+  company_id: number;
+  company_name: string;
+  status: 'Not Started' | 'In Progress' | 'Completed' | 'Cancelled';
+  total: number;
+  completed: number;
+  completion_percentage: string;
+  process_type: 'global' | 'company' | null;
+  url: string;
+  updated_at: string;
+}
+
+/**
+ * Result of `procedures.getWithTasks` (compact, policy §9): the procedure summary plus
+ * its tasks. `task_count` is everything the fetch returned, so `tasks.length <
+ * task_count` tells the caller the list was bounded before `limit`.
+ */
+export interface ProcedureWithTasks {
+  procedure: ProcedureSummary;
+  tasks: ProcedureTaskSummary[];
+  task_count: number;
+}
+
+/** `getWithTasks(id, { expand: true })`: the full procedure and its full task records. */
+export interface ProcedureWithTasksFull {
+  procedure: Procedure;
+  tasks: ProcedureTask[];
+  task_count: number;
+  /** The effective task bound applied (default 25, maximum 100). */
+  limit: number;
+}

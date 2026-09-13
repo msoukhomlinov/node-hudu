@@ -41,5 +41,66 @@ export type CompanyCreate = Partial<Omit<Company, 'id' | 'created_at' | 'updated
  * Input for updating a Company.
  */
 import type { CompanyIntegration } from './company_integration.js';
+import type { Article, ArticleSummary } from './article.js';
+import type { Asset, AssetSummary } from './asset.js';
+import type { AssetPassword, AssetPasswordSummary } from './asset_password.js';
+import type { Website } from './website.js';
 
 export type CompanyUpdate = Partial<Company>;
+
+
+/**
+ * Compact agent-facing projection of `Company` (policy §9, SCOPING decision 6).
+ *
+ * Keeps: id, name, nickname, slug, website, phone_number, city, state, id_number,
+ * archived, url, updated_at.
+ * Drops (recorded in the registry `outputSchema.drops`): address_line_1,
+ * address_line_2, zip, country_name, company_type, parent_company_id,
+ * parent_company_name, fax_number, notes, object_type, full_url, passwords_url,
+ * knowledge_base_url, created_at, integrations.
+ */
+export interface CompanySummary {
+  id: number;
+  name: string;
+  nickname: string | null;
+  slug: string;
+  website: string;
+  phone_number: string;
+  city: string;
+  state: string;
+  id_number: string;
+  archived: boolean;
+  url: string;
+  updated_at: string;
+}
+
+/**
+ * Identifier kinds `companies.resolve` understands (policy §7). A bare value is
+ * read in the documented order: numeric id, slug, exact name, domain.
+ */
+export interface CompanyIdentifier {
+  id?: number;
+  name?: string;
+  slug?: string;
+  website?: string;
+  domain?: string;
+}
+
+/** Bounded context bundle returned by `companies.getContext` (policy §9). */
+export interface CompanyContext {
+  company: CompanySummary;
+  assets: AssetSummary[];
+  articles: ArticleSummary[];
+  /** `websites` has no Group-A compact shape, so the full typed record is returned. */
+  websites: Website[];
+  assetPasswords: AssetPasswordSummary[];
+}
+
+/** `companies.getContext(id, { expand: true })` — every member is the full typed record. */
+export interface CompanyContextExpand {
+  company: Company;
+  assets: Asset[];
+  articles: Article[];
+  websites: Website[];
+  assetPasswords: AssetPassword[];
+}

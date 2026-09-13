@@ -3,9 +3,10 @@
  */
 import { describe, it, expect } from 'vitest';
 import { HttpClient, unwrapByKey, unwrapList } from '../src/http.js';
+import { HuduClient } from '../src/client.js';
 import { resolveConfig } from '../src/config.js';
 import { HuduNetworkError, RateLimitError, BadRequestError, NotFoundError, HuduError } from '../src/errors.js';
-import { clearFetch, stubFetch, json, text, empty, type FetchSpy } from './helpers.js';
+import { clearFetch, stubFetch, json, text, empty, expectRequests, type FetchSpy } from './helpers.js';
 
 function makeClient(overrides: Record<string, unknown> = {}) {
   const cfg = resolveConfig({
@@ -50,7 +51,8 @@ describe('URL construction', () => {
 
 describe('headers and body', () => {
   it('sends the x-api-key header', async () => {
-    const spy = stubFetch(() => json({}));
+    const spy = stubFetch(() => json({}), { baseUrl: 'https://hudu.example.com' });
+    expectRequests(spy, [{ method: 'GET', url: 'https://hudu.example.com/api/v1/companies' }]);
     const client = makeClient();
     await client.request<unknown>({ method: 'GET', path: '/companies' });
     const headers = spy.calls[0].init.headers as Record<string, string>;
@@ -60,7 +62,8 @@ describe('headers and body', () => {
   });
 
   it('sends a JSON body with content-type', async () => {
-    const spy = stubFetch(() => json({ company: { id: 1 } }));
+    const spy = stubFetch(() => json({ company: { id: 1 } }), { baseUrl: 'https://hudu.example.com' });
+    expectRequests(spy, [{ method: 'POST', url: 'https://hudu.example.com/api/v1/companies' }]);
     const client = makeClient();
     const res = await client.request<unknown>({ method: 'POST', path: '/companies', body: { name: 'Acme' } });
     const headers = spy.calls[0].init.headers as Record<string, string>;
@@ -71,7 +74,8 @@ describe('headers and body', () => {
   });
 
   it('does not set content-type when there is no body', async () => {
-    const spy = stubFetch(() => json({}));
+    const spy = stubFetch(() => json({}), { baseUrl: 'https://hudu.example.com' });
+    expectRequests(spy, [{ method: 'DELETE', url: 'https://hudu.example.com/api/v1/companies/1' }]);
     const client = makeClient();
     await client.request<unknown>({ method: 'DELETE', path: '/companies/1' });
     const headers = spy.calls[0].init.headers as Record<string, string>;
@@ -615,5 +619,172 @@ describe('client-side rate limiter', () => {
       clearFetch();
       vi.useRealTimers();
     }
+  });
+});
+
+describe('Retry-After: delta-seconds and HTTP-date (RFC 7231)', () => {
+  it('keeps the existing delta-seconds behaviour (integer and fractional)', async () => {
+    stubFetch(() => json({ detail: 'rate' }, 429, { 'Retry-After': '12' }));
+    const client = makeClient({ maxRetries: 0 });
+    await expect(client.request<unknown>({ method: 'GET', path: '/x' })).rejects.toMatchObject({
+      retryAfter: 12,
+    });
+    clearFetch();
+
+    stubFetch(() => json({ detail: 'rate' }, 429, { 'Retry-After': '0.5' }));
+    const client2 = makeClient({ maxRetries: 0 });
+    await expect(client2.request<unknown>({ method: 'GET', path: '/x' })).rejects.toMatchObject({
+      retryAfter: 0.5,
+    });
+    clearFetch();
+  });
+
+  it('converts an HTTP-date Retry-After into a delta from now', async () => {
+    const when = new Date(Date.now() + 30_000).toUTCString();
+    stubFetch(() => json({ detail: 'rate' }, 429, { 'Retry-After': when }));
+    const client = makeClient({ maxRetries: 0 });
+    const err = await client.request<unknown>({ method: 'GET', path: '/x' }).catch((e: unknown) => e);
+    // 30s minus the (tiny) test execution time, and definitely not NaN/undefined.
+    expect((err as { retryAfter?: number }).retryAfter).toBeGreaterThan(25);
+    expect((err as { retryAfter?: number }).retryAfter).toBeLessThanOrEqual(30);
+    clearFetch();
+  });
+
+  it('clamps an HTTP-date Retry-After in the past to 0 (retry now, not never)', async () => {
+    const when = new Date(Date.now() - 60_000).toUTCString();
+    stubFetch(() => json({ detail: 'rate' }, 429, { 'Retry-After': when }));
+    const client = makeClient({ maxRetries: 0 });
+    await expect(client.request<unknown>({ method: 'GET', path: '/x' })).rejects.toMatchObject({
+      retryAfter: 0,
+    });
+    clearFetch();
+  });
+
+  it('treats an unparseable Retry-After as absent so the backoff path is unchanged', async () => {
+    const spy = stubFetch(() => json({ detail: 'rate' }, 429, { 'Retry-After': 'very soon, please' }));
+    const client = makeClient({ maxRetries: 0 });
+    await expect(client.request<unknown>({ method: 'GET', path: '/x' })).rejects.toMatchObject({
+      retryAfter: undefined,
+    });
+    expect(spy.calls).toHaveLength(1);
+    clearFetch();
+  });
+
+  it('waits out an HTTP-date Retry-After instead of the shorter exponential backoff', async () => {
+    // Regression guard for the timing bug: an HTTP-date used to parse to NaN, be
+    // read as "no hint", and fall back to 200ms for attempt 0 — retrying BEFORE
+    // the server said it was ready. The date is rounded UP to a whole second
+    // because an HTTP-date carries no sub-second precision, so the honoured delay
+    // is between 700ms and 1700ms and must dominate the 200ms backoff.
+    let n = 0;
+    stubFetch(() => {
+      n += 1;
+      if (n === 1) {
+        const target = Math.ceil((Date.now() + 700) / 1000) * 1000;
+        return json({}, 429, { 'Retry-After': new Date(target).toUTCString() });
+      }
+      return json({ ok: true });
+    });
+    const client = makeClient({ maxRetries: 2 });
+    const started = Date.now();
+    const res = await client.request<unknown>({ method: 'GET', path: '/x' });
+    const elapsed = Date.now() - started;
+    expect(res).toEqual({ ok: true });
+    expect(n).toBe(2);
+    expect(elapsed).toBeGreaterThanOrEqual(650);
+    clearFetch();
+  });
+});
+
+describe('getRateLimitStatus', () => {
+  function statusOf(client: HttpClient) {
+    return client.getRateLimitStatus();
+  }
+
+  it('reports a plain, synchronous, non-throttled snapshot for a fresh client with no limiter', () => {
+    const client = makeClient();
+    const status = statusOf(client);
+    expect(status).toEqual({
+      enabled: false,
+      throttled: false,
+      availableTokens: 0,
+      burst: 0,
+      queued: 0,
+      inFlight: 0,
+    });
+    expect(status.lastRetryAfterSeconds).toBeUndefined();
+    // Synchronous: the state is local, so no promise is returned.
+    expect((status as unknown as { then?: unknown }).then).toBeUndefined();
+  });
+
+  it('reports the configured bucket for a fresh client with a limiter', () => {
+    const client = makeClient({ rateLimit: { perMinute: 60, burst: 3 } });
+    const status = statusOf(client);
+    expect(status.enabled).toBe(true);
+    expect(status.throttled).toBe(false);
+    expect(status.burst).toBe(3);
+    expect(status.availableTokens).toBeGreaterThan(2.9);
+    expect(status.availableTokens).toBeLessThanOrEqual(3);
+    expect(status.queued).toBe(0);
+    expect(status.inFlight).toBe(0);
+  });
+
+  it('drops the available token after a call and reports the honoured Retry-After hint', async () => {
+    let n = 0;
+    stubFetch(() => {
+      n += 1;
+      return n === 1 ? json({}, 429, { 'Retry-After': '0.01' }) : json({ ok: true });
+    });
+    const client = makeClient({ rateLimit: { perMinute: 60, burst: 2 }, maxRetries: 2 });
+    const before = statusOf(client);
+    await client.request<unknown>({ method: 'GET', path: '/x' });
+    const after = statusOf(client);
+    expect(after.enabled).toBe(true);
+    // One token (of the two) was spent; the bucket refills at 60/min, so it has
+    // not climbed back to the burst within the test.
+    expect(after.availableTokens).toBeLessThan(before.availableTokens);
+    // Two acquisitions (the 429 and the retry) drained the burst of 2; the 60/min
+    // refill cannot restore a whole token inside the test.
+    expect(after.availableTokens).toBeLessThan(0.5);
+    expect(after.throttled).toBe(true);
+    expect(after.inFlight).toBe(0);
+    expect(after.lastRetryAfterSeconds).toBe(0.01);
+    clearFetch();
+  });
+
+  it('counts an in-flight request while it is pending', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    stubFetch(async () => { await gate; return json({ ok: true }); });
+    const client = makeClient();
+    const pending = client.request<unknown>({ method: 'GET', path: '/x' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(statusOf(client).inFlight).toBe(1);
+    release();
+    await pending;
+    expect(statusOf(client).inFlight).toBe(0);
+    clearFetch();
+  });
+
+  it('never mutates the limiter: repeated reads do not consume tokens', () => {
+    const client = makeClient({ rateLimit: { perMinute: 60, burst: 5 } });
+    const first = statusOf(client);
+    const second = statusOf(client);
+    const third = statusOf(client);
+    // Reads may only track elapsed refill; they must never spend a token.
+    expect(second.availableTokens).toBeGreaterThanOrEqual(first.availableTokens);
+    expect(third.availableTokens).toBeGreaterThanOrEqual(second.availableTokens);
+    expect(third.availableTokens).toBeGreaterThan(4.9);
+  });
+
+  it('is exposed additively on HuduClient and delegates to the transport state', () => {
+    const plain = new HuduClient({ baseUrl: 'https://hudu.example.com', apiKey: 'k' });
+    expect(plain.getRateLimitStatus()).toMatchObject({ enabled: false, inFlight: 0, queued: 0 });
+    const limited = new HuduClient({
+      baseUrl: 'https://hudu.example.com',
+      apiKey: 'k',
+      rateLimit: { perMinute: 60, burst: 4 },
+    });
+    expect(limited.getRateLimitStatus()).toMatchObject({ enabled: true, burst: 4, throttled: false });
   });
 });

@@ -31,3 +31,29 @@ export type RackStorageItemCreate = Partial<Omit<RackStorageItem, 'id' | 'create
  * Input for updating a RackStorageItem.
  */
 export type RackStorageItemUpdate = Partial<RackStorageItem>;
+
+/**
+ * Compact projection of {@link RackStorageItem} (policy §9, helper tier).
+ *
+ * Keeps: id, asset_id, asset_name, asset_url, rack_storage_role_id, rack_storage_role_name,
+ * start_unit, end_unit, side, status, company_id, url.
+ * Drops (recorded in the capability registry `outputSchema.drops`): max_wattage, power_draw,
+ * reserved_message, rack_storage_role_description, rack_storage_role_hex_color.
+ *
+ * `id` is kept because it is the only field a rack storage item can be resolved by: the vendor
+ * exposes no name for a rack item.
+ */
+export interface RackStorageItemSummary {
+  id: number;
+  asset_id: number;
+  asset_name: string;
+  asset_url: string;
+  rack_storage_role_id: number;
+  rack_storage_role_name: string;
+  start_unit: number;
+  end_unit: number;
+  side: number;
+  status: number;
+  company_id: number;
+  url: string;
+}

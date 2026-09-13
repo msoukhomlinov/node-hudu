@@ -25,3 +25,23 @@ export type GroupCreate = Partial<Omit<Group, 'id' | 'created_at' | 'updated_at'
 import type { GroupMember } from './group_member.js';
 
 export type GroupUpdate = Partial<Group>;
+
+/**
+ * Compact projection used by the group helper tier. Drops `members`, `url` and
+ * `created_at`; never drops `id`, `name` or `slug`.
+ */
+export interface GroupSummary {
+  id: number;
+  name: string;
+  slug: string;
+  default: boolean;
+  member_count: number;
+  updated_at: string;
+}
+
+/** Object identifier accepted by `groups.resolve`. */
+export interface GroupIdentifier {
+  id?: number;
+  slug?: string;
+  name?: string;
+}

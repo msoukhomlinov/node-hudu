@@ -21,3 +21,27 @@ export type LabelCreate = Partial<Omit<Label, 'id' | 'created_at' | 'updated_at'
  * Input for updating a Label.
  */
 export type LabelUpdate = Partial<Label>;
+
+/**
+ * Object form of a `LabelsResource.resolve` identifier (agent-execution-layer §6).
+ * A label has no `name`, so the accepted kinds are numeric `id` and the
+ * `{ labelableType, labelableId }` pair of the record it is attached to.
+ */
+export interface LabelIdentifier {
+  id?: number;
+  labelableType?: string;
+  labelableId?: number;
+}
+
+/**
+ * Compact projection of a Label (policy §9). Drops `created_at`; keeps every field
+ * an agent uses to answer "what is this record tagged with", including `id`.
+ */
+export interface LabelSummary {
+  id: number;
+  label_type_id: number;
+  labelable_type: string;
+  labelable_id: number;
+  user_id: number;
+  updated_at: string;
+}

@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import { HuduClient } from '../src/client.js';
 import { HuduConfigError } from '../src/errors.js';
-import { clearFetch, stubFetchAny } from './helpers.js';
+import { clearFetch, expectRequests, stubFetchAny, type FetchSpy } from './helpers.js';
 
 const RESOURCES = [
   'companies', 'articles', 'assetLayouts', 'assetPasswords', 'assets', 'expirations',
@@ -20,7 +20,12 @@ function makeClient() {
 }
 
 describe('HuduClient', () => {
-  beforeEach(() => stubFetchAny());
+  // Strict: the client constructor must not make a single request, so ANY request fails the test.
+  let spy: FetchSpy;
+  beforeEach(() => {
+    spy = stubFetchAny({ baseUrl: 'https://hudu.example.com' });
+    expectRequests(spy, []);
+  });
   afterEach(() => clearFetch());
 
   it('resolves and exposes the config', () => {
@@ -31,7 +36,6 @@ describe('HuduClient', () => {
   });
 
   it('wires all 35 resource clients', () => {
-    stubFetchAny();
     const c = makeClient();
     for (const name of RESOURCES) {
       const r = (c as unknown as Record<string, unknown>)[name];

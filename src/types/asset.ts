@@ -39,4 +39,59 @@ export type AssetCreate = Partial<Omit<Asset, 'id' | 'created_at' | 'updated_at'
  */
 import type { IntegratorCard } from './integrator_card.js';
 
+import type { AssetLayout, AssetLayoutSummary } from './asset_layout.js';
+import type { Expiration } from './expiration.js';
+import type { Relation } from './relation.js';
+
 export type AssetUpdate = Partial<Asset>;
+
+
+/**
+ * Compact agent-facing projection of `Asset` (policy §9, SCOPING decision 6).
+ *
+ * Keeps: id, name, company_id, company_name, asset_layout_id, primary_serial,
+ * asset_type, archived, url, updated_at.
+ * Drops (recorded in the registry `outputSchema.drops`): fields, cards, value,
+ * label, position, primary_mail, primary_model, primary_manufacturer, slug,
+ * object_type, created_at.
+ */
+export interface AssetSummary {
+  id: number;
+  name: string;
+  company_id: number;
+  company_name: string;
+  asset_layout_id: number;
+  primary_serial: string;
+  asset_type: string;
+  archived: boolean;
+  url: string;
+  updated_at: string;
+}
+
+/**
+ * Identifier kinds `assets.resolve` understands (policy §7). `{ companyId, id }`
+ * is the direct company-scoped fetch; the other kinds are account-wide.
+ */
+export interface AssetIdentifier {
+  id?: number;
+  companyId?: number;
+  name?: string;
+  slug?: string;
+  primary_serial?: string;
+}
+
+/** Bounded context bundle returned by `assets.getContext` (policy §9). */
+export interface AssetContext {
+  asset: AssetSummary;
+  layout: AssetLayoutSummary | null;
+  expirations: Expiration[];
+  relations: Relation[];
+}
+
+/** `assets.getContext(..., { expand: true })` — asset and layout are full typed records. */
+export interface AssetContextExpand {
+  asset: Asset;
+  layout: AssetLayout | null;
+  expirations: Expiration[];
+  relations: Relation[];
+}

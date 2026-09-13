@@ -846,3 +846,244 @@ and shared types. Notable type-only exports include (non-exhaustive):
 All input types follow the pattern `<Type>Create = Partial<Omit<Base, 'id'|'created_at'|'updated_at'|'url'|'full_url'>>`
 and `<Type>Update = Partial<Base>` — every create/update field is optional at the type
 level, with the API's actual requirements documented per field in the type comments.
+---
+
+## Appendix — capability registry (generated)
+
+Generated from `capabilities.json` (planHash `da4bf1f2de978259`, 225 operations). One row per operation; the same data is importable as
+`node-hudu/capabilities` (`getCapability(name)`) and is what the MCP tool manifest is projected from.
+
+| Operation | Kind | Effect | Flags | dryRun | Compact | Bound |
+|---|---|---|---|---|---|---|
+| `activity_logs.deleteAll` | primitive | destructive | idempotent, requiresApproval | yes | - | none (not paginated) |
+| `activity_logs.findByResource` | helper | read | - | no | ActivityLogSummary | none (not paginated) |
+| `activity_logs.list` | primitive | read | - | no | - | 25 per page, max 100 |
+| `activity_logs.resolve` | helper | read | - | no | ActivityLogSummary | none (not paginated) |
+| `api_info.get` | primitive | read | - | no | - | none (not paginated) |
+| `api_info.resolve` | helper | read | - | no | - | none (not paginated) |
+| `articles.archive` | primitive | write | idempotent | yes | - | none (not paginated) |
+| `articles.create` | primitive | write | - | yes | - | none (not paginated) |
+| `articles.delete` | primitive | destructive | idempotent, requiresApproval | yes | - | none (not paginated) |
+| `articles.findBySlug` | helper | read | - | no | ArticleSummary | none (not paginated) |
+| `articles.get` | primitive | read | - | no | - | none (not paginated) |
+| `articles.getContext` | helper | read | - | no | ArticleContext | none (not paginated) |
+| `articles.list` | primitive | read | - | no | - | 25 per page, max 100 |
+| `articles.resolve` | helper | read | - | no | ArticleSummary | none (not paginated) |
+| `articles.search` | helper | read | - | no | ArticleSummary | none (not paginated) |
+| `articles.unarchive` | primitive | write | idempotent | yes | - | none (not paginated) |
+| `articles.update` | primitive | write | idempotent | yes | - | none (not paginated) |
+| `asset_layouts.create` | primitive | write | - | yes | - | none (not paginated) |
+| `asset_layouts.get` | primitive | read | - | no | - | none (not paginated) |
+| `asset_layouts.list` | primitive | read | - | no | - | 25 per page, max 100 |
+| `asset_layouts.resolve` | helper | read | - | no | AssetLayoutSummary | none (not paginated) |
+| `asset_layouts.update` | primitive | write | idempotent | yes | - | none (not paginated) |
+| `asset_passwords.archive` | primitive | write | sensitive, idempotent | yes | - | none (not paginated) |
+| `asset_passwords.create` | primitive | write | sensitive | yes | - | none (not paginated) |
+| `asset_passwords.delete` | primitive | destructive | sensitive, idempotent, requiresApproval | yes | - | none (not paginated) |
+| `asset_passwords.findBySlug` | helper | read | sensitive | no | AssetPasswordSummary | none (not paginated) |
+| `asset_passwords.get` | primitive | read | sensitive | no | - | none (not paginated) |
+| `asset_passwords.list` | primitive | read | sensitive | no | - | 25 per page, max 100 |
+| `asset_passwords.resolve` | helper | read | sensitive | no | AssetPasswordSummary | none (not paginated) |
+| `asset_passwords.search` | helper | read | sensitive | no | AssetPasswordSummary | none (not paginated) |
+| `asset_passwords.unarchive` | primitive | write | sensitive, idempotent | yes | - | none (not paginated) |
+| `asset_passwords.update` | primitive | write | sensitive, idempotent | yes | - | none (not paginated) |
+| `assets.archive` | primitive | write | idempotent | yes | - | none (not paginated) |
+| `assets.create` | primitive | write | - | yes | - | none (not paginated) |
+| `assets.delete` | primitive | destructive | idempotent, requiresApproval | yes | - | none (not paginated) |
+| `assets.findBySerial` | helper | read | - | no | AssetSummary | none (not paginated) |
+| `assets.get` | primitive | read | - | no | - | none (not paginated) |
+| `assets.getContext` | helper | read | - | no | AssetContext | none (not paginated) |
+| `assets.list` | primitive | read | - | no | - | 25 per page, max 100 |
+| `assets.listAcrossCompanies` | primitive | read | - | no | - | none (not paginated) |
+| `assets.moveLayout` | primitive | write | idempotent | yes | - | none (not paginated) |
+| `assets.resolve` | helper | read | - | no | AssetSummary | none (not paginated) |
+| `assets.search` | helper | read | - | no | AssetSummary | none (not paginated) |
+| `assets.unarchive` | primitive | write | idempotent | yes | - | none (not paginated) |
+| `assets.update` | primitive | write | idempotent | yes | - | none (not paginated) |
+| `cards.jump` | primitive | read | - | no | - | none (not paginated) |
+| `cards.lookup` | primitive | read | - | no | - | none (not paginated) |
+| `cards.resolve` | helper | read | - | no | IntegratorCardSummary | none (not paginated) |
+| `companies.archive` | primitive | write | idempotent | yes | - | none (not paginated) |
+| `companies.create` | primitive | write | - | yes | - | none (not paginated) |
+| `companies.delete` | primitive | destructive | idempotent, requiresApproval | yes | - | none (not paginated) |
+| `companies.findByDomain` | helper | read | - | no | CompanySummary | none (not paginated) |
+| `companies.findBySlug` | helper | read | - | no | CompanySummary | none (not paginated) |
+| `companies.get` | primitive | read | - | no | - | none (not paginated) |
+| `companies.getContext` | helper | read | - | no | CompanyContext | none (not paginated) |
+| `companies.jump` | primitive | read | - | no | - | none (not paginated) |
+| `companies.list` | primitive | read | - | no | - | 25 per page, max 100 |
+| `companies.resolve` | helper | read | - | no | CompanySummary | none (not paginated) |
+| `companies.search` | helper | read | - | no | CompanySummary | none (not paginated) |
+| `companies.unarchive` | primitive | write | idempotent | yes | - | none (not paginated) |
+| `companies.update` | primitive | write | idempotent | yes | - | none (not paginated) |
+| `expirations.delete` | primitive | destructive | idempotent, requiresApproval | yes | - | none (not paginated) |
+| `expirations.findByResource` | helper | read | - | no | ExpirationSummary | none (not paginated) |
+| `expirations.list` | primitive | read | - | no | - | 25 per page, max 100 |
+| `expirations.resolve` | helper | read | - | no | ExpirationSummary | none (not paginated) |
+| `expirations.update` | primitive | write | idempotent | yes | - | none (not paginated) |
+| `exports.create` | primitive | write | - | yes | - | none (not paginated) |
+| `exports.get` | primitive | read | - | no | - | none (not paginated) |
+| `exports.list` | primitive | read | - | no | - | none (not paginated) |
+| `exports.resolve` | helper | read | - | no | - | none (not paginated) |
+| `flag_types.create` | primitive | write | - | yes | - | none (not paginated) |
+| `flag_types.delete` | primitive | destructive | idempotent, requiresApproval | yes | - | none (not paginated) |
+| `flag_types.get` | primitive | read | - | no | - | none (not paginated) |
+| `flag_types.list` | primitive | read | - | no | - | 25 per page, max 100 |
+| `flag_types.resolve` | helper | read | - | no | FlagTypeSummary | none (not paginated) |
+| `flag_types.update` | primitive | write | idempotent | yes | - | none (not paginated) |
+| `flags.create` | primitive | write | - | yes | - | none (not paginated) |
+| `flags.delete` | primitive | destructive | idempotent, requiresApproval | yes | - | none (not paginated) |
+| `flags.findByFlagable` | helper | read | - | no | FlagSummary | none (not paginated) |
+| `flags.get` | primitive | read | - | no | - | none (not paginated) |
+| `flags.list` | primitive | read | - | no | - | 25 per page, max 100 |
+| `flags.resolve` | helper | read | - | no | FlagSummary | none (not paginated) |
+| `flags.update` | primitive | write | idempotent | yes | - | none (not paginated) |
+| `folders.create` | primitive | write | - | yes | - | none (not paginated) |
+| `folders.delete` | primitive | destructive | idempotent, requiresApproval | yes | - | none (not paginated) |
+| `folders.get` | primitive | read | - | no | - | none (not paginated) |
+| `folders.list` | primitive | read | - | no | - | 25 per page, max 100 |
+| `folders.resolve` | helper | read | - | no | FolderSummary | none (not paginated) |
+| `folders.update` | primitive | write | idempotent | yes | - | none (not paginated) |
+| `groups.get` | primitive | read | - | no | - | none (not paginated) |
+| `groups.list` | primitive | read | - | no | - | 25 per page, max 1000 |
+| `groups.resolve` | helper | read | - | no | GroupSummary | none (not paginated) |
+| `groups.search` | helper | read | - | no | GroupSummary | none (not paginated) |
+| `ip_addresses.create` | primitive | write | - | yes | - | none (not paginated) |
+| `ip_addresses.delete` | primitive | destructive | idempotent, requiresApproval | yes | - | none (not paginated) |
+| `ip_addresses.findByAddress` | helper | read | - | no | IpAddressSummary | none (not paginated) |
+| `ip_addresses.get` | primitive | read | - | no | - | none (not paginated) |
+| `ip_addresses.list` | primitive | read | - | no | - | none (not paginated) |
+| `ip_addresses.resolve` | helper | read | - | no | IpAddressSummary | none (not paginated) |
+| `ip_addresses.update` | primitive | write | idempotent | yes | - | none (not paginated) |
+| `label_types.create` | primitive | write | - | yes | - | none (not paginated) |
+| `label_types.delete` | primitive | destructive | idempotent, requiresApproval | yes | - | none (not paginated) |
+| `label_types.get` | primitive | read | - | no | - | none (not paginated) |
+| `label_types.list` | primitive | read | - | no | - | 25 per page, max 100 |
+| `label_types.resolve` | helper | read | - | no | LabelTypeSummary | none (not paginated) |
+| `label_types.update` | primitive | write | idempotent | yes | - | none (not paginated) |
+| `labels.create` | primitive | write | - | yes | - | none (not paginated) |
+| `labels.delete` | primitive | destructive | idempotent, requiresApproval | yes | - | none (not paginated) |
+| `labels.findByLabelable` | helper | read | - | no | LabelSummary | none (not paginated) |
+| `labels.get` | primitive | read | - | no | - | none (not paginated) |
+| `labels.list` | primitive | read | - | no | - | 25 per page, max 100 |
+| `labels.resolve` | helper | read | - | no | LabelSummary | none (not paginated) |
+| `labels.update` | primitive | write | idempotent | yes | - | none (not paginated) |
+| `lists.create` | primitive | write | - | yes | - | none (not paginated) |
+| `lists.delete` | primitive | destructive | idempotent, requiresApproval | yes | - | none (not paginated) |
+| `lists.findByName` | helper | read | - | no | - | none (not paginated) |
+| `lists.get` | primitive | read | - | no | - | none (not paginated) |
+| `lists.list` | primitive | read | - | no | - | none (not paginated) |
+| `lists.resolve` | helper | read | - | no | - | none (not paginated) |
+| `lists.update` | primitive | write | idempotent | yes | - | none (not paginated) |
+| `magic_dash.create` | primitive | write | - | yes | - | none (not paginated) |
+| `magic_dash.delete` | primitive | destructive | idempotent, requiresApproval | yes | - | none (not paginated) |
+| `magic_dash.deleteById` | primitive | destructive | idempotent, requiresApproval | yes | - | none (not paginated) |
+| `magic_dash.findByCompany` | helper | read | - | no | MagicDashSummary | none (not paginated) |
+| `magic_dash.list` | primitive | read | - | no | - | 25 per page, max 100 |
+| `magic_dash.resolve` | helper | read | - | no | MagicDashSummary | none (not paginated) |
+| `magic_dash.updatePositions` | primitive | write | idempotent, requiresApproval | yes | - | none (not paginated) |
+| `matchers.delete` | primitive | destructive | idempotent, requiresApproval | yes | - | none (not paginated) |
+| `matchers.findBySyncId` | helper | read | - | no | - | none (not paginated) |
+| `matchers.list` | primitive | read | - | no | - | 25 per page, max 100 |
+| `matchers.resolve` | helper | read | - | no | - | none (not paginated) |
+| `matchers.update` | primitive | write | idempotent | yes | - | none (not paginated) |
+| `networks.create` | primitive | write | - | yes | - | none (not paginated) |
+| `networks.delete` | primitive | destructive | idempotent, requiresApproval | yes | - | none (not paginated) |
+| `networks.findByAddress` | helper | read | - | no | NetworkSummary | none (not paginated) |
+| `networks.get` | primitive | read | - | no | - | none (not paginated) |
+| `networks.list` | primitive | read | - | no | - | none (not paginated) |
+| `networks.resolve` | helper | read | - | no | NetworkSummary | none (not paginated) |
+| `networks.update` | primitive | write | idempotent | yes | - | none (not paginated) |
+| `operations.resolveAny` | helper | read | - | no | ResolutionCandidateHit | none (not paginated) |
+| `operations.searchAcrossResources` | helper | read | - | no | SearchHit | none (not paginated) |
+| `password_folders.create` | primitive | write | sensitive | yes | - | none (not paginated) |
+| `password_folders.delete` | primitive | destructive | sensitive, idempotent, requiresApproval | yes | - | none (not paginated) |
+| `password_folders.get` | primitive | read | sensitive | no | - | none (not paginated) |
+| `password_folders.list` | primitive | read | sensitive | no | - | 25 per page, max 100 |
+| `password_folders.resolve` | helper | read | sensitive | no | PasswordFolderSummary | none (not paginated) |
+| `password_folders.search` | helper | read | sensitive | no | PasswordFolderSummary | none (not paginated) |
+| `password_folders.update` | primitive | write | sensitive, idempotent | yes | - | none (not paginated) |
+| `photos.create` | primitive | write | - | yes | - | none (not paginated) |
+| `photos.delete` | primitive | destructive | idempotent, requiresApproval | yes | - | none (not paginated) |
+| `photos.findByPhotoable` | helper | read | - | no | PhotoSummary | none (not paginated) |
+| `photos.get` | primitive | read | - | no | - | none (not paginated) |
+| `photos.list` | primitive | read | - | no | - | 25 per page, max 100 |
+| `photos.resolve` | helper | read | - | no | PhotoSummary | none (not paginated) |
+| `photos.update` | primitive | write | idempotent | yes | - | none (not paginated) |
+| `procedure_tasks.create` | primitive | write | - | yes | - | none (not paginated) |
+| `procedure_tasks.delete` | primitive | destructive | idempotent, requiresApproval | yes | - | none (not paginated) |
+| `procedure_tasks.get` | primitive | read | - | no | - | none (not paginated) |
+| `procedure_tasks.list` | primitive | read | - | no | - | none (not paginated) |
+| `procedure_tasks.resolve` | helper | read | - | no | ProcedureTaskSummary | none (not paginated) |
+| `procedure_tasks.update` | primitive | write | idempotent | yes | - | none (not paginated) |
+| `procedures.create` | primitive | write | - | yes | - | none (not paginated) |
+| `procedures.createFromTemplate` | primitive | write | - | yes | - | none (not paginated) |
+| `procedures.delete` | primitive | destructive | idempotent, requiresApproval | yes | - | none (not paginated) |
+| `procedures.duplicate` | primitive | write | - | yes | - | none (not paginated) |
+| `procedures.get` | primitive | read | - | no | - | none (not paginated) |
+| `procedures.getWithTasks` | helper | read | - | no | ProcedureWithTasks | none (not paginated) |
+| `procedures.kickoff` | primitive | write | - | yes | - | none (not paginated) |
+| `procedures.list` | primitive | read | - | no | - | 25 per page, max 1000 |
+| `procedures.resolve` | helper | read | - | no | ProcedureSummary | none (not paginated) |
+| `procedures.update` | primitive | write | idempotent | yes | - | none (not paginated) |
+| `public_photos.create` | primitive | write | - | yes | - | none (not paginated) |
+| `public_photos.get` | primitive | read | - | no | - | none (not paginated) |
+| `public_photos.list` | primitive | read | - | no | - | 25 per page, max 100 |
+| `public_photos.resolve` | helper | read | - | no | - | none (not paginated) |
+| `public_photos.update` | primitive | write | idempotent | yes | - | none (not paginated) |
+| `rack_storage_items.create` | primitive | write | - | yes | - | none (not paginated) |
+| `rack_storage_items.delete` | primitive | destructive | idempotent, requiresApproval | yes | - | none (not paginated) |
+| `rack_storage_items.get` | primitive | read | - | no | - | none (not paginated) |
+| `rack_storage_items.list` | primitive | read | - | no | - | none (not paginated) |
+| `rack_storage_items.resolve` | helper | read | - | no | RackStorageItemSummary | none (not paginated) |
+| `rack_storage_items.update` | primitive | write | idempotent | yes | - | none (not paginated) |
+| `rack_storages.create` | primitive | write | - | yes | - | none (not paginated) |
+| `rack_storages.delete` | primitive | destructive | idempotent, requiresApproval | yes | - | none (not paginated) |
+| `rack_storages.get` | primitive | read | - | no | - | none (not paginated) |
+| `rack_storages.list` | primitive | read | - | no | - | none (not paginated) |
+| `rack_storages.resolve` | helper | read | - | no | RackStorageSummary | none (not paginated) |
+| `rack_storages.update` | primitive | write | idempotent | yes | - | none (not paginated) |
+| `relations.create` | primitive | write | - | yes | - | none (not paginated) |
+| `relations.delete` | primitive | destructive | idempotent, requiresApproval | yes | - | none (not paginated) |
+| `relations.findByEndpoints` | helper | read | - | no | RelationSummary | none (not paginated) |
+| `relations.list` | primitive | read | - | no | - | 25 per page, max 100 |
+| `relations.resolve` | helper | read | - | no | RelationSummary | none (not paginated) |
+| `s3_exports.create` | primitive | write | - | yes | - | none (not paginated) |
+| `uploads.delete` | primitive | destructive | idempotent, requiresApproval | yes | - | none (not paginated) |
+| `uploads.get` | primitive | read | - | no | - | none (not paginated) |
+| `uploads.list` | primitive | read | - | no | - | 25 per page, max 100 |
+| `uploads.resolve` | helper | read | - | no | UploadSummary | none (not paginated) |
+| `uploads.upload` | primitive | write | - | yes | - | none (not paginated) |
+| `users.findByEmail` | helper | read | - | no | UserSummary | none (not paginated) |
+| `users.get` | primitive | read | - | no | - | none (not paginated) |
+| `users.list` | primitive | read | - | no | - | 25 per page, max 100 |
+| `users.resolve` | helper | read | - | no | UserSummary | none (not paginated) |
+| `users.search` | helper | read | - | no | UserSummary | none (not paginated) |
+| `vlan_zones.create` | primitive | write | - | yes | - | none (not paginated) |
+| `vlan_zones.delete` | primitive | destructive | idempotent, requiresApproval | yes | - | none (not paginated) |
+| `vlan_zones.get` | primitive | read | - | no | - | none (not paginated) |
+| `vlan_zones.list` | primitive | read | - | no | - | none (not paginated) |
+| `vlan_zones.resolve` | helper | read | - | no | VlanZoneSummary | none (not paginated) |
+| `vlan_zones.update` | primitive | write | idempotent | yes | - | none (not paginated) |
+| `vlans.create` | primitive | write | - | yes | - | none (not paginated) |
+| `vlans.delete` | primitive | destructive | idempotent, requiresApproval | yes | - | none (not paginated) |
+| `vlans.findByVlanId` | helper | read | - | no | VlanSummary | none (not paginated) |
+| `vlans.get` | primitive | read | - | no | - | none (not paginated) |
+| `vlans.list` | primitive | read | - | no | - | none (not paginated) |
+| `vlans.resolve` | helper | read | - | no | VlanSummary | none (not paginated) |
+| `vlans.update` | primitive | write | idempotent | yes | - | none (not paginated) |
+| `websites.create` | primitive | write | - | yes | - | none (not paginated) |
+| `websites.delete` | primitive | destructive | idempotent, requiresApproval | yes | - | none (not paginated) |
+| `websites.findBySlug` | helper | read | - | no | WebsiteSummary | none (not paginated) |
+| `websites.get` | primitive | read | - | no | - | none (not paginated) |
+| `websites.list` | primitive | read | - | no | - | 25 per page, max 100 |
+| `websites.resolve` | helper | read | - | no | WebsiteSummary | none (not paginated) |
+| `websites.search` | helper | read | - | no | WebsiteSummary | none (not paginated) |
+| `websites.update` | primitive | write | idempotent | yes | - | none (not paginated) |
+
+**Helper contract.** `resolve` throws `NOT_FOUND` on an id miss, returns `null` only after a complete
+scan, throws `RESOLUTION_TRUNCATED` when a cap stopped the search, and throws `RESOLUTION_AMBIGUOUS` with the
+candidate ids when the filter is inexact. Helper scans are bounded by the client's resolution caps
+(500 records / 4 pages by default). `limit` defaults to 25 and throws above 100. Compact summaries declare
+the fields they drop; `expand: true` returns the full record.
+

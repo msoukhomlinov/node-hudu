@@ -34,3 +34,35 @@ export type NetworkCreate = Partial<Omit<Network, 'id' | 'created_at' | 'updated
  * Input for updating a Network.
  */
 export type NetworkUpdate = Partial<Network>;
+
+/**
+ * Identifier accepted by `networks.resolve` (policy §6). Accepted kinds: id, slug,
+ * exact name, address (CIDR). A kind the vendor cannot filter on is rejected with a
+ * structured validation error instead of guessing.
+ */
+export interface NetworkIdentifier {
+  id?: number;
+  slug?: string;
+  name?: string;
+  address?: string;
+}
+
+/**
+ * Compact projection returned by the `networks` helper tier (policy §9).
+ * Drops: description, notes, ancestry, settings, sync_identifier, is_radar,
+ * created_at, archived_at. Primitives keep returning the full `Network`.
+ */
+export interface NetworkSummary {
+  id: number;
+  name: string;
+  address: string;
+  network_type: number;
+  slug: string;
+  company_id: number;
+  location_id: number;
+  vlan_id: number;
+  status_list_item_id: number;
+  role_list_item_id: number;
+  url: string;
+  updated_at: string;
+}

@@ -2,13 +2,96 @@
  * AssetLayoutsResource — Hudu "asset_layouts" resource.
  */
 import type { HttpClient } from '../http.js';
+import { assertScanDecided } from './agent-layer-helpers.js';
 import { BaseResource } from './base.js';
 import type { ListParams, Page } from '../pagination.js';
 import type { AssetLayout, AssetLayoutCreate, AssetLayoutUpdate } from '../types/index.js';
-import { HuduConfigError } from '../errors.js';
+import type { AssetLayoutIdentifier, AssetLayoutSummary } from '../types/asset_layout.js';
+import type { DryRunResult, HelperOptions, MutationOptions, Resolution, ResolutionCandidate } from '../types/common.js';
+import { HuduConfigError, ResolutionError } from '../errors.js';
+import { DEFAULT_PAGE_SIZE } from '../config.js';
 
 /** Upper bound on server-side pages walked before refusing (runaway guard). */
 const MAX_PAGES = 100_000;
+
+/**
+ * Options of `asset_layouts.create`. A create has no prior revision, so there is no
+ * `expectedUpdatedAt` guard: the option is deliberately absent from this signature
+ * rather than declared and ignored.
+ */
+export interface LayoutWriteOptions {
+  dryRun?: boolean;
+}
+
+/**
+ * Options accepted by `asset_layouts.resolve`. `HelperOptions.limit` is deliberately
+ * absent: /asset_layouts has no `page_size`, so no helper of this resource can bound the
+ * number of rows a request returns, and advertising a knob that does nothing would lie.
+ */
+export interface AssetLayoutResolveOptions {
+  /** Return the full record instead of the compact `AssetLayoutSummary`. */
+  expand?: boolean;
+  /** Return the `Resolution<T>` wrapper (cost, scanned, scanTruncated, candidates). */
+  resolutionDetails?: boolean;
+}
+
+/** The identifier kinds `asset_layouts.resolve` documents. */
+const LAYOUT_IDENTIFIER_KINDS =
+  'asset_layouts.resolve accepts { id }, { name } or { slug }, or a bare numeric id / slug / exact name';
+
+/**
+ * Refuse a `limit` the endpoint cannot honour (JS callers can still pass one): GET
+ * /asset_layouts has no `page_size`, so a resolver cannot bound the rows it reads.
+ */
+function refuseUnsupportedLimit(opts: AssetLayoutResolveOptions | undefined): void {
+  const limit = (opts as HelperOptions | undefined)?.limit;
+  if (limit !== undefined) {
+    throw new HuduConfigError(
+      'asset_layouts.resolve does not accept `limit`: /asset_layouts has no page_size, so a layout scan cannot bound its page size; use the client resolution caps instead',
+    );
+  }
+}
+
+/** Case-insensitive, whitespace-trimmed equality — the exact compare applied to a vendor filter. */
+function sameText(a: string | null | undefined, b: string | null | undefined): boolean {
+  return typeof a === 'string' && typeof b === 'string' && a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+/** Ambiguity label for one layout. */
+function layoutLabel(layout: AssetLayout): string {
+  return `${layout.name} (slug ${layout.slug}, id ${layout.id})`;
+}
+
+/** Compact projection of a full asset layout record (policy §9). */
+export function toAssetLayoutSummary(layout: AssetLayout): AssetLayoutSummary {
+  return {
+    id: layout.id,
+    name: layout.name,
+    slug: layout.slug,
+    active: layout.active,
+    icon: layout.icon,
+    color: layout.color,
+  };
+}
+
+/**
+ * Apply the caller's requested shape to a resolution: compact by default,
+ * `expand: true` for the full record, `resolutionDetails: true` for the
+ * `Resolution<T>` wrapper (cost, scanned, scanTruncated, candidates).
+ */
+function projectResolution<U, S>(
+  resolution: Resolution<U>,
+  opts: HelperOptions | undefined,
+  summarize: (item: U) => S,
+): unknown {
+  if (opts?.resolutionDetails === true) {
+    if (resolution.value === null) return { ...resolution, value: null } as Resolution<S>;
+    const value = (opts.expand === true ? resolution.value : summarize(resolution.value)) as S;
+    return { ...resolution, value } as Resolution<S>;
+  }
+  if (resolution.value === null) return null;
+  return opts?.expand === true ? resolution.value : summarize(resolution.value);
+}
 
 export interface AssetLayoutsListParams extends ListParams {
   name?: string;
@@ -36,15 +119,182 @@ export class AssetLayoutsResource extends BaseResource<AssetLayout> {
     for await (const page of this.assetLayoutPages(params ?? {})) all.push(...page.items);
     return all;
   }
-  async create(data: AssetLayoutCreate): Promise<AssetLayout> {
-    return this.createOne<AssetLayout>(data);
+
+  async create(data: AssetLayoutCreate): Promise<AssetLayout>;
+  /** Dry-run: describe the create without issuing it. */
+  async create(data: AssetLayoutCreate, opts: { dryRun: true }): Promise<DryRunResult<AssetLayout>>;
+  async create(data: AssetLayoutCreate, opts?: LayoutWriteOptions): Promise<AssetLayout | DryRunResult<AssetLayout>>;
+  /**
+   * POST /asset_layouts. `{ dryRun: true }` describes the create without issuing
+   * it. A create has no prior revision, so there is no `expectedUpdatedAt` guard and
+   * the option is not part of this signature.
+   */
+  async create(data: AssetLayoutCreate, opts?: LayoutWriteOptions): Promise<AssetLayout | DryRunResult<AssetLayout>> {
+    return this.createOne<AssetLayout>(data, undefined, opts);
   }
-  async update(id: number, data: AssetLayoutUpdate): Promise<AssetLayout> {
-    return this.updateOne<AssetLayout>(id, data);
+
+  async update(id: number, data: AssetLayoutUpdate): Promise<AssetLayout>;
+  /** Dry-run: describe the update without issuing it. */
+  async update(id: number, data: AssetLayoutUpdate, opts: MutationOptions & { dryRun: true }): Promise<DryRunResult<AssetLayout>>;
+  /** Live update, optionally with the opt-in `expectedUpdatedAt` stale guard. */
+  async update(id: number, data: AssetLayoutUpdate, opts: MutationOptions & { dryRun?: false }): Promise<AssetLayout>;
+  async update(id: number, data: AssetLayoutUpdate, opts?: MutationOptions): Promise<AssetLayout | DryRunResult<AssetLayout>>;
+  async update(id: number, data: AssetLayoutUpdate, opts?: MutationOptions): Promise<AssetLayout | DryRunResult<AssetLayout>> {
+    return this.updateOne<AssetLayout>(id, data, undefined, opts);
   }
 
   listPages(params?: AssetLayoutsListParams): AsyncIterable<Page<AssetLayout>> {
     return this.assetLayoutPages(params ?? {});
+  }
+
+  // ---------------------------------------------------------------------------
+  // Agent-execution-layer helpers (policy §5-§9).
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Resolve a layout from an id, name or slug (policy §6). A bare value is read in
+   * the documented order: numeric id, slug, exact name. `{ id }` (or a numeric bare
+   * value) is a direct fetch: a miss throws `NOT_FOUND`, never `null`. Layouts are a
+   * small configuration table, so the resolution caps are never expected to be
+   * reached; a capped scan would throw `RESOLUTION_TRUNCATED` rather than return
+   * `null`.
+   *
+   * `limit` is NOT accepted: GET /asset_layouts accepts `page` and not `page_size`, so
+   * the number of records a scan examines cannot be bounded by the caller — only the
+   * client's own resolution caps (config `resolution.maxScanRecords/maxScanPages`) apply,
+   * and hitting them throws `RESOLUTION_TRUNCATED`. A caller that still passes `limit`
+   * is refused with `HuduConfigError` instead of having it silently ignored.
+   */
+  async resolve(identifier: number | string | AssetLayoutIdentifier): Promise<AssetLayoutSummary | null>;
+  /** `expand: true` returns the full record. */
+  async resolve(identifier: number | string | AssetLayoutIdentifier, opts: AssetLayoutResolveOptions & { expand: true }): Promise<AssetLayout | null>;
+  /** `resolutionDetails: true` returns the `Resolution<T>` wrapper. */
+  async resolve(identifier: number | string | AssetLayoutIdentifier, opts: AssetLayoutResolveOptions & { resolutionDetails: true }): Promise<Resolution<AssetLayoutSummary>>;
+  async resolve(
+    identifier: number | string | AssetLayoutIdentifier,
+    opts?: AssetLayoutResolveOptions,
+  ): Promise<AssetLayoutSummary | AssetLayout | null | Resolution<AssetLayoutSummary>>;
+  async resolve(
+    identifier: number | string | AssetLayoutIdentifier,
+    opts?: AssetLayoutResolveOptions,
+  ): Promise<AssetLayoutSummary | AssetLayout | null | Resolution<AssetLayoutSummary>> {
+    const resolution = await this.resolveRecord(identifier, opts);
+    return projectResolution(resolution, opts, toAssetLayoutSummary) as
+      | AssetLayoutSummary
+      | AssetLayout
+      | null
+      | Resolution<AssetLayoutSummary>;
+  }
+
+  /** The identifier -> resolution table of `resolve` (policy §6). */
+  private async resolveRecord(
+    identifier: number | string | AssetLayoutIdentifier,
+    opts?: HelperOptions,
+  ): Promise<Resolution<AssetLayout>> {
+    if (typeof identifier === 'number') return this.byId(identifier);
+    if (typeof identifier === 'string') {
+      const text = identifier.trim();
+      if (text.length === 0) throw new HuduConfigError(LAYOUT_IDENTIFIER_KINDS);
+      if (/^\d+$/.test(text)) return this.byId(Number(text));
+      const bySlug = await this.filterScan({ slug: text }, (layout) => sameText(layout.slug, text), opts);
+      if (bySlug.value !== null) return bySlug;
+      return this.filterScan({ name: text }, (layout) => sameText(layout.name, text), opts);
+    }
+    if (identifier === null || typeof identifier !== 'object') throw new HuduConfigError(LAYOUT_IDENTIFIER_KINDS);
+    if (typeof identifier.id === 'number') return this.byId(identifier.id);
+    if (typeof identifier.slug === 'string') {
+      return this.filterScan({ slug: identifier.slug }, (layout) => sameText(layout.slug, identifier.slug), opts);
+    }
+    if (typeof identifier.name === 'string') {
+      return this.filterScan({ name: identifier.name }, (layout) => sameText(layout.name, identifier.name), opts);
+    }
+    throw new HuduConfigError(LAYOUT_IDENTIFIER_KINDS);
+  }
+
+  /** Direct fetch by id: a miss throws NOT_FOUND (never null). */
+  private async byId(id: number): Promise<Resolution<AssetLayout>> {
+    const layout = await this.get(id);
+    return {
+      value: layout,
+      resolutionCost: 'direct',
+      scanned: 1,
+      scanTruncated: false,
+      candidates: [{ id: layout.id, label: layoutLabel(layout) } satisfies ResolutionCandidate],
+    };
+  }
+
+  /**
+   * One bounded, server-filtered scan (policy §6): the vendor filter narrows the
+   * result set, the exact compare decides. Several matches throw
+   * `RESOLUTION_AMBIGUOUS`; a complete scan with no match is `null`; a scan the client
+   * cap stopped throws `RESOLUTION_TRUNCATED` — never `null`.
+   *
+   * GET /asset_layouts accepts `page` but NOT `page_size` (api-docs 2.45.1), so the
+   * server's page size cannot be requested: the walk assumes the SDK's documented
+   * default page size and grows it when the server returns a longer page; a page
+   * shorter than the known full page (or empty) is the last page. Walking pages is
+   * what makes a layout that sits on page 2+ resolvable instead of reported as
+   * "not found".
+   */
+  private async filterScan(
+    filter: Record<string, unknown>,
+    matches: (layout: AssetLayout) => boolean,
+    opts?: AssetLayoutResolveOptions,
+  ): Promise<Resolution<AssetLayout>> {
+    refuseUnsupportedLimit(opts);
+    const operation = 'asset_layouts.resolve';
+    const fetched: AssetLayout[] = [];
+    let fullPage = DEFAULT_PAGE_SIZE;
+    const scan = await this.boundedScan<AssetLayout>(
+      async (page) => {
+        const body = await this.request<unknown>({
+          method: 'GET',
+          path: `/${this.resourcePath}`,
+          query: { ...filter, page },
+          operation,
+        });
+        const items = this.unwrapList<AssetLayout>(body);
+        // `page_size` is not in the spec, so the full-page size is learned from the
+        // responses themselves and never sent (mirrors assetLayoutPages).
+        if (items.length > fullPage) fullPage = items.length;
+        return { items, page, page_size: fullPage, hasMore: items.length > 0 && items.length === fullPage };
+      },
+      {
+        match: (layout) => {
+          fetched.push(layout);
+          return false;
+        },
+        label: layoutLabel,
+        resolutionCost: 'server-filter',
+      },
+    );
+    const exact = fetched.filter(matches);
+    if (exact.length > 1) {
+      throw ResolutionError.ambiguous(
+        `${operation}: ${exact.length} asset layouts match the identifier exactly, so it is not unique.`,
+        { operation, resourceIds: exact.map((layout) => layout.id) },
+      );
+    }
+    // A cap that stopped the scan cannot prove uniqueness: a single exact match must not be
+    // handed back as a confident hit, so the shared guard throws RESOLUTION_TRUNCATED (policy §6).
+    assertScanDecided({ operation, scanned: fetched.length, truncated: scan.scanTruncated });
+    const only = exact.length === 1 ? (exact[0] as AssetLayout) : undefined;
+    if (only !== undefined) {
+      return {
+        value: only,
+        resolutionCost: 'server-filter',
+        scanned: fetched.length,
+        scanTruncated: false,
+        candidates: [{ id: only.id, label: layoutLabel(only) } satisfies ResolutionCandidate],
+      };
+    }
+    if (fetched.length > 1) {
+      throw ResolutionError.ambiguous(
+        `${operation}: the vendor filter is inexact and returned ${fetched.length} asset layouts, none matching exactly.`,
+        { operation, resourceIds: fetched.map((layout) => layout.id) },
+      );
+    }
+    return { value: null, resolutionCost: 'server-filter', scanned: fetched.length, scanTruncated: false };
   }
 
   /**
@@ -85,6 +335,7 @@ export class AssetLayoutsResource extends BaseResource<AssetLayout> {
         method: 'GET',
         path: '/asset_layouts',
         query: { ...query, page: firstPage + offset },
+        operation: 'asset_layouts.list',
       });
       const items = this.unwrapList<AssetLayout>(body);
       // Track the largest non-empty page as the server's full-page size.
@@ -127,4 +378,3 @@ export class AssetLayoutsResource extends BaseResource<AssetLayout> {
       .join(',');
   }
 }
-

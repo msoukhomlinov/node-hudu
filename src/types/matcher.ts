@@ -23,3 +23,16 @@ export type MatcherCreate = Partial<Omit<Matcher, 'id' | 'created_at' | 'updated
  * Input for updating a Matcher.
  */
 export type MatcherUpdate = Partial<Matcher>;
+
+/**
+ * Identifier accepted by `matchers.resolve` (policy §6). The vendor requires
+ * `integration_id` on `GET /matchers`, so every kind is resolved inside one
+ * integration: an id by bounded client scan (there is no `GET /matchers/{id}`), a
+ * `sync_id` or an `identifier` through the vendor filters.
+ */
+export interface MatcherIdentifier {
+  id?: number;
+  sync_id?: number;
+  identifier?: string;
+  integration_id?: number;
+}

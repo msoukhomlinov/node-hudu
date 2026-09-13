@@ -20,3 +20,18 @@ export type FlagTypeCreate = Partial<Omit<FlagType, 'id' | 'created_at' | 'updat
  * Input for updating a FlagType.
  */
 export type FlagTypeUpdate = Partial<FlagType>;
+
+/**
+ * Compact projection of {@link FlagType} (policy §9, helper tier).
+ *
+ * Keeps: id, name, slug, color.
+ * Drops (recorded in the capability registry `outputSchema.drops`): created_at, updated_at.
+ *
+ * `id`, `name` and `slug` are all kept: flag_types.resolve accepts any of them.
+ */
+export interface FlagTypeSummary {
+  id: number;
+  name: string;
+  slug: string;
+  color: string;
+}

@@ -28,3 +28,33 @@ export type IntegratorCardCreate = Partial<Omit<IntegratorCard, 'id' | 'created_
  * Input for updating a Integrator_Card.
  */
 export type IntegratorCardUpdate = Partial<IntegratorCard>;
+
+/**
+ * Identifier accepted by `cards.resolve` (policy §6). `integration_slug` is the one
+ * required vendor filter (`GET /cards/lookup`); the other fields narrow it.
+ */
+export interface IntegratorCardIdentifier {
+  integration_slug?: string;
+  integration_id?: string;
+  integration_identifier?: string;
+}
+
+/**
+ * Compact projection of an IntegratorCard (policy §9). Keeps the identity, the
+ * integrator, the external sync identity and `link` — the jump target an agent follows
+ * to reach the integrated system. Never drops `id`.
+ *
+ * Drops: data, office_365_assigned_products, exchange_license_assign_date,
+ * onedrive_license_assign_date, sharepoint_license_assign_date,
+ * skype_for_business_license_assign_date.
+ */
+export interface IntegratorCardSummary {
+  id: number;
+  integrator_id: number;
+  integrator_name: string;
+  link: string;
+  primary_field: string | null;
+  sync_type: string;
+  sync_id: number;
+  sync_identifier: string | null;
+}

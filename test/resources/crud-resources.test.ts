@@ -41,7 +41,9 @@ const DESCRIPTORS: ResDesc[] = [
   { field: 'vlanZones',   path: 'vlan_zones',       singleKey: undefined,       listKey: undefined,          create: 'raw' },
   { field: 'vlans',       path: 'vlans',            singleKey: undefined,       listKey: undefined,          create: 'raw' },
   { field: 'websites',    path: 'websites',         singleKey: undefined,       listKey: undefined,          create: 'raw', bodyWrapper: 'website' },
-  { field: 'matchers',    path: 'matchers',         singleKey: undefined,       listKey: 'matchers',         create: null, get: false },
+  // `GET /matchers` requires integration_id (the vendor answers 500 without it), so the list
+  // primitives refuse a missing one before any IO: the shared list cases must pass it.
+  { field: 'matchers',    path: 'matchers',         singleKey: undefined,       listKey: 'matchers',         create: null, get: false, listParams: { integration_id: 1 } },
   { field: 'relations',   path: 'relations',        singleKey: undefined,       listKey: 'relations',        create: 'wrapped', get: false, update: false, bodyWrapper: 'relation' },
 ];
 
@@ -71,7 +73,7 @@ describe('standard CRUD resources', () => {
       // exhaustion response — required for server-sized pagination, R1).
       let n = 0;
       const spy = stubFetch(() => { n += 1; return n === 1 ? json(listResp) : json([]); });
-      const res = await (makeClient() as any)[desc.field].listAll({});
+      const res = await (makeClient() as any)[desc.field].listAll(desc.listParams ?? {});
       expect(res).toEqual([obj]);
       expect(spy.calls[0].url).toContain(base);
     });
@@ -80,7 +82,7 @@ describe('standard CRUD resources', () => {
       let n = 0;
       stubFetch(() => { n += 1; return n === 1 ? json(listResp) : json([]); });
       const out: unknown[] = [];
-      for await (const item of (makeClient() as any)[desc.field].list({})) out.push(item);
+      for await (const item of (makeClient() as any)[desc.field].list(desc.listParams ?? {})) out.push(item);
       expect(out).toEqual([obj]);
     });
 
@@ -88,7 +90,7 @@ describe('standard CRUD resources', () => {
       let n = 0;
       stubFetch(() => { n += 1; return n === 1 ? json(listResp) : json([]); });
       const pages: unknown[] = [];
-      for await (const pageObj of (makeClient() as any)[desc.field].listPages({})) pages.push(pageObj);
+      for await (const pageObj of (makeClient() as any)[desc.field].listPages(desc.listParams ?? {})) pages.push(pageObj);
       // First page carries the record; iteration terminates cleanly (a tiny
       // result may span a trailing empty "exhaustion" page for server-sized
       // pagination, R1).

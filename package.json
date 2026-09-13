@@ -1,8 +1,9 @@
 {
   "name": "node-hudu",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Fully-typed TypeScript SDK for the Hudu IT documentation API. Built for building MCP servers and integrations.",
   "type": "module",
+  "sideEffects": false,
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -47,6 +48,26 @@
         "default": "./dist/errors.cjs"
       }
     },
+    "./capabilities": {
+      "import": {
+        "types": "./dist/capabilities.d.ts",
+        "default": "./dist/capabilities.js"
+      },
+      "require": {
+        "types": "./dist/capabilities.d.cts",
+        "default": "./dist/capabilities.cjs"
+      }
+    },
+    "./operations": {
+      "import": {
+        "types": "./dist/operations/index.d.ts",
+        "default": "./dist/operations/index.js"
+      },
+      "require": {
+        "types": "./dist/operations/index.d.cts",
+        "default": "./dist/operations/index.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -56,7 +77,10 @@
     "LICENSE",
     "CHANGELOG.md",
     "ARCHITECTURE.md",
-    "docs"
+    "docs",
+    "MCP_TOOL_MANIFEST.md",
+    "capabilities.json",
+    "capabilities.schema.json"
   ],
   "engines": {
     "node": ">=18.0.0"
@@ -68,9 +92,15 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "plan:derive": "node scripts/derive-plan.mjs",
+    "capabilities:build": "node scripts/generate-capabilities.mjs",
+    "capabilities:check": "node scripts/check-capabilities.mjs",
+    "mcp:project": "node scripts/project-mcp-tools.mjs",
     "lint": "eslint src test",
     "lint:fix": "eslint src test --fix",
     "clean": "rimraf dist coverage",
+    "verify:pack": "node scripts/verify-pack.mjs",
+    "prepack": "npm run build",
     "prepublishOnly": "npm run clean && npm run build"
   },
   "keywords": [

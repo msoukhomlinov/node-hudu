@@ -31,3 +31,36 @@ export type AssetPasswordCreate = Partial<Omit<AssetPassword, 'id' | 'created_at
  * Input for updating a Asset_Password.
  */
 export type AssetPasswordUpdate = Partial<AssetPassword>;
+
+
+/**
+ * Compact agent-facing projection of `AssetPassword` (policy §9, SCOPING
+ * decision 6). NEVER carries the secret: `password` and `otp_secret` are dropped
+ * (not blanked), so a helper can never pull a credential into an agent context.
+ *
+ * Keeps: id, name, slug, company_id, password_folder_id, password_folder_name,
+ * username, url, login_url, password_type, updated_at.
+ * Drops (recorded in the registry `outputSchema.drops`): password, otp_secret,
+ * description, passwordable_id, passwordable_type, created_at.
+ */
+export interface AssetPasswordSummary {
+  id: number;
+  name: string;
+  slug: string;
+  company_id: number;
+  password_folder_id: number | null;
+  password_folder_name: string | null;
+  username: string;
+  url: string;
+  login_url: string | null;
+  password_type: string | null;
+  updated_at: string;
+}
+
+/** Identifier kinds `asset_passwords.resolve` understands (policy §7). */
+export interface AssetPasswordIdentifier {
+  id?: number;
+  name?: string;
+  slug?: string;
+  company_id?: number;
+}
