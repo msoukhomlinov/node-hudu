@@ -217,9 +217,13 @@ export class AssetsResource extends BaseResource<Asset> {
     return this.unwrapSingle<Asset>(body);
   }
 
-  list(companyId: number, params?: CompanyAssetsListParams): AsyncIterable<Asset>;
-  /** `include` attaches the named relation groups to each asset (each group = its own fetch). */
+  /**
+   * `include` attaches the named relation groups to each asset (each group = its own fetch).
+   * Declared BEFORE the plain overload on purpose: `ListParams` carries an index signature, so
+   * the plain overload accepts `{ include: [...] }` too and would otherwise shadow this one.
+   */
   list(companyId: number, params: CompanyAssetsListParams & { include: AssetIncludeGroup[] }): AsyncIterable<AssetWithIncludes>;
+  list(companyId: number, params?: CompanyAssetsListParams): AsyncIterable<Asset>;
   list(companyId: number, params?: CompanyAssetsListParams & { include?: AssetIncludeGroup[] }): AsyncIterable<Asset | AssetWithIncludes> {
     requireCompanyId(companyId, 'assets.list');
     const groups = validateIncludeGroups(params?.include, 'assets.list');
@@ -228,9 +232,9 @@ export class AssetsResource extends BaseResource<Asset> {
     return groups.length === 0 ? base : this.withIncludes(base, groups, this.includePageSize(params));
   }
 
-  async listAll(companyId: number, params?: CompanyAssetsListParams): Promise<Asset[]>;
-  /** `include` attaches the named relation groups to each asset (each group = its own fetch). */
+  /** `include` attaches the named relation groups to each asset (each group = its own fetch); keep before the plain overload (see `list`). */
   async listAll(companyId: number, params: CompanyAssetsListParams & { include: AssetIncludeGroup[] }): Promise<AssetWithIncludes[]>;
+  async listAll(companyId: number, params?: CompanyAssetsListParams): Promise<Asset[]>;
   async listAll(companyId: number, params?: CompanyAssetsListParams & { include?: AssetIncludeGroup[] }): Promise<Asset[] | AssetWithIncludes[]> {
     requireCompanyId(companyId, 'assets.listAll');
     const groups = validateIncludeGroups(params?.include, 'assets.listAll');
@@ -240,9 +244,9 @@ export class AssetsResource extends BaseResource<Asset> {
     return this.withIncludesAll(items, groups, this.includePageSize(params));
   }
 
-  listPages(companyId: number, params?: CompanyAssetsListParams): AsyncIterable<Page<Asset>>;
-  /** `include` attaches the named relation groups to each asset in each page. */
+  /** `include` attaches the named relation groups to each asset in each page; keep before the plain overload (see `list`). */
   listPages(companyId: number, params: CompanyAssetsListParams & { include: AssetIncludeGroup[] }): AsyncIterable<Page<AssetWithIncludes>>;
+  listPages(companyId: number, params?: CompanyAssetsListParams): AsyncIterable<Page<Asset>>;
   listPages(companyId: number, params?: CompanyAssetsListParams & { include?: AssetIncludeGroup[] }): AsyncIterable<Page<Asset> | Page<AssetWithIncludes>> {
     requireCompanyId(companyId, 'assets.listPages');
     const groups = validateIncludeGroups(params?.include, 'assets.listPages');
@@ -387,9 +391,9 @@ export class AssetsResource extends BaseResource<Asset> {
     return this.unwrapSingle<Asset>(body);
   }
 
-  async listAllAcrossCompanies(params?: AccountAssetsListParams): Promise<Asset[]>;
-  /** `include` attaches the named relation groups to each asset (each group = its own fetch). */
+  /** `include` attaches the named relation groups to each asset (each group = its own fetch); keep before the plain overload (see `list`). */
   async listAllAcrossCompanies(params: AccountAssetsListParams & { include: AssetIncludeGroup[] }): Promise<AssetWithIncludes[]>;
+  async listAllAcrossCompanies(params?: AccountAssetsListParams): Promise<Asset[]>;
   async listAllAcrossCompanies(params?: AccountAssetsListParams & { include?: AssetIncludeGroup[] }): Promise<Asset[] | AssetWithIncludes[]> {
     // The account-wide list accepts a `company_id` narrowing; a supplied one is
     // validated like a company-scoped path segment so a caller bug is named here.
@@ -403,10 +407,10 @@ export class AssetsResource extends BaseResource<Asset> {
     return this.withIncludesAll(items, groups, this.includePageSize(params));
   }
 
+  /** `include` attaches the named relation groups to each asset (each group = its own fetch); keep before the plain overload (see `list`). */
+  listAcrossCompanies(params: AccountAssetsListParams & { include: AssetIncludeGroup[] }): AsyncIterable<AssetWithIncludes>;
   /** Stream account-wide assets across pages (GET /assets). */
   listAcrossCompanies(params?: AccountAssetsListParams): AsyncIterable<Asset>;
-  /** `include` attaches the named relation groups to each asset (each group = its own fetch). */
-  listAcrossCompanies(params: AccountAssetsListParams & { include: AssetIncludeGroup[] }): AsyncIterable<AssetWithIncludes>;
   listAcrossCompanies(params?: AccountAssetsListParams & { include?: AssetIncludeGroup[] }): AsyncIterable<Asset | AssetWithIncludes> {
     const groups = validateIncludeGroups(params?.include, 'assets.listAcrossCompanies');
     const vendor = this.vendorParams(params);
@@ -414,10 +418,10 @@ export class AssetsResource extends BaseResource<Asset> {
     return groups.length === 0 ? base : this.withIncludes(base, groups, this.includePageSize(params));
   }
 
+  /** `include` attaches the named relation groups to each asset in each page; keep before the plain overload (see `list`). */
+  listAcrossCompaniesPages(params: AccountAssetsListParams & { include: AssetIncludeGroup[] }): AsyncIterable<Page<AssetWithIncludes>>;
   /** Iterate account-wide asset pages (GET /assets). */
   listAcrossCompaniesPages(params?: AccountAssetsListParams): AsyncIterable<Page<Asset>>;
-  /** `include` attaches the named relation groups to each asset in each page. */
-  listAcrossCompaniesPages(params: AccountAssetsListParams & { include: AssetIncludeGroup[] }): AsyncIterable<Page<AssetWithIncludes>>;
   listAcrossCompaniesPages(params?: AccountAssetsListParams & { include?: AssetIncludeGroup[] }): AsyncIterable<Page<Asset> | Page<AssetWithIncludes>> {
     const groups = validateIncludeGroups(params?.include, 'assets.listAcrossCompaniesPages');
     const vendor = this.vendorParams(params);
