@@ -488,12 +488,17 @@ export class AssetsResource extends BaseResource<Asset> {
    * throws `HuduConfigError`).
    */
   async search(query: string): Promise<AssetSummary[]>;
-  /** `expand: true` returns the full records. */
-  async search(query: string, opts: { expand: true; limit?: number; company_id?: number; primary_serial?: string }): Promise<Asset[]>;
+  /**
+   * `expand: true` + `include` — full records, each carrying the named relation groups.
+   * Declared BEFORE the single-flag overloads on purpose: with the options in a variable or
+   * a spread (no excess-property check), `{ expand: true, include: [...] }` is structurally
+   * assignable to the narrower opts shapes and would otherwise be shadowed by them (see `list`).
+   */
+  async search(query: string, opts: { expand: true; include: AssetIncludeGroup[]; limit?: number; company_id?: number; primary_serial?: string }): Promise<AssetWithIncludes[]>;
   /** `include` attaches the named relation groups to each compact summary (each group = its own fetch). */
   async search(query: string, opts: { include: AssetIncludeGroup[]; limit?: number; company_id?: number; primary_serial?: string }): Promise<AssetSummaryWithIncludes[]>;
-  /** `expand: true` + `include` — full records, each carrying the named relation groups. */
-  async search(query: string, opts: { expand: true; include: AssetIncludeGroup[]; limit?: number; company_id?: number; primary_serial?: string }): Promise<AssetWithIncludes[]>;
+  /** `expand: true` returns the full records. */
+  async search(query: string, opts: { expand: true; limit?: number; company_id?: number; primary_serial?: string }): Promise<Asset[]>;
   async search(query: string, opts?: AssetSearchOptions & { include?: AssetIncludeGroup[] }): Promise<AssetSummary[] | Asset[] | AssetSummaryWithIncludes[] | AssetWithIncludes[]>;
   async search(query: string, opts?: AssetSearchOptions & { include?: AssetIncludeGroup[] }): Promise<AssetSummary[] | Asset[] | AssetSummaryWithIncludes[] | AssetWithIncludes[]> {
     const size = helperLimit(opts?.limit);
