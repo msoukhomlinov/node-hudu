@@ -540,10 +540,25 @@ function unwrapArrayMember(member) {
 }
 function isResolutionMember(member) { return /^Resolution<.+>$/.test(member.trim()); }
 
+// A union member that is itself a PROJECTION of the compact shape — e.g.
+// `type AssetSummaryWithIncludes = AssetSummary & AssetIncludes` — is not the full record: it
+// adds fields to the compact shape, so it is a TIGHTER superset of the compact props than the
+// real full record and would steal the "tightest superset" pick (which is exactly what made
+// `assets.search` advertise `AssetSummaryWithIncludes` with the include fields as `drops`).
+// A wrapped alias whose source names the compact type as a whole identifier is such a
+// projection; a full record like `Asset & AssetIncludes` names `Asset`, never the compact.
+function isCompactProjection(name, compactName) {
+  const alias = aliasText.get(name);
+  if (!alias) return false;
+  return new RegExp(`(?<![A-Za-z0-9_])${compactName}(?![A-Za-z0-9_])`).test(alias);
+}
+
 // Pick the full-record member of a union return type for a compact-shape helper:
 //   1. skip null/undefined and the Resolution<...> (resolutionDetails) member,
 //   2. resolve the remaining members,
-//   3. prefer the tightest STRICT superset of the compact shape's fields (the full record),
+//   3. prefer the tightest STRICT superset of the compact shape's fields that is NOT itself a
+//      projection of the compact shape (the full record: `Asset` without include, not
+//      `AssetSummaryWithIncludes`),
 //   4. if only the compact shape itself resolves, keep it — `drops: []` is then the correct,
 //      honest answer (the compact shape keeps every field, e.g. `type ExportSummary = Export`).
 function pickFullMember(returnType, compactProps, compactName) {
@@ -557,7 +572,9 @@ function pickFullMember(returnType, compactProps, compactName) {
     candidates.push({ name: m, props: props.map((x) => x.name) });
   }
   if (!compactProps) return candidates.length === 1 ? candidates[0] : null;
-  const supersets = candidates.filter((c) => c.name !== compactName && compactProps.every((n) => c.props.includes(n)));
+  const supersets = candidates.filter(
+    (c) => c.name !== compactName && !isCompactProjection(c.name, compactName) && compactProps.every((n) => c.props.includes(n)),
+  );
   if (supersets.length) return supersets.reduce((a, b) => (a.props.length <= b.props.length ? a : b));
   return candidates.length === 1 ? candidates[0] : null;
 }
