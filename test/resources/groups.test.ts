@@ -132,21 +132,26 @@ describe('GroupsResource helpers', () => {
   });
 
   it('returns the single exact match', async () => {
-    // A bare slug is narrowed with the vendor `search` filter and compared exactly.
+    // Live-verified on Hudu 2.45.1: GET /groups accepts no `slug` filter (api-docs.json
+    // lists name, default, search only) and its `search` filter does NOT match a slug, so a
+    // slug lookup is a COMPLETE client scan whose exact compare decides.
     const spy = listOnce([group({ id: 1, slug: 'other' }), group({ id: 2, slug: 'engineering' })]);
     const res = await makeClient().groups.resolve('engineering');
     expect(res).toMatchObject({ id: 2, slug: 'engineering' });
     expect(spy.calls).toHaveLength(1);
-    expect(spy.calls[0].url).toContain('search=engineering');
+    expect(spy.calls[0].url).not.toContain('search=');
+    expect(spy.calls[0].url).not.toContain('slug=');
     expect(spy.calls[0].url).toContain('page_size=25');
   });
 
   it('returns null after a complete scan', async () => {
     const spy = stubFetch(() => json([]));
     await expect(makeClient().groups.resolve('Absent')).resolves.toBeNull();
-    // Bare value: the slug pass, then the exact-name pass, both vendor-filtered.
+    // Bare value: the slug pass is an UNFILTERED client scan (the vendor has no slug filter
+    // and `search` cannot match a slug), then the vendor-honoured `name` filter.
     expect(spy.calls).toHaveLength(2);
-    expect(spy.calls[0].url).toContain('search=Absent');
+    expect(spy.calls[0].url).not.toContain('search=');
+    expect(spy.calls[0].url).not.toContain('name=');
     expect(spy.calls[1].url).toContain('name=Absent');
   });
 
@@ -275,6 +280,16 @@ describe('GroupsResource identifier edges', () => {
     const pages: unknown[] = [];
     for await (const page of client.groups.listPages()) pages.push(page);
     expect((pages[0] as { items: unknown[] }).items).toHaveLength(1);
+  });
+
+  it('resolves a slug the vendor search filter cannot match', async () => {
+    // Live-verified regression: /groups?search=<slug> returns 0 rows for the group whose slug
+    // that is, so the old `search`-narrowed slug stage read a real group as absent.
+    const spy = stubFetch((url) => (url.includes('search=') ? json([]) : json([group({ id: 1, slug: '9fd63e9f4ca2' })])));
+    const res = await makeClient().groups.resolve({ slug: '9fd63e9f4ca2' });
+    expect(res).toMatchObject({ id: 1, slug: '9fd63e9f4ca2' });
+    expect(spy.calls).toHaveLength(1);
+    expect(spy.calls[0].url).not.toContain('search=');
   });
 
   it('returns null only after scanning both the slug and the name filter', async () => {

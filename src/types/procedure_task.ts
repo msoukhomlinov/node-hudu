@@ -25,8 +25,15 @@ export interface ProcedureTask {
   subtask_count: number; // The number of subtasks this task has.
   has_subtasks: boolean; // Whether this task has any subtasks.
   url: string; // The URL to view this task in the application.
-  created_at: string; // The date and time when the task was created.
-  updated_at: string; // The date and time when the task was last updated.
+  // Live-verified on Hudu 2.45.1 (2026-09-12): a created procedure task and its GET
+  // response carry neither timestamp (observed keys end at name, url, completed_date,
+  // due_date, formatted_due_date, priority, completion_notes, assigned_users,
+  // first_assigned_user_*, user_id, user_name, description, position, completed,
+  // procedure_id, optional, parent_task_id, subtask_ids, subtask_count, has_subtasks).
+  // api-docs.json declares them, the vendor does not send them, so they are optional and
+  // the registry row says `staleCheck: "unavailable"`.
+  created_at?: string; // Declared by api-docs.json; never observed in a live response.
+  updated_at?: string; // Declared by api-docs.json; never observed in a live response.
 }
 
 /**
@@ -76,5 +83,6 @@ export interface ProcedureTaskSummary {
   subtask_count: number;
   first_assigned_user_name: string;
   url: string;
-  updated_at: string;
+  /** Absent in every live response (see `ProcedureTask.updated_at`). */
+  updated_at?: string;
 }

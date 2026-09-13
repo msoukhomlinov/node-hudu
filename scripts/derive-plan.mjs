@@ -105,10 +105,17 @@ const EXTRA_ERRORS = {
 /** The 20 resources whose update path carries the base-class expectedUpdatedAt guard (plan staleCheck). */
 const STALE_GUARD_RESOURCES = new Set([
   'companies', 'articles', 'asset_layouts', 'asset_passwords', 'websites', 'folders', 'password_folders',
-  'networks', 'vlans', 'vlan_zones', 'rack_storages', 'flags', 'flag_types',
-  'procedures', 'procedure_tasks', 'expirations',
+  'networks', 'vlans', 'vlan_zones', 'ip_addresses', 'flags', 'flag_types',
+  'procedures', 'expirations',
   'photos', 'lists', 'label_types', 'labels',
 ]);
+// Live-verified on Hudu 2.45.1 (2026-09-12): rack_storages and procedure_tasks were previously
+// listed here, but their live records carry NO `updated_at` at all. On those rows updateOne's
+// comparison always raises CONFIG_ERROR ("the current <resource> record ... carries no
+// updated_at"), so STALE_OBJECT is UNREACHABLE — advertising it was a guard that can never run.
+// Both rows now say `staleCheck: "unavailable"`. ip_addresses joined the set: a live ip_address
+// carries `updated_at` and it ADVANCES on update (03:05:11.914Z -> 03:05:13.508Z via a raw PUT,
+// 03:05:13.596Z via the SDK), so its update row really can throw STALE_OBJECT.
 
 const STATUS_CODES = {
   400: 'BAD_REQUEST', 401: 'UNAUTHORIZED', 403: 'FORBIDDEN', 404: 'NOT_FOUND',

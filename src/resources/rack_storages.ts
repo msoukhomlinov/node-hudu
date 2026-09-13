@@ -20,7 +20,7 @@ import type {
   MutationOptions,
   Resolution,
 } from '../types/common.js';
-import { ResolutionError, ValidationFailedError } from '../errors.js';
+import { HuduConfigError, ResolutionError, ValidationFailedError } from '../errors.js';
 
 export interface RackStoragesListParams extends ListParams {
   company_id?: number;
@@ -101,6 +101,20 @@ export class RackStoragesResource extends BaseResource<RackStorage> {
   async update(id: number, data: RackStorageUpdate, opts: MutationOptions & { dryRun?: false }): Promise<RackStorage>;
   async update(id: number, data: RackStorageUpdate, opts: MutationOptions | undefined): Promise<RackStorage | DryRunResult<RackStorage>>;
   async update(id: number, data: RackStorageUpdate, opts?: MutationOptions): Promise<RackStorage | DryRunResult<RackStorage>> {
+    // Live-verified on Hudu 2.45.1 (2026-09-12): GET /rack_storages and every create/update
+    // response carry NO `created_at`/`updated_at` (observed keys: id, name, description,
+    // descending_units, starting_unit, height, max_wattage, width, serial_number, asset_tag,
+    // front_items, rear_items, location_name, location_url, location_id, utilization,
+    // power_draw_utilization, power_utilization, company_id). No revision therefore exists to
+    // compare, so this row's `staleCheck` is "unavailable" and the opt-in guard is REFUSED by
+    // name before any request instead of running against a field the vendor never sends.
+    // STALE_OBJECT is unreachable here and the registry no longer advertises it.
+    if (opts?.expectedUpdatedAt !== undefined) {
+      throw new HuduConfigError(
+        'rack_storages.update cannot honour { expectedUpdatedAt }: the live vendor record carries no ' +
+          'updated_at field, so there is no revision to compare. Omit the guard, or use { dryRun: true } to preview the change.',
+      );
+    }
     return this.updateOne<RackStorage>(id, data, undefined, opts);
   }
   async delete(id: number): Promise<void>;

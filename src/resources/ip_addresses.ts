@@ -20,7 +20,7 @@ import type {
   Resolution,
   ResolutionCandidate,
 } from '../types/common.js';
-import { HuduConfigError, ResolutionError, ValidationFailedError } from '../errors.js';
+import { ResolutionError, ValidationFailedError } from '../errors.js';
 
 export interface IpAddressesListParams extends ListParams {
   network_id?: number;
@@ -102,15 +102,14 @@ export class IpAddressesResource extends BaseResource<IpAddress> {
   async update(id: number, data: IpAddressUpdate, opts: MutationOptions & { dryRun?: false }): Promise<IpAddress>;
   async update(id: number, data: IpAddressUpdate, opts: MutationOptions | undefined): Promise<IpAddress | DryRunResult<IpAddress>>;
   async update(id: number, data: IpAddressUpdate, opts?: MutationOptions): Promise<IpAddress | DryRunResult<IpAddress>> {
-    // registry staleCheck for this row is "unavailable": the vendor's IpAddress record
-    // declares no `updated_at`, so the guard cannot be honoured and is REFUSED rather
-    // than silently ignored (the same contract createOne/deleteOne/updateOne use).
-    if (opts?.expectedUpdatedAt !== undefined) {
-      throw new HuduConfigError(
-        'ip_addresses.update cannot honour { expectedUpdatedAt }: the vendor record declares ' +
-          'no updated_at field. Omit the guard, or use { dryRun: true } to preview the change.',
-      );
-    }
+    // The row's staleCheck is `updated_at` and the opt-in guard IS honoured here.
+    // This method used to REFUSE `{ expectedUpdatedAt }` claiming "the vendor record
+    // declares no updated_at field". That stated reason was FALSE: live-verified on
+    // Hudu 2.45.1 (2026-09-12) a created ip_address carries
+    // `created_at`/`updated_at` (e.g. "2026-09-13T03:05:11.914Z" on create and on GET),
+    // and `updated_at` ADVANCES on every update (a raw PUT to 03:05:13.508Z, an SDK
+    // update to 03:05:13.596Z), so the guard has a real revision to compare. updateOne
+    // runs that comparison before the write and throws STALE_OBJECT on a mismatch.
     return this.updateOne<IpAddress>(id, data, undefined, opts);
   }
   async delete(id: number): Promise<void>;
@@ -119,8 +118,9 @@ export class IpAddressesResource extends BaseResource<IpAddress> {
   async delete(id: number, opts: MutationOptions & { dryRun?: false }): Promise<void>;
   async delete(id: number, opts: MutationOptions | undefined): Promise<void | DryRunResult<void>>;
   async delete(id: number, opts?: MutationOptions): Promise<void | DryRunResult<void>> {
-    // `staleCheck` is "unavailable" for this resource: the vendor's record does not
-    // declare `updated_at`, so an `{ expectedUpdatedAt }` guard cannot be honoured.
+    // `staleCheck` is "unavailable" on the DELETE path (the row's update path has
+    // `updated_at`): Hudu exposes no conditional delete, so there is no prior revision to
+    // compare against and `deleteOne` refuses `{ expectedUpdatedAt }` by name.
     return this.deleteOne(id, opts);
   }
 

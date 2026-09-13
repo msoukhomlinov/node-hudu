@@ -8,7 +8,7 @@
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import { HuduClient } from '../../src/client.js';
-import { HuduConfigError, HuduError, NotFoundError, ResolutionError, ValidationFailedError } from '../../src/errors.js';
+import { HuduConfigError, HuduError, NotFoundError, ResolutionError, StaleObjectError, ValidationFailedError } from '../../src/errors.js';
 import type { AuditEvent } from '../../src/types/common.js';
 import type { IpAddressIdentifier, IpAddressSummary } from '../../src/types/ip_address.js';
 import { stubFetch, json, empty, clearFetch } from '../helpers.js';
@@ -127,17 +127,28 @@ describe('ip_addresses primitives', () => {
     expect(res.warnings.length).toBeGreaterThan(0);
   });
 
-  it('refuses expectedUpdatedAt on update with CONFIG_ERROR and issues no request', async () => {
-    // staleCheck is "unavailable" for ip_addresses.update (no updated_at on the record),
-    // so the guard is refused instead of silently ignored.
-    const spy = stubFetch(() => json({ ...IP, status: 'reserved' }));
+  it('runs the expectedUpdatedAt guard on update and maps a mismatch to STALE_OBJECT', async () => {
+    // Live-verified on Hudu 2.45.1 (2026-09-12): a live ip_address carries `updated_at`
+    // ("2026-09-13T03:05:11.914Z" on create and on GET) and it ADVANCES on update
+    // (03:05:13.508Z after a raw PUT, 03:05:13.596Z after an SDK update). This row's
+    // staleCheck is therefore `updated_at`: the guard REALLY runs, and the old refusal
+    // ("the vendor record declares no updated_at field") was false.
+    const spy = stubFetch(() => json({ ...IP, updated_at: '2026-01-02T00:00:00Z' }));
     const err = await rejection(
-      makeClient().ipAddresses.update(7, { status: 'reserved' }, { expectedUpdatedAt: 'any' }),
+      makeClient().ipAddresses.update(7, { status: 'reserved' }, { expectedUpdatedAt: '2026-01-01T00:00:00Z' }),
     );
-    expect(err).toBeInstanceOf(HuduConfigError);
-    expect(err.code).toBe('CONFIG_ERROR');
-    expect(err.category).toBe('validation');
-    expect(spy.calls).toHaveLength(0);
+    expect(err).toBeInstanceOf(StaleObjectError);
+    expect(err.code).toBe('STALE_OBJECT');
+    expect(spy.calls).toHaveLength(1);
+    expect(spy.calls[0]?.init.method).toBe('GET');
+  });
+
+  it('issues the write when the expectedUpdatedAt revision still matches', async () => {
+    const spy = stubFetch(() => json({ ...IP, status: 'reserved', updated_at: '2026-01-02T00:00:00Z' }));
+    expect(
+      await makeClient().ipAddresses.update(7, { status: 'reserved' }, { expectedUpdatedAt: '2026-01-02T00:00:00Z' }),
+    ).toMatchObject({ id: 7, status: 'reserved' });
+    expect(spy.calls.map((call) => call.init.method)).toEqual(['GET', 'PUT']);
   });
 
   it('refuses expectedUpdatedAt on delete with CONFIG_ERROR and issues no request', async () => {

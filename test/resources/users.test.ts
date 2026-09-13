@@ -131,8 +131,11 @@ describe('users.resolve (helper tier)', () => {
     expect(found).toEqual(ALICE_SUMMARY);
     expect(spy.calls).toHaveLength(4);
     expect(query(spy.calls[0]!).get('email')).toBe('Alice Smith');
-    expect(query(spy.calls[1]!).get('search')).toBe('Alice Smith');
-    expect(query(spy.calls[3]!).get('search')).toBe('Alice Smith');
+    // Stage 2 (slug) is an UNFILTERED client scan; stage 3 (name) narrows with `last_name`.
+    expect(query(spy.calls[1]!).get('search')).toBeNull();
+    expect(query(spy.calls[1]!).get('email')).toBeNull();
+    expect(query(spy.calls[2]!).get('last_name')).toBe('Smith');
+    expect(query(spy.calls[3]!).get('last_name')).toBe('Smith');
     expect(query(spy.calls[1]!).get('page_size')).toBe('25');
   });
 
@@ -140,8 +143,12 @@ describe('users.resolve (helper tier)', () => {
     const spy = stubFetch(usersHandler(() => []));
     const found = await makeClient().users.resolve('Nobody At All');
     expect(found).toBeNull();
-    // Every stage completed a scan; none truncated.
-    expect(spy.calls).toHaveLength(3);
+    // Every stage completed a scan; none truncated: email (1), slug client scan (1),
+    // narrowed name pass (1) and the complete client-scan fallback (1).
+    expect(spy.calls).toHaveLength(4);
+    expect(query(spy.calls[1]!).get('search')).toBeNull();
+    expect(query(spy.calls[2]!).get('last_name')).toBe('All');
+    expect(query(spy.calls[3]!).get('last_name')).toBeNull();
   });
 
   it('throws RESOLUTION_AMBIGUOUS when several users match a name', async () => {
@@ -190,11 +197,31 @@ describe('users.resolve (helper tier)', () => {
   });
 
   it('resolves by an explicit slug identifier', async () => {
-    const spy = stubFetch(usersHandler((p) => (p.get('search') === 'alice-smith' ? [BOB, ALICE] : [])));
+    // Live-verified on Hudu 2.45.1: /users IGNORES an unknown `slug` key (a bogus slug still
+    // returned the whole collection) and `search` does not match a slug, so the slug stage
+    // walks the collection and compares the slug exactly — the old `search` stage returned a
+    // false null for a user that exists.
+    const spy = stubFetch(
+      usersHandler((p) => (p.get('email') === null && p.get('last_name') === null ? [BOB, ALICE] : [])),
+    );
     const found = await makeClient().users.resolve({ slug: 'alice-smith' });
     expect(found).toEqual(ALICE_SUMMARY);
     expect(spy.calls).toHaveLength(2);
-        expect(spy.calls[0]!.url).toContain('search=alice-smith');
+    expect(spy.calls[0]!.url).not.toContain('search=');
+    expect(spy.calls[0]!.url).not.toContain('slug=');
+  });
+
+  it('falls back to a complete client scan when the last_name narrowing excludes the record', async () => {
+    // A multi-word surname is not equal to its last token, so the narrowed `last_name` pass
+    // can miss the real record; only the unfiltered fallback makes "a COMPLETE scan found
+    // nothing" true. Live-verified fact mirrored with a fixture.
+    const mary = makeUser(9, 'Mary', 'Van Der Berg', 'mary@example.com');
+    mary.slug = 'mary-van-der-berg';
+    const spy = stubFetch(usersHandler((p) => (p.get('last_name') === 'Berg' ? [] : [mary])));
+    const found = await makeClient().users.resolve('Mary Van Der Berg');
+    expect(found).toMatchObject({ id: 9, first_name: 'Mary', last_name: 'Van Der Berg' });
+    expect(query(spy.calls[2]!).get('last_name')).toBe('Berg');
+    expect(query(spy.calls[3]!).get('last_name')).toBeNull();
   });
 
   it('throws RESOLUTION_TRUNCATED when the scan cap stops the search', async () => {

@@ -9,7 +9,7 @@ import type { HttpClient } from '../http.js';
 import { BaseResource } from './base.js';
 import type { ListParams, Page } from '../pagination.js';
 import { HuduConfigError, ResolutionError } from '../errors.js';
-import type { Resolution } from '../types/common.js';
+import type { Resolution, ResolutionCost } from '../types/common.js';
 import type { User } from '../types/index.js';
 import type { UserIdentifier, UserSummary } from '../types/user.js';
 import { identifierError } from './agent-layer-helpers.js';
@@ -157,6 +157,10 @@ export class UsersResource extends BaseResource<User> {
    *
    * Bare values are read in the documented order: numeric id, exact email, slug,
    * exact name. `{ id }` resolves directly and a miss throws NOT_FOUND — never null.
+   * Live-verified on Hudu 2.45.1: /users has no `slug` filter and its `search` matches a
+   * single field, so the slug stage walks the collection client-side and the name stage
+   * narrows with `last_name` before falling back to a complete client scan. Every stage
+   * compares its field exactly, so a `null` still means a COMPLETE scan found nothing.
    * `null` means every stage completed a scan and found nothing; a stage the cap
    * stopped throws RESOLUTION_TRUNCATED. Several exact matches throw
    * RESOLUTION_AMBIGUOUS with the candidate ids.
@@ -246,6 +250,7 @@ export class UsersResource extends BaseResource<User> {
       (item) => `user "${item.email}"`,
       operation,
       `several users share the email "${email}"`,
+      'server-filter',
     );
     if (opts.resolutionDetails) {
       return opts.expand ? found : projectResolution(found, toUserSummary);
@@ -277,17 +282,67 @@ export class UsersResource extends BaseResource<User> {
     return opts.expand ? items : items.map(toUserSummary);
   }
 
-  /** One bounded, vendor-filtered stage of the resolve lookup. */
+  /** One bounded stage of the resolve lookup. Every stage compares its field exactly. */
   private async scanBy(kind: 'email' | 'slug' | 'name', value: string, operation: string): Promise<Resolution<User>> {
-    const filter = kind === 'email' ? { email: value } : { search: value };
-    return this.scanUnique<User>(
-      this.pageFetcher(filter),
-      (item) =>
-        kind === 'email' ? sameEmail(item.email, value) : kind === 'slug' ? item.slug === value : fullName(item) === value,
-      (item) => (kind === 'email' ? `user "${item.email}"` : `user "${fullName(item)}"`),
+    const label = (item: User): string => (kind === 'email' ? `user "${item.email}"` : `user "${fullName(item)}"`);
+    const ambiguity = `several users match ${kind} "${value}"`;
+    if (kind === 'email') {
+      // `email` IS a documented vendor filter (live-verified honoured).
+      return this.scanUnique<User>(
+        this.pageFetcher({ email: value }),
+        (item) => sameEmail(item.email, value),
+        label,
+        operation,
+        ambiguity,
+        'server-filter',
+      );
+    }
+    if (kind === 'slug') {
+      // Live-verified on Hudu 2.45.1 (2026-09-12): GET /users accepts NO `slug` filter
+      // (api-docs.json lists first_name, last_name, search, portal_member_company_id,
+      // archived, email, security_level) — an unknown `slug` key is IGNORED, so
+      // `/users?slug=<any>` returns the WHOLE collection (a bogus slug still returned the
+      // one user) — and `search` does NOT match a slug (`/users?search=0000000000` -> 0
+      // rows while that user exists). The old `search` stage therefore hid a real user from
+      // a COMPLETE scan and `users.resolve('<slug>')` returned a FALSE null. There is no
+      // vendor field filter for a slug, so this stage walks the collection and compares the
+      // slug exactly; a cap still throws RESOLUTION_TRUNCATED, never null.
+      return this.scanUnique<User>(
+        this.pageFetcher({}),
+        (item) => item.slug === value,
+        label,
+        operation,
+        ambiguity,
+        'client-scan',
+      );
+    }
+    // Name stage. Live-verified: `search=Max Soukhomlinov` returns 0 rows while
+    // `last_name=Soukhomlinov` returns the user — the vendor's `search` matches ONE field
+    // at a time, so a full-name `search` is exactly the false-null trap. The displayed name
+    // is "First Last", so a narrowed `last_name` attempt runs first, and a complete client
+    // scan (no filter at all) is the guaranteed fallback: the narrowed pass can exclude a
+    // real record (a multi-word surname, e.g. "Van Der Berg", is not equal to its last
+    // token), and only the fallback can make "a COMPLETE scan found nothing" true.
+    const lastToken = value.trim().split(/\s+/).slice(-1)[0] ?? value;
+    const narrowed = await this.scanUnique<User>(
+      this.pageFetcher({ last_name: lastToken }),
+      (item) => fullName(item) === value,
+      label,
       operation,
-      `several users match ${kind} "${value}"`,
+      ambiguity,
+      'server-filter',
     );
+    // A truncated narrowed pass is undecided — never treat it as a miss for the fallback.
+    if (narrowed.value !== null || narrowed.scanTruncated) return narrowed;
+    const complete = await this.scanUnique<User>(
+      this.pageFetcher({}),
+      (item) => fullName(item) === value,
+      label,
+      operation,
+      ambiguity,
+      'client-scan',
+    );
+    return { ...complete, scanned: narrowed.scanned + complete.scanned };
   }
 
   /**
@@ -303,13 +358,14 @@ export class UsersResource extends BaseResource<User> {
     label: (item: U) => string,
     operation: string,
     ambiguity: string,
+    cost: ResolutionCost,
   ): Promise<Resolution<U>> {
     const idOf = (item: U): number => item.id;
     const first = await this.boundedScan<U>(fetchPage, {
       match,
       label,
       idOf,
-      resolutionCost: 'server-filter',
+      resolutionCost: cost,
     });
     if (first.value === null) return first;
     const firstId = idOf(first.value);
@@ -317,7 +373,7 @@ export class UsersResource extends BaseResource<User> {
       match: (item) => idOf(item) !== firstId && match(item),
       label,
       idOf,
-      resolutionCost: 'server-filter',
+      resolutionCost: cost,
     });
     if (rest.value !== null) {
       throw ResolutionError.ambiguous(`${operation}: ${ambiguity} (ids ${firstId}, ${idOf(rest.value)}).`, {
@@ -329,7 +385,7 @@ export class UsersResource extends BaseResource<User> {
       // The uniqueness pass hit its cap: "no second match" is undecided, never a null.
       return {
         value: null,
-        resolutionCost: 'server-filter',
+        resolutionCost: cost,
         scanned: first.scanned + rest.scanned,
         scanTruncated: true,
       };

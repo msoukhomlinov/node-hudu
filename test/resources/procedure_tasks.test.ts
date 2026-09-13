@@ -232,20 +232,18 @@ describe('ProcedureTasksResource — agent execution layer', () => {
     expect(err.correlationId).toMatch(UUID);
   });
 
-  it('sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT', async () => {
-    const spy = routed({
-      [`${PATH}/5`]: () => json({ procedure_task: task() }),
-    });
+  it('refuses expectedUpdatedAt on update with CONFIG_ERROR because no record carries updated_at', async () => {
+    // Live-verified on Hudu 2.45.1 (2026-09-12): a created procedure task and its GET response
+    // carry NO created_at/updated_at, so this row's staleCheck is "unavailable", STALE_OBJECT is
+    // unreachable, and the guard is refused by name before any request.
+    const spy = routed({ [`${PATH}/5`]: () => json({ procedure_task: task() }) });
     const err = await rejection(
-      makeClient().procedureTasks.update(5, { completed: true }, { expectedUpdatedAt: '1999-01-01T00:00:00Z' }),
+      makeClient().procedureTasks.update(5, { completed: true }, { expectedUpdatedAt: '2024-05-01T00:00:00Z' }),
     );
-    expect(err.code).toBe('STALE_OBJECT');
-    expect(err.resourceIds).toEqual([5]);
-    expect(spy.calls.map((call) => call.init.method)).toEqual(['GET']);
-    const ok = routed({ [`${PATH}/5`]: () => json({ procedure_task: task() }) });
-    ok.setHandler((_raw, init) => (init.method === 'PUT' ? json({ procedure_task: task() }) : json({ procedure_task: task() })));
-    await makeClient().procedureTasks.update(5, { completed: true }, { expectedUpdatedAt: '2024-05-01T00:00:00Z' });
-    expect(ok.calls.map((call) => call.init.method)).toEqual(['GET', 'PUT']);
+    expect(err).toBeInstanceOf(HuduConfigError);
+    expect(err.code).toBe('CONFIG_ERROR');
+    expect(err.category).toBe('validation');
+    expect(spy.calls).toHaveLength(0);
   });
 
   it('fetches by id without a scan', async () => {

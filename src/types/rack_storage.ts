@@ -10,9 +10,16 @@ export interface RackStorage {
   starting_unit: number; // The starting unit of the rack storage.
   height: number; // The height of the rack storage.
   width: number; // The width of the rack storage.
-  created_at: string; // The date and time when the rack storage was created.
-  updated_at: string; // The date and time when the rack storage was last updated.
-  discarded_at: string | null; // The date and time when the rack storage was discarded. Can Be null.
+  // Live-verified on Hudu 2.45.1 (2026-09-12): GET /rack_storages and the create/update
+  // responses send NEITHER timestamp (observed keys: id, name, description,
+  // descending_units, starting_unit, height, max_wattage, width, serial_number, asset_tag,
+  // front_items, rear_items, location_name, location_url, location_id, utilization,
+  // power_draw_utilization, power_utilization, company_id). api-docs.json declares them,
+  // the vendor does not send them, so they are optional: no stale guard can be honoured on
+  // this resource, and the registry says `staleCheck: "unavailable"`.
+  created_at?: string; // Declared by api-docs.json; never observed in a live response.
+  updated_at?: string; // Declared by api-docs.json; never observed in a live response.
+  discarded_at?: string | null; // Not observed in a live response either.
   company_id: number; // The unique ID of the company.
 }
 
@@ -50,5 +57,6 @@ export interface RackStorageSummary {
   width: number;
   max_wattage: number;
   starting_unit: number;
-  updated_at: string;
+  /** Absent in every live response (see `RackStorage.updated_at`). */
+  updated_at?: string;
 }

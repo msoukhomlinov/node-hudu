@@ -5,7 +5,7 @@ import type { HttpClient } from '../http.js';
 import { BaseResource } from './base.js';
 import type { ListParams, Page } from '../pagination.js';
 import type { Group, GroupIdentifier, GroupSummary } from '../types/group.js';
-import type { HelperOptions, Resolution } from '../types/common.js';
+import type { HelperOptions, Resolution, ResolutionCost } from '../types/common.js';
 import { HuduConfigError, ResolutionError, ValidationFailedError } from '../errors.js';
 import { assertScanDecided, identifierError } from './agent-layer-helpers.js';
 
@@ -42,11 +42,13 @@ function helperLimit(limit: number | undefined, helper: string): number {
   return limit;
 }
 
-/** One bounded, vendor-filtered scan for exact matches. */
+/** One bounded scan for exact matches (vendor-filtered, or a complete client scan). */
 interface ExactScan<T> {
   matches: T[];
   scanned: number;
   scanTruncated: boolean;
+  /** How the deciding stage found the record; reported verbatim in `Resolution`. */
+  cost: ResolutionCost;
 }
 
 /** The compact projection of a group record (`GroupSummary`). `members` is dropped. */
@@ -163,8 +165,10 @@ export class GroupsResource extends BaseResource<Group> {
   }
 
   // ---------------------------------------------------------------------------
-  // Helper tier (policy §6/§9). The vendor filters `name` and `search`; a slug
-  // lookup narrows with `search` and compares the slug exactly.
+  // Helper tier (policy §6/§9). The vendor filters `name` and `search` (live-verified
+  // honoured on Hudu 2.45.1). Neither matches a slug, and the vendor declares no slug
+  // filter, so a slug lookup is a bounded CLIENT scan (cost 'client-scan') whose exact
+  // compare is the only decision; a `name` lookup narrows with the vendor `name` filter.
   // ---------------------------------------------------------------------------
 
   /**
@@ -207,8 +211,12 @@ export class GroupsResource extends BaseResource<Group> {
   // Internals
   // ---------------------------------------------------------------------------
 
-  /** Bounded, vendor-filtered scan that reports every exact match it examined. */
-  private async scanExact(params: GroupsListParams, isExact: (item: Group) => boolean): Promise<ExactScan<Group>> {
+  /** Bounded scan that reports every exact match it examined. */
+  private async scanExact(
+    params: GroupsListParams,
+    isExact: (item: Group) => boolean,
+    cost: ResolutionCost = 'server-filter',
+  ): Promise<ExactScan<Group>> {
     const matches: Group[] = [];
     const resolution = await this.boundedScan<Group>(this.pageFetcher(params), {
       match: (item) => {
@@ -220,12 +228,13 @@ export class GroupsResource extends BaseResource<Group> {
       },
       label: (item) => item.name,
       idOf: (item) => item.id,
-      resolutionCost: 'server-filter',
+      resolutionCost: cost,
     });
     return {
       matches,
       scanned: resolution.scanned,
       scanTruncated: resolution.value === null && resolution.scanTruncated,
+      cost,
     };
   }
 
@@ -249,13 +258,13 @@ export class GroupsResource extends BaseResource<Group> {
     if (first !== undefined) {
       return {
         value: first,
-        resolutionCost: 'server-filter',
+        resolutionCost: scan.cost,
         scanned: scan.scanned,
         scanTruncated: false,
         candidates: [{ id: first.id, label: first.name }],
       };
     }
-    return { value: null, resolutionCost: 'server-filter', scanned: scan.scanned, scanTruncated: false };
+    return { value: null, resolutionCost: scan.cost, scanned: scan.scanned, scanTruncated: false };
   }
 
   /** Resolve the identifier to a full record (policy §6). */
@@ -266,8 +275,17 @@ export class GroupsResource extends BaseResource<Group> {
       return { value: record, resolutionCost: 'direct', scanned: 0, scanTruncated: false };
     }
     if (lookup.kind === 'slug') {
-      // The vendor exposes no slug filter: narrow with `search`, then compare exactly.
-      const scan = await this.scanExact({ search: lookup.slug }, (item) => item.slug === lookup.slug);
+      // Live-verified on Hudu 2.45.1 (2026-09-12): GET /groups accepts NO `slug` filter
+      // (api-docs.json lists name, default, search, page, page_size only) — an unknown
+      // `slug` key is IGNORED and returns the whole collection — and the `search` filter
+      // does NOT match a slug (`/groups?search=9fd63e9f4ca2` -> 0 rows while the group
+      // whose slug that is exists). Narrowing a slug lookup with `search` therefore hid a
+      // real group from a scan that the resolution policy advertises as COMPLETE, and
+      // `groups.resolve('<slug>')` returned a FALSE null. A slug stage must not be narrowed
+      // by a filter that can exclude the record, so it walks the collection and compares
+      // the slug exactly (the same client scan `vlan_zones`/`rack_storages` use for a field
+      // the vendor cannot filter on); the cap still throws RESOLUTION_TRUNCATED, never null.
+      const scan = await this.scanExact({}, (item) => item.slug === lookup.slug, 'client-scan');
       return this.decideScan(scan, 'groups.resolve', `slug "${lookup.slug}"`);
     }
     if (lookup.kind === 'name') {
@@ -275,7 +293,8 @@ export class GroupsResource extends BaseResource<Group> {
       return this.decideScan(scan, 'groups.resolve', `name "${lookup.name}"`);
     }
     // Bare value: numeric id first (handled above), then slug, then exact name.
-    const slugScan = await this.scanExact({ search: lookup.value }, (item) => item.slug === lookup.value);
+    // The slug stage is a complete client scan; see `lookup.kind === 'slug'` above.
+    const slugScan = await this.scanExact({}, (item) => item.slug === lookup.value, 'client-scan');
     const bySlug = this.decideScan(slugScan, 'groups.resolve', `slug "${lookup.value}"`);
     if (bySlug.value !== null) return bySlug;
     const nameScan = await this.scanExact({ name: lookup.value }, (item) => item.name === lookup.value);

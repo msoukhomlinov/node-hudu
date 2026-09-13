@@ -7,6 +7,7 @@ import type { ListParams, Page } from '../pagination.js';
 import type { DryRunResult, Identifier, MutationOptions, Resolution, ResolutionOptions } from '../types/common.js';
 import type { ProcedureTask, ProcedureTaskCreate, ProcedureTaskUpdate } from '../types/index.js';
 import type { ProcedureTaskSummary } from '../types/procedure_task.js';
+import { HuduConfigError } from '../errors.js';
 import {
   decideResolution, helperLimit, identifierError,
   refuseExpectedUpdatedAtOutsideUpdate, requirePositiveId,
@@ -78,6 +79,20 @@ export class ProcedureTasksResource extends BaseResource<ProcedureTask> {
   async update(id: number, data: ProcedureTaskUpdate, opts: MutationOptions & { dryRun?: false }): Promise<ProcedureTask>;
   async update(id: number, data: ProcedureTaskUpdate, opts: MutationOptions | undefined): Promise<ProcedureTask | DryRunResult<ProcedureTask>>;
   async update(id: number, data: ProcedureTaskUpdate, opts?: MutationOptions): Promise<ProcedureTask | DryRunResult<ProcedureTask>> {
+    // Live-verified on Hudu 2.45.1 (2026-09-12): a created procedure task and its GET response
+    // carry NO `created_at`/`updated_at` (observed keys end at name, url, completed_date,
+    // due_date, formatted_due_date, priority, completion_notes, assigned_users,
+    // first_assigned_user_*, user_id, user_name, description, position, completed,
+    // procedure_id, optional, parent_task_id, subtask_ids, subtask_count, has_subtasks). No
+    // revision therefore exists to compare, so this row's `staleCheck` is "unavailable" and the
+    // opt-in guard is REFUSED by name before any request. STALE_OBJECT is unreachable here and
+    // the registry no longer advertises it.
+    if (opts?.expectedUpdatedAt !== undefined) {
+      throw new HuduConfigError(
+        'procedure_tasks.update cannot honour { expectedUpdatedAt }: the live vendor record carries no ' +
+          'updated_at field, so there is no revision to compare. Omit the guard, or use { dryRun: true } to preview the change.',
+      );
+    }
     return this.updateOne<ProcedureTask>(id, data, undefined, opts);
   }
 

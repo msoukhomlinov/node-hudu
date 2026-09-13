@@ -3,7 +3,7 @@
     "source": "api-docs.json",
     "version": "2.45.1"
   },
-  "generatedAt": "2026-09-12T14:54:35.600Z",
+  "generatedAt": "2026-09-13T03:06:52.955Z",
   "resources": {
     "companies": {
       "helperCap": 4,
@@ -4565,7 +4565,7 @@
       "dryRun": false,
       "metadata": {
         "purpose": "Resolve a user group from an id, name or slug.",
-        "usage": "Bare values are read in the order: numeric id, slug, exact name. The summary carries member_count but not the member list.",
+        "usage": "Bare values are read in the order: numeric id, slug, exact name. The summary carries member_count but not the member list. GET /groups has no `slug` filter and its `search` filter does not match a slug (live-verified), so the slug stage is a bounded client scan over the collection with an exact slug compare; the name stage uses the vendor `name` filter.",
         "preferredWhen": "Use when the identifier is a group name; groups.get is cheaper for a known id.",
         "related": [
           "groups.get",
@@ -4617,6 +4617,11 @@
           "id": "groups.resolve.expand",
           "file": "test/resources/groups.test.ts",
           "title": "expand: true returns the full group"
+        },
+        {
+          "id": "groups.resolve.slug-client-scan",
+          "file": "test/resources/groups.test.ts",
+          "title": "resolves a slug the vendor search filter cannot match"
         }
       ],
       "group": "A",
@@ -6054,7 +6059,7 @@
       "dryRun": true,
       "metadata": {
         "purpose": "Update an existing IP address.",
-        "usage": "Mutating path for ip_addresses; supports { dryRun: true }, which validates without issuing the write.",
+        "usage": "Mutating path for ip_addresses; supports { dryRun: true }, which validates without issuing the write, and the opt-in { expectedUpdatedAt } stale guard: the live record carries updated_at, which advances on every update, so updateOne compares it and throws STALE_OBJECT before the write when it moved.",
         "preferredWhen": "Preferred over create or delete when the record exists and only some fields change.",
         "related": [
           "ip_addresses.get"
@@ -6062,12 +6067,13 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "unavailable",
+      "staleCheck": "updated_at",
       "redaction": "none",
       "errors": [
         "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
+        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -6091,6 +6097,11 @@
           "id": "ip_addresses.update.correlation",
           "file": "test/resources/ip_addresses.test.ts",
           "title": "surfaces a correlation id on the success path and the error path"
+        },
+        {
+          "id": "ip_addresses.update.guard-match",
+          "file": "test/resources/ip_addresses.test.ts",
+          "title": "issues the write when the expectedUpdatedAt revision still matches"
         }
       ],
       "group": "B",
@@ -6463,13 +6474,12 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
-        "STALE_OBJECT",
         "UNAUTHORIZED",
         "UNPROCESSABLE_ENTITY"
       ],
@@ -6497,7 +6507,12 @@
         {
           "id": "rack_storages.update.stale",
           "file": "test/resources/rack_storages.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
+          "title": "refuses expectedUpdatedAt on update with CONFIG_ERROR and issues no request"
+        },
+        {
+          "id": "rack_storages.update.optional-timestamps",
+          "file": "test/resources/rack_storages.test.ts",
+          "title": "types created_at/updated_at as optional because the live record never carries them"
         }
       ],
       "group": "B",
@@ -8730,13 +8745,12 @@
       },
       "compact": null,
       "resolution": null,
-      "staleCheck": "updated_at",
+      "staleCheck": "unavailable",
       "redaction": "none",
       "errors": [
         "CONFIG_ERROR",
         "NETWORK_ERROR",
         "NOT_FOUND",
-        "STALE_OBJECT",
         "UNPROCESSABLE_ENTITY"
       ],
       "tests": [
@@ -8763,7 +8777,7 @@
         {
           "id": "procedure_tasks.update.stale",
           "file": "test/resources/procedure_tasks.test.ts",
-          "title": "sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT"
+          "title": "refuses expectedUpdatedAt on update with CONFIG_ERROR because no record carries updated_at"
         }
       ],
       "group": "C",
@@ -12768,7 +12782,7 @@
       "dryRun": false,
       "metadata": {
         "purpose": "Resolve a user from an id, email, slug or exact name.",
-        "usage": "Bare values are read in the order: numeric id, exact email, slug, exact name. Email is the natural key, so prefer users.findByEmail when the email is known.",
+        "usage": "Bare values are read in the order: numeric id, exact email, slug, exact name. Email is the natural key, so prefer users.findByEmail when the email is known. GET /users has no `slug` filter and its `search` matches one field at a time (live-verified: search=\"Max Soukhomlinov\" returns nothing), so the slug stage is a bounded client scan, and the name stage narrows with `last_name` and then falls back to a complete client scan. Every stage compares its field exactly, so null still means a COMPLETE scan found nothing.",
         "preferredWhen": "Use when the identifier is an email or a name; users.get is cheaper for a known id.",
         "related": [
           "users.findByEmail",
@@ -12831,6 +12845,11 @@
           "id": "users.resolve.expand",
           "file": "test/resources/users.test.ts",
           "title": "expand: true returns the full user"
+        },
+        {
+          "id": "users.resolve.name-fallback",
+          "file": "test/resources/users.test.ts",
+          "title": "falls back to a complete client scan when the last_name narrowing excludes the record"
         }
       ],
       "group": "D",

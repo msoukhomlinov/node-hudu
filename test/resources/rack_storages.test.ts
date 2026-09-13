@@ -165,15 +165,30 @@ describe('rack_storages primitives', () => {
     expect(last.correlationId).toBe(err.correlationId);
   });
 
-  it('sends the expectedUpdatedAt guard and maps a mismatch to STALE_OBJECT', async () => {
+  it('refuses expectedUpdatedAt on update with CONFIG_ERROR and issues no request', async () => {
+    // Live-verified on Hudu 2.45.1 (2026-09-12): GET /rack_storages (and the create/update
+    // responses) carry NO created_at/updated_at, so no revision exists to compare, this row's
+    // staleCheck is "unavailable", and STALE_OBJECT is UNREACHABLE — the registry no longer
+    // advertises it and the SDK refuses the guard by name before any request.
     const spy = stubFetch(() => json({ ...RACK, updated_at: '2026-02-02T00:00:00Z' }));
     const err = await rejection(
-      makeClient().rackStorages.update(7, { name: 'x' }, { expectedUpdatedAt: RACK.updated_at }),
+      makeClient().rackStorages.update(7, { name: 'x' }, { expectedUpdatedAt: '2026-01-01T00:00:00Z' }),
     );
-    expect(err).toBeInstanceOf(StaleObjectError);
-    expect(err.code).toBe('STALE_OBJECT');
+    expect(err).toBeInstanceOf(HuduConfigError);
+    expect(err.code).toBe('CONFIG_ERROR');
+    expect(err.category).toBe('validation');
+    expect(spy.calls).toHaveLength(0);
+  });
+
+  it('types created_at/updated_at as optional because the live record never carries them', async () => {
+    // Live-verified fact mirrored with a fixture: the vendor sends neither timestamp, so a
+    // record without them still satisfies the declared `RackStorage` type.
+    const live = { ...RACK, created_at: undefined, updated_at: undefined, discarded_at: undefined };
+    const spy = stubFetch(() => json(live));
+    const record = await makeClient().rackStorages.get(7);
+    expect(record.updated_at).toBeUndefined();
+    expect(record.created_at).toBeUndefined();
     expect(spy.calls).toHaveLength(1);
-    expect(spy.calls[0]?.init.method).toBe('GET');
   });
 
   it('refuses expectedUpdatedAt on delete with CONFIG_ERROR and issues no request', async () => {
@@ -187,11 +202,11 @@ describe('rack_storages primitives', () => {
     expect(spy.calls).toHaveLength(0);
   });
 
-  it('issues the write when the expectedUpdatedAt revision still matches', async () => {
+  it('issues the write when no expectedUpdatedAt guard is passed', async () => {
     const spy = stubFetch(() => json(RACK));
-    expect(await makeClient().rackStorages.update(7, { name: 'x' }, { expectedUpdatedAt: RACK.updated_at })).toEqual(RACK);
-    expect(spy.calls).toHaveLength(2);
-    expect(spy.calls[1]?.init.method).toBe('PUT');
+    expect(await makeClient().rackStorages.update(7, { name: 'x' })).toEqual(RACK);
+    expect(spy.calls).toHaveLength(1);
+    expect(spy.calls[0]?.init.method).toBe('PUT');
   });
 });
 
