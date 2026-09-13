@@ -28,6 +28,11 @@
  *   `expectedUpdatedAt` stale check, sensitive-field redaction, the dry-run result shape — is that
  *   path's, not a second implementation of it.
  *
+ * The CALL SHAPE is decided from the record's structure, never from field order alone: a flat set
+ * of named fields whose target takes ONE object parameter travels as ONE object
+ * (`cards.lookup({ integration_slug })`), while a flat set whose target takes several parameters
+ * stays positional (`assets.get(companyId, id)`). See `invokeCallShape`.
+ *
  * The unsound corner, named rather than hidden: `inputSchema` is NOT JSON Schema, it is the
  * generator's own vocabulary (`type`, `required`, `fields`, `items`, `enum`, `anyOf`, `variants`,
  * `typeName`, `additionalProperties`, `keyType`), and this validator is a SECOND implementation of
@@ -137,6 +142,14 @@ function enumOf(field: SchemaField): unknown[] | undefined {
  *
  * The generator emits two forms, both handled: a map of `fieldName -> field` (the primitive and
  * helper form) and `{ type: 'object', fields: [...] }` (the list form).
+ *
+ * In the MAP form the key IS the field name, and a field name is not a structural keyword: the
+ * vendor's own filters include `name` (`companies.list`, `articles.list`, ...) and `type`
+ * (`procedures.list`), so skipping keys by name silently dropped 18 records' fields — a caller's
+ * `name` filter was refused as "unknown field", and `lists.findByName(name, opts)`, which the
+ * generator flattened, lost its `name` parameter entirely. A field node is always an OBJECT, and
+ * the structural keys are a string (`type`, `name`) or an array (`fields`), so testing the value's
+ * shape keeps every real field and skips every keyword.
  */
 export function inputFields(inputSchema: unknown): SchemaField[] {
   if (inputSchema === null || inputSchema === undefined) return [];
@@ -145,7 +158,6 @@ export function inputFields(inputSchema: unknown): SchemaField[] {
   if (Array.isArray(inputSchema.fields)) return (inputSchema.fields as unknown[]).filter(isObject);
   const out: SchemaField[] = [];
   for (const key of Object.keys(inputSchema)) {
-    if (key === 'type' || key === 'fields' || key === 'name') continue;
     const value = inputSchema[key];
     if (isObject(value)) out.push(value);
   }
@@ -426,6 +438,128 @@ function refuse(message: string, operation: string, suggestedAction?: string): n
 }
 
 // ---------------------------------------------------------------------------
+// Call SHAPE: what the target method expects, not merely which field comes first.
+// ---------------------------------------------------------------------------
+
+/**
+ * The argument shape a record's typed method expects.
+ *
+ * - `positional` — one argument per declared field, in declaration order. This is the shape of BOTH
+ *   ends of the registry: a method that takes several parameters (`assets.get(companyId, id)`, so
+ *   `inputSchema` is flat and shares their names) AND a method whose parameter IS a caller-supplied
+ *   object (`companies.update(id, data, opts)`, so `inputSchema` keeps `data`/`opts` as object
+ *   fields). Neither needs a second treatment: field order is the parameter order in the first case,
+ *   and the object field travels as one argument in the second.
+ * - `bag` — the declared fields are the FIELDS OF ONE OBJECT PARAMETER, so they must travel as ONE
+ *   object (`cards.lookup(params)`, `companies.list(params)`).
+ * - `unknown` — the record does not say, and the dispatcher refuses rather than guess.
+ */
+export type InvokeCallShape = 'bag' | 'positional' | 'unknown';
+
+/**
+ * The argument count of the record's own `examples[0]`, or null when it cannot be read.
+ *
+ * This is the only surviving witness of the parameter list for a FLATTENED record. The generator
+ * renders `examples[0]` from the SAME parameter resolution that builds `inputSchema`
+ * (`paramInfo()`: one parameter with declared fields is flattened into top-level fields; several
+ * parameters keep their names). So a flattened one-parameter method shows exactly ONE argument in
+ * its example, while a method with N parameters shows N — the information the flattened schema
+ * dropped. It is generated registry data, not prose, and the test asserts the invariant for every
+ * record so a drift fails the suite instead of sending a wrong request.
+ */
+export function exampleCallArity(record: CapabilityRecord): number | null {
+  const example = Array.isArray(record.examples) ? record.examples[0] : undefined;
+  if (typeof example !== 'string' || example.length === 0) return null;
+  const open = example.indexOf('(');
+  if (open === -1) return null;
+  let depth = 0;
+  let close = -1;
+  for (let index = open; index < example.length; index += 1) {
+    const char = example[index];
+    if (char === '(' || char === '[' || char === '{') depth += 1;
+    else if (char === ')' || char === ']' || char === '}') {
+      depth -= 1;
+      if (depth === 0) { close = index; break; }
+    }
+  }
+  if (close === -1) return null;
+  const inner = example.slice(open + 1, close).trim();
+  if (inner.length === 0) return 0;
+  let nested = 0;
+  let args = 1;
+  for (const char of inner) {
+    if (char === '(' || char === '[' || char === '{') nested += 1;
+    else if (char === ')' || char === ']' || char === '}') nested -= 1;
+    else if (char === ',' && nested === 0) args += 1;
+  }
+  return args;
+}
+
+/**
+ * Decide the call shape from the record's STRUCTURE first, and only fall back to the example's
+ * arity for the one case structure cannot settle: a flat set of scalar fields is either N positional
+ * arguments or the fields of one object parameter, and the flattened schema looks identical either
+ * way. A record with no fields takes no arguments. A record that keeps an object field
+ * (`data`/`params`/`opts`) already carries the call's own shape. A single flat field is one scalar
+ * parameter (`articles.get(id)`) — never a one-field bag, which is what the shipped registry shows.
+ */
+export function invokeCallShape(record: CapabilityRecord): InvokeCallShape {
+  const fields = inputFields(record.inputSchema);
+  if (fields.length === 0) return 'positional';
+  if (fields.some((field) => field.type === 'object')) return 'positional';
+  if (fields.length === 1) return 'positional';
+  const arity = exampleCallArity(record);
+  if (arity === null) return 'unknown';
+  if (arity === 1) return 'bag';
+  if (arity === fields.length) return 'positional';
+  return 'unknown';
+}
+
+/**
+ * The ONE object argument a `bag` record needs, built from the caller's own values. Undefined
+ * fields are omitted rather than sent: the typed method distinguishes "absent" from "undefined
+ * value" for its own query bag, and an explicit `undefined` would be a second spelling of absence.
+ */
+function bagArgument(fields: SchemaField[], bag: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const field of fields) {
+    const name = nameOf(field);
+    if (name.length === 0) continue;
+    if (bag[name] === undefined) continue;
+    out[name] = bag[name];
+  }
+  return out;
+}
+
+/** True for the lazy streaming result of the SDK's `list()`/`listPages()` family. */
+function isAsyncIterable(value: unknown): boolean {
+  return (
+    typeof value === 'object' && value !== null &&
+    typeof (value as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === 'function'
+  );
+}
+
+/**
+ * The refusal for a streaming result. The dispatcher is REQUEST-SCOPED: collecting a stream means
+ * owning pagination and a bound, which this module deliberately does not. Returning the iterator
+ * itself is worse than refusing — JSON serialises it as `{}`, a result that looks like data and
+ * carries none — so an invoke of a `list()`-shaped operation stops here, request-free (an async
+ * generator issues nothing until it is iterated).
+ */
+function streamRefusal(record: CapabilityRecord, client: HuduClient): string {
+  const holder = (client as unknown as Record<string, unknown>)[clientProperty(record.resource)];
+  const hasListAll = typeof (holder as Record<string, unknown> | undefined)?.listAll === 'function';
+  const alternative = hasListAll
+    ? 'Call the typed method for the array form instead: `hudu.' + clientProperty(record.resource) + '.listAll({ ... })`.'
+    : 'Call the typed method that returns an array instead.';
+  return (
+    'operations.invoke: ' + record.name + ' returns an AsyncIterable (a streaming scan), not a call result. ' +
+    'The dispatcher is request-scoped and owns no pagination, so it will not collect a stream into an array — ' +
+    'and handing the iterator back would serialise as {}. Nothing was sent to Hudu. ' + alternative
+  );
+}
+
+// ---------------------------------------------------------------------------
 // The dispatcher.
 // ---------------------------------------------------------------------------
 
@@ -433,7 +567,11 @@ function refuse(message: string, operation: string, suggestedAction?: string): n
 export interface InvokePlan {
   /** True when the call may reach the network; false means the SDK dry-run path (no request). */
   execute: boolean;
-  /** The positional arguments for the typed method, in the registry's own declaration order. */
+  /**
+   * The arguments for the typed method: one per declared field in the registry's own declaration
+   * order, or — when the record's flat fields are the fields of ONE parameter object — a single
+   * argument holding that object (`invokeCallShape`).
+   */
   args: unknown[];
 }
 
@@ -516,6 +654,25 @@ export function planInvoke(
     execute = options.dryRun === false;
     bag[bagName] = { ...(isObject(supplied) ? supplied : {}), dryRun: !execute };
   }
+
+  // SHAPE, not merely order. A flat set of scalar fields is ambiguous: `cards.lookup` declares
+  // integration_slug/integration_id/integration_identifier, which are the FIELDS OF ONE `params`
+  // object, while `assets.get` declares companyId/id, which are TWO parameters. Passing the flat
+  // fields positionally in the first case hands the method a bare string where an object belongs,
+  // which the HTTP layer then serialises into the query as `0=a&1=c&2=m&3=e` — a request to the
+  // right path that cannot succeed and cannot throw. `invokeCallShape` settles the case from the
+  // record's structure, and refuses when the record itself does not say.
+  const shape = invokeCallShape(record);
+  if (shape === 'unknown') {
+    refuse(
+      'operations.invoke: ' + record.name + ' declares ' + String(fields.length) + ' flat scalar fields, which ' +
+      'this dispatcher cannot tell apart from the fields of one object parameter, and the record\'s own example ' +
+      'does not settle it (' + JSON.stringify(Array.isArray(record.examples) ? record.examples[0] ?? null : null) +
+      '). Refusing rather than sending a request with the wrong argument shape.',
+      operation,
+    );
+  }
+  if (shape === 'bag') return { execute, args: [bagArgument(fields, bag)] };
   return { execute, args: fields.map((field) => bag[nameOf(field)]) };
 }
 
@@ -559,5 +716,9 @@ export async function invokeOperation(
   }
   const plan = planInvoke(record, operation, input, opts);
   const target = resolveInvokeTarget(client, record);
-  return target(...plan.args);
+  const result = await target(...plan.args);
+  // A streaming scan is not a call result: see streamRefusal. The refusal is request-free because an
+  // async generator does no work until it is iterated.
+  if (isAsyncIterable(result)) refuse(streamRefusal(record, client), operation);
+  return result;
 }

@@ -22,7 +22,9 @@ import {
   SCHEMA_FIELD_KEYS,
   SCHEMA_FIELD_TYPES,
   auditSchemaVocabulary,
+  exampleCallArity,
   inputFields,
+  invokeCallShape,
   nearestOperations,
   planInvoke,
   resolveInvokeTarget,
@@ -577,5 +579,248 @@ describe('the authored example on the operations.invoke row', () => {
     const result = (await makeOps().invoke(operation, bag)) as Record<string, unknown>;
     expect(spy.calls).toHaveLength(1);
     expect(result.id).toBe(42);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The GAP this file was missing: inputs RESOLVING is not the same as arguments being RIGHT.
+//
+// The G4 block above proves every record's bag validates and that every record's key resolves. It
+// never asked what the dispatcher then HANDS the typed method, which is where `cards.lookup` broke:
+// three flat registry fields were passed as three positional arguments, the method's single `params`
+// object received the string `'acme'`, and the HTTP layer serialised it as `?0=a&1=c&2=m&3=e` —
+// a request to the right path carrying nonsense that cannot throw. These tests assert the ARGUMENT
+// SHAPE for every record, and prove the shape on the wire with a fetch spy for one operation per
+// shape.
+// ---------------------------------------------------------------------------
+
+/**
+ * The synthesised bag WITHOUT a smuggled `dryRun`: `sampleInput` fills every declared field,
+ * including the write-side `opts` bag the GOVERN step refuses to see in the payload. Only the
+ * argument SHAPE is under test here, so the smuggled flag is removed rather than governed.
+ */
+function invocableInput(record: CapabilityRecord): Record<string, unknown> {
+  const input = sampleInput(record);
+  for (const value of Object.values(input)) {
+    if (isObject(value)) delete (value as Record<string, unknown>).dryRun;
+  }
+  return input;
+}
+
+describe('operations.invoke — the produced ARGUMENTS match the target method (registry-wide)', () => {
+  it('counts the arguments of a rendered call, ignoring commas nested in objects', () => {
+    const base = getCapability('articles.get') as CapabilityRecord;
+    expect(exampleCallArity(getCapability('cards.lookup') as CapabilityRecord)).toBe(1);
+    expect(exampleCallArity(getCapability('assets.get') as CapabilityRecord)).toBe(2);
+    expect(exampleCallArity({ ...base, examples: ['await hudu.f()'] })).toBe(0);
+    expect(exampleCallArity({ ...base, examples: ['await hudu.f({ a: 1, b: 2 }, [3, 4])'] })).toBe(2);
+    expect(exampleCallArity({ ...base, examples: [] })).toBeNull();
+    expect(exampleCallArity({ ...base, examples: ['no call here'] })).toBeNull();
+  });
+
+  it('classifies EVERY record — a shape is decided, or refused; never guessed', () => {
+    const undecided = records.filter((record) => invokeCallShape(record) === 'unknown');
+    expect(undecided.map((record) => record.name)).toEqual([]);
+    const bag = records.filter((record) => invokeCallShape(record) === 'bag').map((record) => record.name);
+    // The reported bug's own operation, and the whole flattened-`params` family.
+    expect(bag).toContain('cards.lookup');
+    expect(bag).toContain('cards.jump');
+    expect(bag).toContain('companies.list');
+    expect(bag.length).toBeGreaterThan(20);
+    expect(invokeCallShape(getCapability('assets.get') as CapabilityRecord)).toBe('positional');
+    expect(invokeCallShape(getCapability('rack_storages.get') as CapabilityRecord)).toBe('positional');
+  });
+
+  it('refuses a record whose shape it cannot decide, instead of guessing', () => {
+    const base = getCapability('articles.get') as CapabilityRecord;
+    const undecidable = {
+      ...base,
+      name: 'future.undecidable',
+      inputSchema: {
+        first: { name: 'first', type: 'string', required: true },
+        second: { name: 'second', type: 'string', required: false },
+      },
+      examples: [],
+    };
+    expect(invokeCallShape(undecidable)).toBe('unknown');
+    // An example that contradicts the field count does not settle it either: neither "one bag" nor
+    // "two positional" can be read from it, so the dispatcher refuses rather than pick one.
+    expect(invokeCallShape({ ...undecidable, examples: ['await hudu.future.undecidable(1, 2, 3)'] })).toBe('unknown');
+    expect(() => planInvoke(undecidable, 'future.undecidable', { first: 'a' }))
+      .toThrow(/cannot tell apart from the fields of one object parameter/);
+  });
+
+  it('builds the argument count the typed method expects, for EVERY record', () => {
+    for (const record of records) {
+      const fields = inputFields(record.inputSchema);
+      const shape = invokeCallShape(record);
+      const arity = exampleCallArity(record);
+      expect(arity, record.name + ' has no readable example').not.toBeNull();
+      const plan = planInvoke(record, record.name, invocableInput(record), { confirm: record.name });
+      // One argument per parameter: one per declared field, or ONE for the whole flattened bag.
+      const expected = shape === 'bag' ? 1 : fields.length;
+      expect(plan.args.length, record.name + ' builds the wrong number of arguments').toBe(expected);
+      // The example is the generator's own rendering of this call, so its top-level argument count
+      // is the parameter count the flattened schema lost. It can be SHORT only for the optional
+      // tail it chose not to render (e.g. the authored `operations.invoke` example omits `options`);
+      // it can never be longer, and it can never omit a required parameter.
+      expect(arity!, record.name + ' example passes more arguments than the method takes')
+        .toBeLessThanOrEqual(expected);
+      if (shape === 'bag') {
+        // The bag's single argument IS the whole call: the example renders it as ONE object, and
+        // that object carries every required field (nothing is left for a "trailing" argument).
+        const example = record.examples[0]!;
+        const inner = example.slice(example.indexOf('(') + 1, example.lastIndexOf(')'));
+        expect(inner.trim().startsWith('{'), record.name + ' bag example must pass one object').toBe(true);
+        for (const field of fields.filter((entry) => entry.required === true)) {
+          expect(inner, record.name + ' bag example omits required ' + nameOf(field))
+            .toContain(nameOf(field) + ':');
+        }
+      } else {
+        for (const omitted of fields.slice(arity!)) {
+          expect(
+            omitted.required,
+            record.name + ': the record example omits the REQUIRED field ' + nameOf(omitted),
+          ).not.toBe(true);
+        }
+      }
+    }
+  });
+
+  it('NEVER hands a bare scalar to a bag-shaped method, for EVERY bag record', () => {
+    const bagRecords = records.filter((record) => invokeCallShape(record) === 'bag');
+    expect(bagRecords.length).toBeGreaterThan(0);
+    for (const record of bagRecords) {
+      const input = sampleInput(record);
+      const plan = planInvoke(record, record.name, input, { confirm: record.name });
+      expect(plan.args, record.name + ' must pass one object').toHaveLength(1);
+      const only = plan.args[0];
+      expect(isObject(only), record.name + ' passed a bare ' + typeof only + ' where an object belongs').toBe(true);
+      // Every caller value is IN that object, under the name the caller used.
+      expect(Object.keys(only as Record<string, unknown>).sort()).toEqual(Object.keys(input).sort());
+      for (const [key, value] of Object.entries(input)) {
+        expect((only as Record<string, unknown>)[key], record.name + '.' + key).toEqual(value);
+      }
+    }
+  });
+
+  it('keeps positional arguments in declaration order, for EVERY positional record', () => {
+    for (const record of records.filter((entry) => invokeCallShape(entry) === 'positional')) {
+      const input = invocableInput(record);
+      const plan = planInvoke(record, record.name, input, { confirm: record.name });
+      const fields = inputFields(record.inputSchema);
+      expect(plan.args, record.name).toHaveLength(fields.length);
+      // A write's dry-run bag is the ONE argument the dispatcher augments (and only with dryRun).
+      const bagIndex = record.effect === 'read'
+        ? -1
+        : fields.map((field) => field.type).lastIndexOf('object');
+      fields.forEach((field, index) => {
+        const name = nameOf(field);
+        const supplied = input[name];
+        const expected = index !== bagIndex
+          ? supplied
+          : { ...(isObject(supplied) ? supplied : {}), dryRun: true };
+        expect(plan.args[index], record.name + ' argument ' + String(index) + ' (' + name + ')').toEqual(expected);
+      });
+    }
+  });
+});
+
+describe('operations.invoke — the request carries the caller\'s values, one test per call shape', () => {
+  it('bag: cards.lookup sends the fields as QUERY PARAMETERS, never a string as a scalar', async () => {
+    const spy = stubFetch(() => json({ integrator_cards: [] }));
+    const result = await makeOps().invoke('cards.lookup', { integration_slug: 'acme' });
+    expect(result).toEqual([]);
+    expect(spy.calls).toHaveLength(1);
+    const url = new URL(spy.calls[0]!.url);
+    expect(url.pathname).toBe('/api/v1/cards/lookup');
+    expect(url.searchParams.get('integration_slug')).toBe('acme');
+    // The exact failure this fix closes: the string 'acme' reaching the query serialiser as a
+    // scalar, which lands as one parameter per character (`0=a&1=c&2=m&3=e`).
+    expect(url.searchParams.get('0')).toBeNull();
+    expect(url.searchParams.get('1')).toBeNull();
+    expect([...url.searchParams.keys()]).toEqual(['integration_slug']);
+  });
+
+  it('bag: an optional filter that the caller omitted is absent from the query', async () => {
+    const spy = stubFetch(() => json({ integrator_cards: [] }));
+    await makeOps().invoke('cards.lookup', { integration_slug: 'acme', integration_id: '42' });
+    const url = new URL(spy.calls[0]!.url);
+    expect(url.searchParams.get('integration_id')).toBe('42');
+    expect(url.searchParams.has('integration_identifier')).toBe(false);
+  });
+
+  it('positional: assets.get sends each parameter in its own path segment', async () => {
+    const asset = { id: 11, company_id: 7, name: 'Laptop' };
+    const spy = stubFetch(() => json({ asset }));
+    const result = await makeOps().invoke('assets.get', { companyId: 7, id: 11 });
+    expect(result).toEqual(asset);
+    expect(spy.calls).toHaveLength(1);
+    expect(spy.calls[0]!.url).toBe(BASE + '/companies/7/assets/11');
+    expect(new URL(spy.calls[0]!.url).search).toBe('');
+  });
+
+  it('data-object write: companies.update sends the caller\'s data as the request body', async () => {
+    const spy = stubFetch(() => json({ company: { id: 4, name: 'Acme Renamed' } }));
+    await makeOps().invoke('companies.update', { id: 4, data: { name: 'Acme Renamed' } }, { dryRun: false });
+    expect(spy.calls).toHaveLength(1);
+    const call = spy.calls[0]!;
+    expect(call.init.method).toBe('PUT');
+    expect(new URL(call.url).pathname).toBe('/api/v1/companies/4');
+    expect(String(call.init.body)).toContain('Acme Renamed');
+  });
+
+  it('client-scan helper: a resolve sends the caller\'s identifier as scan filters', async () => {
+    const spy = stubFetch(() => json([{
+      id: 9, user_id: 2, user_email: 'tech@acme.example', resource_id: 77,
+      resource_type: 'Asset', action_message: 'updated an asset', created_at: '2024-05-01T10:00:00Z',
+    }]));
+    await makeOps().invoke('activity_logs.resolve', { identifier: { id: 9, resource_type: 'Asset', resource_id: 77 } });
+    expect(spy.calls.length).toBeGreaterThan(0);
+    const url = new URL(spy.calls[0]!.url);
+    expect(url.pathname).toBe('/api/v1/activity_logs');
+    expect(url.searchParams.get('resource_type')).toBe('Asset');
+    expect(url.searchParams.get('resource_id')).toBe('77');
+  });
+
+  it('the shipped example (rack_storages.get) is still positional and still reaches the wire', async () => {
+    const spy = stubFetch(() => json({ id: 42, name: 'Rack 1' })); // rack_storages has no singleKey envelope
+    const result = (await makeOps().invoke('rack_storages.get', { id: 42 })) as Record<string, unknown>;
+    expect(result.id).toBe(42);
+    expect(spy.calls).toHaveLength(1);
+    expect(spy.calls[0]!.url).toBe(BASE + '/rack_storages/42');
+  });
+});
+
+describe('operations.invoke — a streaming `*.list` is REFUSED, never silently {}', () => {
+  // `companies.list()` returns an AsyncIterable. Awaiting it yields the ITERATOR, which serialises
+  // to `{}` with zero requests: a catalog entry that looks like data and carries none is worse than
+  // an error. The dispatcher is request-scoped and owns no pagination, so it refuses instead of
+  // collecting an unbounded stream — and the refusal is request-free, because an async generator
+  // does no work until it is iterated.
+  it('refuses an invocable *.list record, request-free', async () => {
+    const spy = stubFetch(() => json({ companies: [] }));
+    await expect(makeOps().invoke('companies.list', { page: 1 })).rejects.toThrow(/AsyncIterable/);
+    await expect(makeOps().invoke('companies.list', { page: 1 })).rejects.toThrow(/hudu\.companies\.listAll/);
+    expect(spy.calls).toHaveLength(0);
+  });
+
+  it('never returns {} for ANY stream-shaped record in the registry', async () => {
+    const streams = records.filter(
+      (record) => record.name.endsWith('.list') && !INVOKE_REFUSED_RESOURCES[record.resource],
+    );
+    expect(streams.length).toBeGreaterThan(20);
+    for (const record of streams) {
+      const spy = stubFetch(() => json({}));
+      let outcome: unknown;
+      try {
+        outcome = await makeOps().invoke(record.name, sampleInput(record));
+      } catch (error) {
+        outcome = error;
+      }
+      expect(outcome, record.name + ' must never resolve to a value').toBeInstanceOf(HuduConfigError);
+      expect((outcome as HuduConfigError).message, record.name).toMatch(/AsyncIterable|Refusing/);
+      expect(spy.calls, record.name + ' issued a request it should not have').toHaveLength(0);
+    }
   });
 });
