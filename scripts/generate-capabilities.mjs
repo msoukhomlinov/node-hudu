@@ -347,12 +347,27 @@ function inlineProps(text) {
   });
   return out;
 }
-function fieldsForType(typeText) {
+function fieldsForType(typeText, namedItems = false) {
   const t = typeText.replace(/\s+/g, ' ');
   const resolved = resolveProps(t);
   if (resolved) {
     return resolved.map((p) => {
       const base = jsonType(p.type);
+      // Variant context (namedItems): an array of a NAMED type keeps the item's name and its
+      // fields on `items` — jsonType()'s array branch reduces items to `{ type }` (G1), which
+      // hides the ExpirationSummary/RelationSummary/PhotoSummary fields behind the include
+      // groups. Only the variant emission passes namedItems, so base (non-variant) schemas
+      // keep the historical reduction byte-for-byte. An unresolvable name keeps its name
+      // (resolved:false), mirroring jsonType()'s other unresolvable-name emission; an inline
+      // literal item has no name and stays `{ type: 'object' }`.
+      if (namedItems && base.type === 'array' && base.items && typeof base.items === 'object') {
+        const inner = unwrapArrayMember(p.type);
+        const it = inner !== p.type ? jsonType(inner) : null;
+        if (it && it.typeName && !it.enum && !it.typeName.startsWith('{') && !it.typeName.startsWith('(')) {
+          const itemFields = fieldsForType(it.typeName, namedItems);
+          base.items = { ...it, ...(itemFields ? { fields: itemFields } : {}) };
+        }
+      }
       const node = { name: p.name, ...base, required: !p.optional, ...(p.enumValues ? { enum: p.enumValues.map((e) => e.replace(/^['"`]|['"`]$/g, '')) } : {}) };
       // Nested union members carry the field's `name` too (CapabilityField declares name).
       if (Array.isArray(node.variants)) node.variants = node.variants.map((v) => ({ name: p.name, ...v }));
@@ -590,7 +605,11 @@ function outputSchema(row, method) {
       // `list` with optional `include` is `AsyncIterable<Asset | AssetWithIncludes>`. A bare
       // `itemType: "union"` strips the prior item contract, so keep the concrete variants
       // (name + fields) so schema-driven callers can discover the included output shape.
-      schema.itemVariants = item.variants;
+      // Re-serialize each variant's fields with named array items (G1): the generic union path
+      // above reduces `ExpirationSummary[]` items to `{ type: 'object' }`, hiding the summary
+      // fields a registry-driven consumer needs.
+      schema.itemVariants = item.variants.map((v) =>
+        (v.typeName && Array.isArray(v.fields) ? { ...v, fields: fieldsForType(v.typeName, true) } : v));
     }
     return schema;
   }
@@ -613,12 +632,13 @@ function outputSchema(row, method) {
     // remaining concrete named variants (name + fields) are preserved next to them — the same
     // mechanism as the stream `itemVariants` (D1), adapted to this record model. A union holding
     // only the base shapes (every other helper) emits nothing, so this is a no-op outside the
-    // include rows and the base `fullType` pick (C3) is untouched.
+    // include rows and the base `fullType` pick (C3) is untouched. Variant fields are serialized
+    // with named array items (G1): the include-group arrays keep their item type name + fields.
     const includeVariants = compactProps
       ? splitTopLevel(rt)
           .map(unwrapArrayMember)
           .filter((m) => m && !['null', 'undefined', 'void'].includes(m) && !isResolutionMember(m) && m !== compactName && (!full || m !== full.name) && resolveProps(m))
-          .map((m) => ({ type: 'object', typeName: m, fields: fieldsForType(m) }))
+          .map((m) => ({ type: 'object', typeName: m, fields: fieldsForType(m, true) }))
       : [];
     return {
       type: compactName,
