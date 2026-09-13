@@ -827,9 +827,15 @@ export class AssetsResource extends BaseResource<Asset> {
     }
   }
 
-  /** Fetch the named groups for one asset, in parallel; each group is its own fetch. */
+  /**
+   * Fetch the named groups for one asset. Runs the per-group fetches through the client's
+   * bounded-concurrency pool (`mapConcurrent`) so a `concurrency` lower than the requested
+   * group count cannot start every group at once: `concurrency: 1` fetches one asset's groups
+   * serially. A failing group fetch rejects the whole call — the same stream error contract
+   * as the unbounded `Promise.all` it replaced (no partial include results are ever returned).
+   */
   private async fetchAssetIncludes(asset: AssetIncludeSource, groups: AssetIncludeGroup[], pageSize: number): Promise<AssetIncludes> {
-    const results = await Promise.all(groups.map((group) => this.fetchOneInclude(asset, group, pageSize)));
+    const results = await this.mapConcurrent(groups, (group) => this.fetchOneInclude(asset, group, pageSize));
     return Object.assign({}, ...results);
   }
 
