@@ -13091,6 +13091,103 @@
       ],
       "group": "operations",
       "status": "tested"
+    },
+    {
+      "endpoint": null,
+      "primitive": null,
+      "specialOp": null,
+      "vendorFilters": [],
+      "search": null,
+      "helper": "operations.searchKnowledge",
+      "helperBasis": "composite",
+      "helperRationale": "Owns the one thing no Hudu endpoint can do: fuzzy, relevance-ranked search over KB ARTICLE BODY content (Hudu's own search is a contiguous-substring match over article titles only, with no typo tolerance), ranked articles-first with assets second, and returns verbatim snippets plus the call that fetches the full record. Replaces an agent's own fan-out, its own ranking and its own body walk with one bounded call that names every bound it hit.",
+      "effect": "read",
+      "flags": [],
+      "dryRun": false,
+      "metadata": {
+        "purpose": "Search the knowledge base by meaning-bearing text, articles first and assets second, with typo tolerance, ranked hits and verbatim snippets.",
+        "usage": "Runs an in-memory body index (articles and account-wide assets) unioned with Hudu's own text search, so a record written a second ago still surfaces. The index is built from list pages: no per-record fetch is issued. With a cold index this answers from Hudu's search alone and reports degraded body-not-indexed, because Hudu never matches article body content. limit defaults to 8 and is hard-capped at 25 (a larger value throws CONFIG_ERROR, never a silent clamp); scope defaults to articles and assets. Each hit carries a snippet (a verbatim slice of the stripped text) and a fetch call for the full record. Every bound that bites is named in the response reasons list with complete false, and one resource failing becomes a failure entry instead of losing the call. The scoreScope field says whether the scores are comparable across resources.",
+        "preferredWhen": "Preferred over articles.search, assets.search or any resource list whenever the caller is looking for CONTENT rather than an exact field: a phrase in an article body, a mistyped title, a serial or a custom-field value. Use the exact-match helper tier instead when the caller already holds an id, a slug or a domain.",
+        "related": [
+          "articles.search",
+          "assets.search",
+          "operations.searchAcrossResources"
+        ]
+      },
+      "compact": "KnowledgeSearchResult",
+      "resolution": {
+        "basis": "client-scan",
+        "maxScanRecords": 20000,
+        "maxScanPages": 100
+      },
+      "staleCheck": null,
+      "redaction": "credentials",
+      "errors": [
+        "BAD_REQUEST",
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "RATE_LIMIT",
+        "UNAUTHORIZED"
+      ],
+      "tests": [
+        {
+          "id": "operations.searchKnowledge.hits",
+          "file": "test/search/engine.test.ts",
+          "title": "returns ranked hits with a verbatim snippet and a fetch call"
+        },
+        {
+          "id": "operations.searchKnowledge.body-recall",
+          "file": "test/search/engine.test.ts",
+          "title": "finds a term that exists only in an article body (the vendor cannot)"
+        },
+        {
+          "id": "operations.searchKnowledge.fuzzy",
+          "file": "test/search/engine.test.ts",
+          "title": "tolerates a typo in a title word and in a digit-bearing identifier"
+        },
+        {
+          "id": "operations.searchKnowledge.tiers",
+          "file": "test/search/engine.test.ts",
+          "title": "answers from the vendor tier when the index is cold and from the index tier when it is warm"
+        },
+        {
+          "id": "operations.searchKnowledge.honesty",
+          "file": "test/search/engine.test.ts",
+          "title": "names every bound that bit and reports body-not-indexed for an empty body-blind search"
+        },
+        {
+          "id": "operations.searchKnowledge.isolation",
+          "file": "test/search/engine.test.ts",
+          "title": "degrades a failing resource to meta.errors instead of losing the call"
+        },
+        {
+          "id": "operations.searchKnowledge.limit",
+          "file": "test/search/engine.test.ts",
+          "title": "refuses a limit above the maximum of 25 instead of clamping it"
+        },
+        {
+          "id": "operations.searchKnowledge.snippet-spans",
+          "file": "test/search/engine.test.ts",
+          "title": "snippet text is exactly the extracted slice its offsets name"
+        },
+        {
+          "id": "operations.searchKnowledge.bounds",
+          "file": "test/search/engine.test.ts",
+          "title": "caps the index by documents, text bytes and response size and says which bound bit"
+        },
+        {
+          "id": "operations.searchKnowledge.through-client",
+          "file": "test/search/engine.test.ts",
+          "title": "indexes article bodies from the LIST payload and needs no per-record GET"
+        },
+        {
+          "id": "operations.searchKnowledge.perf",
+          "file": "test/search/engine-perf.test.ts",
+          "title": "keeps query latency postings-driven over 5,000 documents"
+        }
+      ],
+      "group": "operations",
+      "status": "tested"
     }
   ]
 }

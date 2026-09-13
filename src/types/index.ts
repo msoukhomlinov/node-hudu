@@ -172,3 +172,10 @@ export type { WebsiteCreate } from './website.js';
 export type { WebsiteIdentifier } from './website.js';
 export type { WebsiteSummary } from './website.js';
 export type { WebsiteUpdate } from './website.js';
+
+export type {
+  KnowledgeIndexDocStat, KnowledgeIndexMeta, KnowledgeMatchField, KnowledgeResource,
+  KnowledgeScoreScope, KnowledgeSearchDegraded, KnowledgeSearchError, KnowledgeSearchFetch,
+  KnowledgeSearchHit, KnowledgeSearchMatch, KnowledgeSearchMeta, KnowledgeSearchOptions,
+  KnowledgeSearchResult, KnowledgeSearchSnippet, KnowledgeSearchTruncation, KnowledgeSnippetReason,
+} from './search_knowledge.js';

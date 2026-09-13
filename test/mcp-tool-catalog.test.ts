@@ -97,10 +97,11 @@ describe('catalog reachability (the defect this closes)', () => {
       else counts.exposed += 1;
     }
     expect(counts.exposed + counts.invokeOnly + counts.refused).toBe(CATALOG.length);
-    // The measured split: 147 exposed as their own tool, 56 reachable only through hudu_invoke,
-    // 22 refused (10 unbounded reads + 12 binary/download). The 78 with no tool are the point.
+    // The measured split: 148 exposed as their own tool (147 before the knowledge search landed),
+    // 56 reachable only through hudu_invoke, 22 refused (10 unbounded reads + 12 binary/download).
+    // The 78 with no tool are the point.
     expect(counts.exposed).toBe(Object.keys(EXPOSED).length);
-    expect(counts.exposed).toBe(147);
+    expect(counts.exposed).toBe(148);
     expect(counts.invokeOnly + counts.refused).toBe(78);
     expect(counts.refused).toBe(Object.keys(REFUSALS).length);
   });

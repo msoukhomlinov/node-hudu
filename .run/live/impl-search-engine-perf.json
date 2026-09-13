@@ -1,0 +1,16 @@
+{
+  "documents": 5000,
+  "buildMs": 79,
+  "exactMs": 61,
+  "twoTokenMs": 82,
+  "exactScanned": 5,
+  "twoTokenScanned": 5000,
+  "unmatchedScanned": 0,
+  "exactHits": 5,
+  "twoTokenHits": 8,
+  "assertions": "exactMs < 1000, twoTokenMs < 5000, buildMs < 30000, scanned < 200",
+  "naiveDocumentLoopMs": {
+    "exact": 18400,
+    "twoToken": 229300
+  }
+}

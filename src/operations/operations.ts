@@ -37,6 +37,9 @@ import type { GroupSummary } from '../types/group.js';
 import type { UserSummary } from '../types/user.js';
 import type { WebsiteSummary } from '../types/website.js';
 import type { HelperOptions, Identifier, IdentifierObject, Resolution } from '../types/common.js';
+import type { Page } from '../pagination.js';
+import type { KnowledgeSearchOptions, KnowledgeSearchResult } from '../types/search_knowledge.js';
+import { KnowledgeSearchEngine, type EngineConfig } from '../search/engine.js';
 import type {
   ResolveAnyOptions,
   ResolveAnyResult,
@@ -340,6 +343,53 @@ async function resolveOutcome(
 // The cross-resource helpers.
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// The knowledge search engine (fuzzy, relevance-ranked, body-aware).
+// ---------------------------------------------------------------------------
+
+/**
+ * One engine per client, held in memory for the client's lifetime (the design forbids an on-disk
+ * cache: KB content is customer data). Keyed by the client object, so two clients on two tenants
+ * never share an index.
+ */
+const KNOWLEDGE_ENGINES = new WeakMap<HuduClient, KnowledgeSearchEngine>();
+
+/** Build the engine for a client from the client's own `config.search` bounds. */
+function knowledgeEngine(client: HuduClient): KnowledgeSearchEngine {
+  const existing = KNOWLEDGE_ENGINES.get(client);
+  if (existing !== undefined) return existing;
+  const cfg = client.config.search;
+  const engineConfig: Partial<EngineConfig> = {
+    bounds: { maxDocBytes: cfg.maxDocBytes, maxIndexTextBytes: cfg.maxIndexTextBytes, maxDocs: cfg.maxDocs },
+    ttlMs: cfg.indexTtlMs,
+    fullRefreshEvery: cfg.fullRefreshEvery,
+    pageSize: cfg.indexPageSize,
+    maxIndexPages: cfg.maxIndexPages,
+    maxDocsScored: cfg.maxDocsScored,
+    maxResponseBytes: cfg.maxResponseBytes,
+    fuzzyBody: cfg.fuzzyBody,
+  };
+  const engine = new KnowledgeSearchEngine(
+    {
+      listArticlePages: (params) =>
+        client.articles.listPages(params) as AsyncIterable<Page<Record<string, unknown>>>,
+      listAssetPages: (params) =>
+        client.assets.listAcrossCompaniesPages(params) as AsyncIterable<Page<Record<string, unknown>>>,
+      vendorSearch: async (resource, query, limit) => {
+        const rows = await SEARCH_HELPERS[resource as SearchableResource].compact(client, query, limit);
+        return rows.map((item) => ({
+          id: item.id,
+          label: labelOf(item),
+          item: item as unknown as Record<string, unknown>,
+        }));
+      },
+    },
+    engineConfig,
+  );
+  KNOWLEDGE_ENGINES.set(client, engine);
+  return engine;
+}
+
 /**
  * Cross-resource read helpers. Construct one per client: `new Operations(hudu)`.
  *
@@ -415,6 +465,35 @@ export class Operations {
     return rows.flatMap(({ resource, items }) =>
       items.map((item): SearchHit => ({ resource, id: item.id, label: labelOf(item), item })),
     );
+  }
+
+  /**
+   * Search the knowledge base for a free-text query, ranked, with verbatim snippets.
+   *
+   * Content-first: KB articles are ranked ahead of assets by resource prior, but a precise asset
+   * hit (a serial or a custom-field value) still outranks a weak article body hit. Matching is
+   * token-based, order-free, accent-folded and typo-tolerant — the three things Hudu's own
+   * `search` demonstrably lacks (it is a case-insensitive CONTIGUOUS SUBSTRING over article TITLES
+   * only, and it never reaches article body content).
+   *
+   * Tiers: with a warm index the answer is the body index UNIONed with Hudu's search (so a record
+   * written a second ago still surfaces); with a cold client it is Hudu's search re-ranked locally,
+   * and the response says so through `meta.degraded` — article body terms were NOT searched, which
+   * is why an empty result from a body-blind search carries `degraded: { reason: 'body-not-indexed' }`
+   * rather than a bare empty list.
+   *
+   * Every bound that bites is named in `meta.reasons[]` and sets `meta.complete: false`; one
+   * resource failing becomes an entry in `meta.errors[]` instead of losing the whole call; and
+   * `meta.scoreScope` says whether the scores may be compared across resources.
+   *
+   * Returns snippets plus a `fetch` call per hit: the full record is one `articles.get` (or
+   * `assets.get`) away, because a snippet is a lossy view and full bodies would cost ~11x the bytes.
+   *
+   * `limit` defaults to 8 and is hard-capped at 25 (a larger value throws CONFIG_ERROR, it is never
+   * silently clamped). Scope defaults to articles and assets.
+   */
+  async searchKnowledge(query: string, opts?: KnowledgeSearchOptions): Promise<KnowledgeSearchResult> {
+    return knowledgeEngine(this.client).search(query, opts ?? {});
   }
 
   /**

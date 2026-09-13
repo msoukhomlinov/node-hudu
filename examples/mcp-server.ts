@@ -19,7 +19,7 @@
  *
  * PROGRESSIVE DISCLOSURE (`.run/design/search/progressive-disclosure.md`): this is a REFERENCE
  * CONSUMER, and the tool list it registers is the generated CORE profile — the curated manifest
- * projects 147 tools, of which a client must carry all 147 on every turn. The CORE set (rule in
+ * projects 148 tools, of which a client must carry all 148 on every turn. The CORE set (rule in
  * `scripts/project-mcp-tools.mjs`, generated into `examples/tool-catalog.generated.ts`) is the
  * small always-present surface: R1 discover (`hudu_catalog` / `hudu_describe` / `hudu_invoke`),
  * R2 identify the tenant, R3 find a record the caller cannot name, R4 one read entry per group-A
@@ -179,6 +179,9 @@ const HITS_OUTPUT = z.object({
   truncated: z.array(z.string()),
   scanned: z.number(),
 });
+
+/** A knowledge search result: ranked hits (each carrying its own fetch call) plus the response metadata. */
+const KNOWLEDGE_OUTPUT = z.object({ hits: z.array(z.unknown()), meta: z.unknown() });
 
 /** A bundled context read (`getContext`, `getWithTasks`). */
 const CONTEXT_OUTPUT = z.object({ context: z.unknown() });
@@ -418,6 +421,46 @@ const handle = serveStdio(() => {
         ? await ops.searchAcrossResources(query, { ...(resources ? { resources } : {}), limit, expand: true })
         : await ops.searchAcrossResources(query, { ...(resources ? { resources } : {}), limit });
       return ok(`Found ${hits.length} matching record(s) across resources.`, { hits, total: hits.length, truncated: [], scanned: hits.length });
+      } catch (err) {
+        return errorContent(err);
+      }
+    },
+  );
+
+  // ---------------------------------------------------------------------------------------
+  server.registerTool(
+    'hudu_search_knowledge',
+    {
+      title: 'Search Knowledge',
+      description: 'Search the knowledge base by content, articles first and assets second, with typo tolerance, ranked hits and verbatim snippets. Preferred over articles.search and assets.search for a phrase inside an article body, a mistyped title, a serial or a custom-field value: Hudu search matches titles only and needs an exact substring. Each hit carries its own fetch call for the full record. Bounded: scope defaults to articles and assets, limit defaults to 8 with a hard maximum of 25, and every bound that bit is named. A cold index is answered from Hudu search alone and says so. Do not use it for an exact id, a slug or a domain.',
+      inputSchema: z.object({
+        query: z.string().min(1).describe('Text to search the knowledge base for; word order and typos are tolerated.'),
+        opts: z
+          .object({
+            scope: z.array(z.enum(['articles', 'assets', 'companies', 'users', 'groups', 'websites', 'asset_passwords', 'password_folders'])).optional(),
+            limit: z.number().int().min(1).max(25).optional(),
+            snippetChars: z.number().int().min(1).max(400).optional(),
+            company_id: z.number().int().optional(),
+            updated_since: z.string().optional(),
+            min_score: z.number().optional(),
+            exact_only: z.boolean().optional(),
+            tier: z.enum(['auto', 'vendor', 'index']).optional(),
+            refresh: z.boolean().optional(),
+          })
+          .optional(),
+      }),
+      outputSchema: KNOWLEDGE_OUTPUT,
+      annotations: { readOnlyHint: true, openWorldHint: true },
+      _meta: { backingOperation: 'operations.searchKnowledge', sensitive: false, requiresApproval: false },
+    },
+    async (args) => {
+      const { query, opts } = args;
+      try {
+        const result = await ops.searchKnowledge(query, opts ?? {});
+        return ok(
+          `Found ${result.hits.length} matching record(s)${result.meta.complete ? '' : ' (bounded: ' + result.meta.reasons.join(', ') + ')'}.`,
+          result as unknown as Record<string, unknown>,
+        );
       } catch (err) {
         return errorContent(err);
       }
