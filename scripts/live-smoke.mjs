@@ -11,7 +11,7 @@
  *
  * Flags: --target dist|src, --json <path>, --only <substring>
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -19,7 +19,47 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const argv = process.argv.slice(2);
 const flag = (name, def) => { const i = argv.indexOf(name); return i === -1 ? def : argv[i + 1]; };
 const TARGET = flag('--target', 'dist');
+const DIST_DIR = TARGET === 'src' ? 'src' : 'dist';
 const ONLY = flag('--only', '');
+
+// A stale dist/ makes this harness LIE: it tests old compiled bytes and reports the result as live truth.
+// That really happened - a run against a dist built before a logger fix "reproduced" an already-fixed
+// credential leak. Refuse to run against a dist that is older than the sources, like verify:pack builds first.
+function assertDistIsFresh() {
+  if (TARGET !== 'dist' || argv.includes('--allow-stale-dist')) return;
+  const newest = (dir) => {
+    let newestMtime = 0;
+    const walk = (d) => {
+      for (const entry of readdirSync(d, { withFileTypes: true })) {
+        const p = join(d, entry.name);
+        if (entry.isDirectory()) walk(p);
+        else if (/\.(ts|js|mjs)$/.test(entry.name)) newestMtime = Math.max(newestMtime, statSync(p).mtimeMs);
+      }
+    };
+    walk(dir);
+    return newestMtime;
+  };
+  const srcNewest = newest(join(ROOT, 'src'));
+  const distOldest = (() => {
+    let oldest = Infinity;
+    const walk = (d) => {
+      for (const entry of readdirSync(d, { withFileTypes: true })) {
+        const p = join(d, entry.name);
+        if (entry.isDirectory()) walk(p);
+        else if (entry.name.endsWith('.js')) oldest = Math.min(oldest, statSync(p).mtimeMs);
+      }
+    };
+    walk(join(ROOT, DIST_DIR));
+    return oldest;
+  })();
+  if (distOldest < srcNewest) {
+    console.error(`live-smoke: ${DIST_DIR}/ is STALE (a source file is newer than the oldest build output).`);
+    console.error('  Refusing to report live results from old compiled bytes. Run `npm run build` first,');
+    console.error('  or pass --target src / --allow-stale-dist if you really mean it.');
+    process.exit(2);
+  }
+}
+assertDistIsFresh();
 
 const BASE_URL = process.env.HUDU_BASE_URL;
 const API_KEY = process.env.HUDU_API_KEY;
@@ -369,7 +409,17 @@ try {
     return `${list.length} records; every primitive method exists on the client`;
   });
   await check('C38', 'registry pagination mode matches the live endpoint', async () => {
-    const nonPag = [...new Set(Object.values(CAPABILITY_REGISTRY).filter((r) => r.pagination?.nonPaginated).map((r) => r.name.split('.')[0]))];
+    // `nonPaginated` is a PER-OPERATION flag, so it must be read off each resource's `.list` record only.
+    // Treating any record's flag as the resource's property is what made an earlier version of this check
+    // report 30+ false positives (a resource whose `search` is unpaginated was asserted to have an
+    // unpaginated `list`).
+    const listFlags = new Map();
+    for (const r of Object.values(CAPABILITY_REGISTRY)) {
+      if (!r.name.endsWith('.list')) continue;
+      listFlags.set(r.name.split('.')[0], r.pagination?.nonPaginated === true);
+    }
+    const nonPag = [...listFlags].filter(([, nonPaginated]) => nonPaginated).map(([res]) => res);
+    const paginated = [...listFlags].filter(([, nonPaginated]) => !nonPaginated).map(([res]) => res);
     const wrong = [];
     const errored = [];
     let checked = 0;
@@ -388,7 +438,19 @@ try {
       }
     }
     must(wrong.length === 0, `claimed non-paginated but sent page params: ${wrong.join(', ')}`);
-    return `${checked} non-paginated resources verified live${errored.length ? `; ${errored.length} could not be swept here (${errored.slice(0, 3).join('; ')})` : ''}`;
+    // The converse direction: a resource the registry says IS paginated must actually send page/page_size.
+    const missingParams = [];
+    for (const res of paginated.slice(0, 6)) {
+      const target = hudu[camel(res)];
+      const meth = typeof target?.listAll === 'function' ? 'listAll' : (typeof target?.list === 'function' ? 'list' : null);
+      if (!meth) continue;
+      try {
+        await spy(() => (meth === 'listAll' ? target.listAll() : (async () => { const o = []; for await (const x of target.list()) { o.push(x); break; } return o; })()));
+        if (!/page=/.test(requests[0]?.url ?? '')) missingParams.push(res);
+      } catch { /* covered by the errored list */ }
+    }
+    must(missingParams.length === 0, `registry says paginated but no page param was sent: ${missingParams.join(', ')}`);
+    return `${checked} non-paginated resources sent no page params; ${paginated.slice(0, 6).length} paginated ones did${errored.length ? `; ${errored.length} could not be swept here (${errored.slice(0, 3).join('; ')})` : ''}`;
   });
   await check('C39', 'create() honours its declared return type', async () => {
     const made = await hudu.companies.create({ name: `ZZ SDK Smoke type ${Date.now()}` });
