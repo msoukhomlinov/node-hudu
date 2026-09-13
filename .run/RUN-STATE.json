@@ -263,15 +263,25 @@
     ],
     "open": [
       {
-        "id": "L1",
-        "sev": "HIGH",
-        "what": "companies.create() returns the vendor envelope {company:{...}} while typed Company; 25 resources use createType 'raw'",
-        "owner": "envelope-sweep"
+        "id": "L-CRIT",
+        "sev": "CRITICAL",
+        "what": "a cap-truncated scan returned a single match with scanTruncated:false (false uniqueness claim); ~27 hardcoded sites",
+        "owner": "impl-resolution-truncation",
+        "status": "in flight"
       },
       {
         "id": "L2",
-        "sev": "?",
-        "what": "live findings from the four lenses still landing"
+        "sev": "HIGH",
+        "what": "200+null id miss -> get() returned null / raw TypeError instead of NOT_FOUND (articles, asset_layouts, asset_passwords, folders, websites)",
+        "owner": "impl-id-miss-contract",
+        "status": "fixed in tree, awaiting verification+commit"
+      },
+      {
+        "id": "L4",
+        "sev": "MEDIUM",
+        "what": "resolve(undefined) raw TypeError on 9 resources",
+        "owner": "impl-id-miss-contract",
+        "status": "fixed in tree, awaiting verification+commit"
       }
     ],
     "deadChildren": [
@@ -285,6 +295,12 @@
         "model": "omlx/Qwen3.8-Flash-Next-oQ4e-mtp",
         "cause": "507 memory cap"
       }
-    ]
+    ],
+    "lenses": {
+      "envelope-sweep": "done: listKey fix held; create-path envelope fixed (f4c48c6); page_size claim falsified",
+      "transport-errors-mcp": "done: MCP overrides re-advertised a rejected option -> fixed + write-after-gate fixed (41c45bf); stale-dist guard (12f0d88)",
+      "mutation-safety-2": "done: core promise holds live (94 mutating primitives, zero dry-run writes); payload-slot dryRun footgun fixed (b0c29dd)",
+      "helpers-resolution-2": "done: 1 CRITICAL (truncated scan returned a confident match with scanTruncated:false), 1 HIGH (200+null id miss), 2 MEDIUM; fixes delegated to impl-resolution-truncation + impl-id-miss-contract"
+    }
   }
 }
