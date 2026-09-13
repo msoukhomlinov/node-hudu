@@ -851,8 +851,13 @@ export class KnowledgeSearchEngine {
   }
 }
 
-/** Error code of a thrown value, defaulting to NETWORK_ERROR for a non-HuduError. */
-function errorCode(error: unknown): string {
+/**
+ * Error code of a thrown value, defaulting to NETWORK_ERROR for a non-HuduError.
+ *
+ * Exported because `operations.searchAcrossResources` reports per-resource failures with the same
+ * vocabulary the engine uses for `searchKnowledge`: one answer to "what code is this failure?".
+ */
+export function errorCode(error: unknown): string {
   if (error !== null && typeof error === 'object' && 'code' in error) {
     const code = (error as { code?: unknown }).code;
     if (typeof code === 'string' && code.length > 0) return code;

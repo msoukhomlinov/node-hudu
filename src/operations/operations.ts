@@ -39,10 +39,12 @@ import type { WebsiteSummary } from '../types/website.js';
 import type { HelperOptions, Identifier, IdentifierObject, Resolution } from '../types/common.js';
 import type { Page } from '../pagination.js';
 import type { KnowledgeSearchOptions, KnowledgeSearchResult } from '../types/search_knowledge.js';
-import { KnowledgeSearchEngine, type EngineConfig } from '../search/engine.js';
+import { KnowledgeSearchEngine, errorCode, type EngineConfig } from '../search/engine.js';
 import { invokeOperation, type InvokeOptions } from './invoke.js';
 import type {
   ResolveAnyOptions,
+  SearchAcrossResourcesFailure,
+  SearchAcrossResourcesResult,
   ResolveAnyResult,
   ResolutionCandidateHit,
   SearchAcrossResourcesOptions,
@@ -420,10 +422,25 @@ export class Operations {
     query: string,
     opts: SearchAcrossResourcesOptions & { expand?: false },
   ): Promise<SearchHitUnion[]>;
+  /** `isolateErrors: true` + `expand: true`: the full records that answered, plus the failures. */
+  async searchAcrossResources(
+    query: string,
+    opts: SearchAcrossResourcesOptions & { isolateErrors: true; expand: true },
+  ): Promise<SearchAcrossResourcesResult<SearchHitExpandedUnion>>;
+  /** `isolateErrors: true`: the compact hits that answered, plus the resources that were skipped. */
+  async searchAcrossResources(
+    query: string,
+    opts: SearchAcrossResourcesOptions & { isolateErrors: true; expand?: false },
+  ): Promise<SearchAcrossResourcesResult<SearchHitUnion>>;
   async searchAcrossResources(
     query: string,
     opts?: SearchAcrossResourcesOptions,
-  ): Promise<SearchHit[] | SearchHitExpanded[]>;
+  ): Promise<
+    | SearchHit[]
+    | SearchHitExpanded[]
+    | SearchAcrossResourcesResult<SearchHit>
+    | SearchAcrossResourcesResult<SearchHitExpanded>
+  >;
   /**
    * Search several Hudu resources for one query in a single bounded call (policy §5/§9).
    *
@@ -444,28 +461,57 @@ export class Operations {
   async searchAcrossResources(
     query: string,
     opts?: SearchAcrossResourcesOptions,
-  ): Promise<SearchHit[] | SearchHitExpanded[]> {
+  // The implementation signature covers every overload (TS 2394). It must stay on ONE line: the
+  // capability generator unwraps `Promise<...>` from this declaration's TYPE TEXT to derive the
+  // compact shape's `drops`, and a multi-line union makes that unwrap fail (measured: every helper
+  // row is then emitted with `dropsUnresolved: true`, and the checker fails it).
+  ): Promise<SearchHit[] | SearchHitExpanded[] | SearchAcrossResourcesResult<SearchHit> | SearchAcrossResourcesResult<SearchHitExpanded>> {
     if (typeof query !== 'string' || query.trim().length === 0) {
       throw new HuduConfigError('operations.searchAcrossResources requires a non-empty query');
     }
     const limit = helperLimit(opts?.limit, 'operations.searchAcrossResources');
     const resources = requireResources(opts?.resources, 'operations.searchAcrossResources');
-    if (opts?.expand === true) {
-      const rows = await boundedMap(resources, this.concurrency, async (resource) => ({
-        resource,
-        items: await SEARCH_HELPERS[resource].expanded(this.client, query, limit),
-      }));
-      return rows.flatMap(({ resource, items }) =>
-        items.map((item): SearchHitExpanded => ({ resource, id: item.id, label: labelOf(item), item })),
+    const expand = opts?.expand === true;
+    const isolate = opts?.isolateErrors === true;
+    // Per-resource failure isolation (the contract `searchKnowledge` already keeps): `isolate` turns
+    // a failing resource into a REPORTED skip, otherwise the error propagates untouched and the whole
+    // call rejects. One resource's 5xx must not decide what the other seven answered.
+    const failures: SearchAcrossResourcesFailure[] = [];
+    const answered = await boundedMap(resources, this.concurrency, async (resource) => {
+      try {
+        return expand
+          ? { resource, items: await SEARCH_HELPERS[resource].expanded(this.client, query, limit) }
+          : { resource, items: await SEARCH_HELPERS[resource].compact(this.client, query, limit) };
+      } catch (error) {
+        if (!isolate) throw error;
+        failures.push({
+          resource,
+          code: errorCode(error),
+          message: error instanceof Error ? error.message : String(error),
+        });
+        return { resource, items: [] as SearchableSummary[] | SearchableRecord[] };
+      }
+    });
+    // The fan-out completes out of order; the report is emitted in the documented resource order.
+    const ordered = failures
+      .slice()
+      .sort((a, b) => resources.indexOf(a.resource) - resources.indexOf(b.resource));
+    const report = <H>(hits: H[]): SearchAcrossResourcesResult<H> => ({
+      hits,
+      errors: ordered,
+      failed: [...ordered],
+      complete: ordered.length === 0,
+    });
+    if (expand) {
+      const expanded = answered.flatMap(({ resource, items }) =>
+        (items as SearchableRecord[]).map((item): SearchHitExpanded => ({ resource, id: item.id, label: labelOf(item), item })),
       );
+      return isolate ? report(expanded) : expanded;
     }
-    const rows = await boundedMap(resources, this.concurrency, async (resource) => ({
-      resource,
-      items: await SEARCH_HELPERS[resource].compact(this.client, query, limit),
-    }));
-    return rows.flatMap(({ resource, items }) =>
-      items.map((item): SearchHit => ({ resource, id: item.id, label: labelOf(item), item })),
+    const hits = answered.flatMap(({ resource, items }) =>
+      (items as SearchableSummary[]).map((item): SearchHit => ({ resource, id: item.id, label: labelOf(item), item })),
     );
+    return isolate ? report(hits) : hits;
   }
 
   /**

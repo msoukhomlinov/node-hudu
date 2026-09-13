@@ -361,6 +361,16 @@ describe('AssetsResource agent-execution-layer helpers', () => {
     expect(spy.calls[0].url).toContain('search=laptop');
   });
 
+  it('sends the exact primary_serial filter when given, and ignores an empty one', async () => {
+    const spy = stubFetch(() => json({ assets: [asset] }));
+    await expect(makeClient().assets.search('SER88N9X', { primary_serial: 'SER88N9X' })).resolves.toHaveLength(1);
+    expect(spy.calls[0].url).toContain('primary_serial=SER88N9X');
+    expect(spy.calls[0].url).toContain('search=SER88N9X');
+    // An empty value is not a filter: it must not reach the vendor as an empty parameter.
+    await makeClient().assets.search('laptop', { primary_serial: '' });
+    expect(spy.calls[1].url).not.toContain('primary_serial');
+  });
+
   it('honours limit and never exceeds 100', async () => {
     const spy = stubFetch(() => json({ assets: [asset] }));
     await expect(makeClient().assets.search('laptop', { limit: 100 })).resolves.toHaveLength(1);

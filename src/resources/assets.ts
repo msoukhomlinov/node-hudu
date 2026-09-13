@@ -27,6 +27,16 @@ export interface AssetSearchOptions {
   expand?: boolean;
   /** Narrow the account-wide `search` filter to one company. */
   company_id?: number;
+  /**
+   * Narrow the search to the asset whose `primary_serial` is EXACTLY this value.
+   *
+   * This is the vendor's `?primary_serial=` filter, and it is the only way to search by serial:
+   * the free-text `search` filter does not index serials, so `search('SER88')` matches nothing while
+   * `search('SER88N9X', { primary_serial: 'SER88N9X' })` returns the one asset (both measured against
+   * a live 2.45.1 tenant). The comparison is exact, not a prefix or substring match. An empty string
+   * is ignored, exactly as a non-numeric `company_id` is.
+   */
+  primary_serial?: string;
 }
 
 /**
@@ -399,7 +409,7 @@ export class AssetsResource extends BaseResource<Asset> {
    */
   async search(query: string): Promise<AssetSummary[]>;
   /** `expand: true` returns the full records. */
-  async search(query: string, opts: { expand: true; limit?: number; company_id?: number }): Promise<Asset[]>;
+  async search(query: string, opts: { expand: true; limit?: number; company_id?: number; primary_serial?: string }): Promise<Asset[]>;
   async search(query: string, opts?: AssetSearchOptions): Promise<AssetSummary[] | Asset[]>;
   async search(query: string, opts?: AssetSearchOptions): Promise<AssetSummary[] | Asset[]> {
     const size = helperLimit(opts?.limit);
@@ -408,6 +418,9 @@ export class AssetsResource extends BaseResource<Asset> {
     }
     const filter: Record<string, unknown> = { search: query };
     if (typeof opts?.company_id === 'number') filter.company_id = opts.company_id;
+    if (typeof opts?.primary_serial === 'string' && opts.primary_serial.length > 0) {
+      filter.primary_serial = opts.primary_serial;
+    }
     const body = await this.request<unknown>({
       method: 'GET',
       path: '/assets',

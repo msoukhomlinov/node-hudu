@@ -390,3 +390,77 @@ describe('operations.resolveAny', () => {
       .resolves.toEqual({ hits: [], truncated: [], scanned: 0 });
   });
 });
+
+describe('operations.searchAcrossResources failure isolation', () => {
+  afterEach(() => clearFetch());
+
+  /** Serve a 500 for the named resources and the one distinctive row for every other resource. */
+  function stubFailures(broken: readonly SearchableResource[]): FetchSpy {
+    return stubFetch((url) => {
+      const resource = ownerOf(url);
+      if (resource === undefined) return json({ error: 'unexpected request: ' + url }, 500);
+      if (broken.includes(resource)) return json({ error: 'boom' }, 500);
+      return json([ROW[resource]]);
+    });
+  }
+
+  it('reports one failing resource instead of losing the other seven', async () => {
+    stubFailures(['assets']);
+    const result = await makeOps().searchAcrossResources('acme', { isolateErrors: true });
+    // The call SUCCEEDS and every other resource still answers.
+    expect(result.hits.map((hit) => hit.resource)).toEqual(
+      SUPPORTED.filter((resource) => resource !== 'assets'),
+    );
+    // The skip is NAMED: a caller can never confuse "assets had no match" with "assets never answered".
+    expect(result.complete).toBe(false);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toMatchObject({ resource: 'assets', code: 'SERVER_ERROR' });
+    expect(result.errors[0]?.message.length).toBeGreaterThan(0);
+    expect(result.failed).toEqual(result.errors);
+  });
+
+  it('reports several failing resources in the documented fan-out order', async () => {
+    stubFailures(['groups', 'companies', 'users']);
+    const result = await makeOps().searchAcrossResources('acme', { isolateErrors: true });
+    expect(result.errors.map((failure) => failure.resource)).toEqual(['companies', 'groups', 'users']);
+    expect(result.failed.map((failure) => failure.resource)).toEqual(['companies', 'groups', 'users']);
+    expect(result.hits.map((hit) => hit.resource)).toEqual([
+      'articles', 'assets', 'websites', 'asset_passwords', 'password_folders',
+    ]);
+    expect(result.complete).toBe(false);
+  });
+
+  it('reports a total failure as an incomplete empty result, not as "no match"', async () => {
+    stubFailures(SUPPORTED);
+    const result = await makeOps().searchAcrossResources('acme', { isolateErrors: true });
+    expect(result.hits).toEqual([]);
+    expect(result.complete).toBe(false);
+    expect(result.errors.map((failure) => failure.resource)).toEqual(SUPPORTED);
+    expect(result.errors.every((failure) => failure.code === 'SERVER_ERROR')).toBe(true);
+  });
+
+  it('marks a call with no failure as complete', async () => {
+    stubRows();
+    const result = await makeOps().searchAcrossResources('acme', { isolateErrors: true });
+    expect(result.complete).toBe(true);
+    expect(result.errors).toEqual([]);
+    expect(result.failed).toEqual([]);
+    expect(result.hits).toHaveLength(SUPPORTED.length);
+  });
+
+  it('carries the isolated report through expand: true', async () => {
+    stubFailures(['users']);
+    const result = await makeOps().searchAcrossResources('acme', { isolateErrors: true, expand: true });
+    expect(result.errors.map((failure) => failure.resource)).toEqual(['users']);
+    expect(result.hits.map((hit) => hit.resource)).toEqual(SUPPORTED.filter((r) => r !== 'users'));
+    for (const hit of result.hits) expect(hit.item).toMatchObject(ROW[hit.resource]);
+  });
+
+  it('keeps the all-or-nothing default: without isolateErrors a failing resource still rejects', async () => {
+    stubFailures(['assets']);
+    await expect(makeOps().searchAcrossResources('acme')).rejects.toMatchObject({ code: 'SERVER_ERROR' });
+    await expect(
+      makeOps().searchAcrossResources('acme', { isolateErrors: false }),
+    ).rejects.toMatchObject({ code: 'SERVER_ERROR' });
+  });
+});

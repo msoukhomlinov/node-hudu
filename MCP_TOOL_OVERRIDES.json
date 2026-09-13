@@ -1334,7 +1334,7 @@
   {
     "tool": "hudu_delete_expiration",
     "field": "description",
-    "newValue": "Delete an expiration. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_expiration keeps it.",
+    "newValue": "Delete an expiration. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: Hudu has no archive endpoint for expiration (api-docs.json carries archive paths only for articles, asset_passwords, assets and companies), so this delete is permanent.",
     "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
   },
   {
@@ -1393,7 +1393,7 @@
   {
     "tool": "hudu_get_expiration",
     "field": "description",
-    "newValue": "Resolve an expiration from an id or from its resource. Use when the identifier is a resource pair; expirations.get is cheaper for a known id. Returns one record: a compact ExpirationSummary (account_id, archived_at, created_at, \u2026 dropped); expand: true returns the full Expiration. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Not for text discovery: call hudu_search.",
+    "newValue": "Resolve an expiration from an id or from its resource. Use when the identifier is a resource pair; an id lookup is the direct form. Returns one record: a compact ExpirationSummary (account_id, archived_at, created_at, \u2026 dropped); expand: true returns the full Expiration. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Not for text discovery: call hudu_search.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -1417,7 +1417,7 @@
   {
     "tool": "hudu_update_expiration",
     "field": "description",
-    "newValue": "Update an expiration. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to create a record: call hudu_create_expiration.",
+    "newValue": "Update an expiration. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to create a record: expirations has no create endpoint (api-docs.json exposes GET on /expirations and PUT/DELETE on /expirations/{id}), so this updates an existing expiration only.",
     "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
   },
   {
@@ -1481,7 +1481,7 @@
   {
     "tool": "hudu_delete_flag_type",
     "field": "description",
-    "newValue": "Delete a Flag Type. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_flag_type keeps it.",
+    "newValue": "Delete a Flag Type. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: Hudu has no archive endpoint for flag type (api-docs.json carries archive paths only for articles, asset_passwords, assets and companies), so this delete is permanent.",
     "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
   },
   {
@@ -1610,7 +1610,7 @@
   {
     "tool": "hudu_delete_flag",
     "field": "description",
-    "newValue": "Delete a Flag. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_flag keeps it.",
+    "newValue": "Delete a Flag. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: Hudu has no archive endpoint for flag (api-docs.json carries archive paths only for articles, asset_passwords, assets and companies), so this delete is permanent.",
     "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
   },
   {
@@ -1763,7 +1763,7 @@
   {
     "tool": "hudu_delete_folder",
     "field": "description",
-    "newValue": "Delete a folder. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_folder keeps it.",
+    "newValue": "Delete a folder. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: Hudu has no archive endpoint for folder (api-docs.json carries archive paths only for articles, asset_passwords, assets and companies), so this delete is permanent.",
     "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
   },
   {
@@ -1952,7 +1952,7 @@
   {
     "tool": "hudu_delete_ip_address",
     "field": "description",
-    "newValue": "Delete an IP address. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_ip_address keeps it.",
+    "newValue": "Delete an IP address. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: Hudu has no archive endpoint for ip address (api-docs.json carries archive paths only for articles, asset_passwords, assets and companies), so this delete is permanent.",
     "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
   },
   {
@@ -2105,7 +2105,7 @@
   {
     "tool": "hudu_delete_label_type",
     "field": "description",
-    "newValue": "Delete a Label Type. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_label_type keeps it.",
+    "newValue": "Delete a Label Type. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: Hudu has no archive endpoint for label type (api-docs.json carries archive paths only for articles, asset_passwords, assets and companies), so this delete is permanent.",
     "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
   },
   {
@@ -2234,7 +2234,7 @@
   {
     "tool": "hudu_delete_label",
     "field": "description",
-    "newValue": "Delete a Label. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_label keeps it.",
+    "newValue": "Delete a Label. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: Hudu has no archive endpoint for label (api-docs.json carries archive paths only for articles, asset_passwords, assets and companies), so this delete is permanent.",
     "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
   },
   {
@@ -2387,7 +2387,7 @@
   {
     "tool": "hudu_delete_list",
     "field": "description",
-    "newValue": "Delete a List. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_list keeps it.",
+    "newValue": "Delete a List. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: Hudu has no archive endpoint for list (api-docs.json carries archive paths only for articles, asset_passwords, assets and companies), so this delete is permanent.",
     "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
   },
   {
@@ -2511,7 +2511,7 @@
   {
     "tool": "hudu_create_magic_dash",
     "field": "description",
-    "newValue": "Create or update a Magic Dash Item. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to change an existing record: call hudu_update_magic_dash.",
+    "newValue": "Create or update a Magic Dash Item. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to change an existing record you can reach by id: magic_dash has no update method, but this POST is an upsert over title and company_name, so posting the same title replaces the item.",
     "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
   },
   {
@@ -2540,7 +2540,7 @@
   {
     "tool": "hudu_delete_magic_dash",
     "field": "description",
-    "newValue": "Delete a Magic Dash Item without an ID. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_magic_dash keeps it.",
+    "newValue": "Delete a Magic Dash Item without an ID. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: Hudu has no archive endpoint for magic dash (api-docs.json carries archive paths only for articles, asset_passwords, assets and companies), so this delete is permanent.",
     "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
   },
   {
@@ -2681,7 +2681,7 @@
   {
     "tool": "hudu_delete_matcher",
     "field": "description",
-    "newValue": "Delete a Matcher. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_matcher keeps it.",
+    "newValue": "Delete a Matcher. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: Hudu has no archive endpoint for matcher (api-docs.json carries archive paths only for articles, asset_passwords, assets and companies), so this delete is permanent.",
     "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
   },
   {
@@ -2764,7 +2764,7 @@
   {
     "tool": "hudu_update_matcher",
     "field": "description",
-    "newValue": "Update a Matcher. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to create a record: call hudu_create_matcher.",
+    "newValue": "Update a Matcher. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to create a record: matchers has no create endpoint (api-docs.json exposes GET on /matchers and PUT/DELETE on /matchers/{id}), so a matcher can only be updated or deleted.",
     "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
   },
   {
@@ -2828,7 +2828,7 @@
   {
     "tool": "hudu_delete_network",
     "field": "description",
-    "newValue": "Delete a network. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_network keeps it.",
+    "newValue": "Delete a network. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: Hudu has no archive endpoint for network (api-docs.json carries archive paths only for articles, asset_passwords, assets and companies), so this delete is permanent.",
     "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
   },
   {
@@ -3029,7 +3029,7 @@
   {
     "tool": "hudu_delete_password_folder",
     "field": "description",
-    "newValue": "Delete a password folder. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Sensitive: it handles credential material \u2014 never echo a secret value into a log, a description or an error (the SDK redacts those fields by default). Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_password_folder keeps it.",
+    "newValue": "Delete a password folder. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Sensitive: it handles credential material \u2014 never echo a secret value into a log, a description or an error (the SDK redacts those fields by default). Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: Hudu has no archive endpoint for password folder (api-docs.json carries archive paths only for articles, asset_passwords, assets and companies), so this delete is permanent.",
     "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
   },
   {
@@ -3182,7 +3182,7 @@
   {
     "tool": "hudu_delete_procedure_task",
     "field": "description",
-    "newValue": "Delete a Task from a Process. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_procedure_task keeps it.",
+    "newValue": "Delete a Task from a Process. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: Hudu has no archive endpoint for procedure task (api-docs.json carries archive paths only for articles, asset_passwords, assets and companies), so this delete is permanent.",
     "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
   },
   {
@@ -3340,7 +3340,7 @@
   {
     "tool": "hudu_delete_procedure",
     "field": "description",
-    "newValue": "Delete a Process or Run. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_procedure keeps it.",
+    "newValue": "Delete a Process or Run. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: Hudu has no archive endpoint for procedure (api-docs.json carries archive paths only for articles, asset_passwords, assets and companies), so this delete is permanent.",
     "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
   },
   {
@@ -3551,7 +3551,7 @@
   {
     "tool": "hudu_delete_rack_storage_item",
     "field": "description",
-    "newValue": "Delete a Rack Storage Item. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_rack_storage_item keeps it.",
+    "newValue": "Delete a Rack Storage Item. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: Hudu has no archive endpoint for rack storage item (api-docs.json carries archive paths only for articles, asset_passwords, assets and companies), so this delete is permanent.",
     "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
   },
   {
@@ -3680,7 +3680,7 @@
   {
     "tool": "hudu_delete_rack_storage",
     "field": "description",
-    "newValue": "Delete a Rack Storage. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_rack_storage keeps it.",
+    "newValue": "Delete a Rack Storage. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: Hudu has no archive endpoint for rack storage (api-docs.json carries archive paths only for articles, asset_passwords, assets and companies), so this delete is permanent.",
     "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
   },
   {
@@ -3780,7 +3780,7 @@
   {
     "tool": "hudu_create_relation",
     "field": "description",
-    "newValue": "Create a Relation. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to change an existing record: call hudu_update_relation.",
+    "newValue": "Create a Relation. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to change an existing record: relations has no update endpoint (api-docs.json exposes GET/POST on /relations and DELETE on /relations/{id}), so change one by deleting it and creating it again.",
     "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
   },
   {
@@ -3809,7 +3809,7 @@
   {
     "tool": "hudu_delete_relation",
     "field": "description",
-    "newValue": "Delete a Relation. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_relation keeps it.",
+    "newValue": "Delete a Relation. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: Hudu has no archive endpoint for relation (api-docs.json carries archive paths only for articles, asset_passwords, assets and companies), so this delete is permanent.",
     "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
   },
   {
@@ -4005,7 +4005,7 @@
   {
     "tool": "hudu_delete_vlan_zone",
     "field": "description",
-    "newValue": "Delete a VLAN Zone. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_vlan_zone keeps it.",
+    "newValue": "Delete a VLAN Zone. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: Hudu has no archive endpoint for vlan zone (api-docs.json carries archive paths only for articles, asset_passwords, assets and companies), so this delete is permanent.",
     "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
   },
   {
@@ -4134,7 +4134,7 @@
   {
     "tool": "hudu_delete_vlan",
     "field": "description",
-    "newValue": "Delete a VLAN. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_vlan keeps it.",
+    "newValue": "Delete a VLAN. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: Hudu has no archive endpoint for vlan (api-docs.json carries archive paths only for articles, asset_passwords, assets and companies), so this delete is permanent.",
     "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
   },
   {
@@ -4287,7 +4287,7 @@
   {
     "tool": "hudu_delete_website",
     "field": "description",
-    "newValue": "Delete a Website. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: hudu_archive_website keeps it.",
+    "newValue": "Delete a Website. Returns the written record, or the DryRunResult plan when dry_run is true. Impact: one record, permanently; there is no undo. Irreversible \u2014 dry-run first and prefer archive where the vendor offers it. requiresApproval: the MCP gateway must obtain explicit human approval before this tool runs; it is not safe to call autonomously. Pass dry_run: true to validate without issuing the write (DryRunResult with simulated: true, the impact and the diff). Do not use it to hide a record you may still need: Hudu has no archive endpoint for website (api-docs.json carries archive paths only for articles, asset_passwords, assets and companies), so this delete is permanent.",
     "reason": "Description states the return shape, the impact bound, the dry-run affordance and the sensitive/approval flags (the registry purpose states none of them)."
   },
   {

@@ -823,6 +823,95 @@ if (catalogData) {
 }
 
 
+// ---------------------------------------------------------------- prose vs the PROJECTION
+//   prose-dangling-projection  prose that reaches an MCP client names a tool or an operation no
+//                            client can call. Two surfaces are scanned, because both are text an
+//                            agent actually reads:
+//                              (1) the curated projection's OWN tool descriptions (the
+//                                  machine-readable block of MCP_TOOL_MANIFEST.md) — the text a
+//                                  client lists, and the only place a `hudu_*` tool NAME appears;
+//                              (2) the plan rows' and registry records' prose fields
+//                                  (purpose/usage/preferredWhen), which the generated catalog
+//                                  (`when`/`summary`) and `hudu_describe` republish.
+//                            A reference is either a `hudu_*` tool name or a `resource.method`
+//                            operation name. Verdicts:
+//                              FAIL  a `hudu_*` name no projected tool has (a `*`/`<...>`/`_`
+//                                    shape is a PATTERN, not a name, and is skipped);
+//                              FAIL  an operation the generated catalog REFUSES
+//                                    (`reachable: false`): hudu_invoke refuses it too, so no client
+//                                    can call it at all;
+//                              FAIL  an operation neither the client nor the catalog knows — the
+//                                    client-side `prose-dangling` rule scans the plan and the
+//                                    registry records only, so a description override's text is
+//                                    otherwise unchecked;
+//                              WARN  an operation that exists but has no tool of its own (curated
+//                                    out as a duplicate outcome, reachable through `hudu_invoke`):
+//                                    a real capability whose NAME is not a tool name;
+//                              WARN  a client method with no registry record at all (not a
+//                                    capability, only reachable from SDK code).
+//                            Composition with `prose-dangling`: that rule asks "does the CLIENT have
+//                            this method" over plan+registry prose; this one asks "can a CLIENT call
+//                            this tool/operation" and also covers the projection's own text. Neither
+//                            subsumes the other, and a name can pass one and fail the other.
+//                            Evidence, counts and the injection proof: `.run/live/impl-remaining-batch.md`.
+const TOOL_NAME_REF = /\bhudu_[a-z0-9_]+\b/g;
+const REF_PATTERN_TAIL = new Set(['<', '*', '_']);
+if (catalogData) {
+  const projectedToolNames = new Set(projectionRows.map((r) => r.name));
+  const catalogByOp = new Map(catalogData.CATALOG.map((r) => [r.op, r]));
+  const manifestRel = path.relative(ROOT, MANIFEST_PATH);
+  function nameIsPattern(text, m) {
+    if (m[0].endsWith('_')) return true;
+    return REF_PATTERN_TAIL.has(text[m.index + m[0].length] ?? '');
+  }
+  function refAgainstProjection(ref) {
+    const row = catalogByOp.get(ref);
+    if (row) {
+      if (row.reachable === false) return { verdict: 'fail', why: `the generated catalog REFUSES it (${row.reason}) and hudu_invoke refuses it too, so no MCP client can call it` };
+      if (row.tool === null) return { verdict: 'warn', why: 'it has no tool of its own (curated out as a duplicate outcome) — reachable only through hudu_invoke, so the name is not a tool name' };
+      return { verdict: 'ok' };
+    }
+    if (sourceMethod(ref).ok) return { verdict: 'warn', why: 'it is a client method with no registry record, so it is not a capability any client can reach' };
+    return { verdict: 'fail', why: 'it is neither a client method nor a registry operation' };
+  }
+  function checkProseProjection(text, jsonPath, label, field) {
+    if (typeof text !== 'string' || text.length === 0) return;
+    for (const m of text.matchAll(TOOL_NAME_REF)) {
+      if (projectedToolNames.has(m[0]) || nameIsPattern(text, m)) continue;
+      fail('prose-dangling-projection', jsonPath, `${label}: ${field} tells an agent to call the tool "${m[0]}", which the curated projection does not expose — no client can select it`);
+    }
+    for (const m of text.matchAll(PROSE_REF)) {
+      const ref = `${m[1]}.${m[2]}`;
+      // Only a real client module can start an operation reference: `meta.complete` is a response
+      // field path, not an operation, and `sourceModules` is the same index sourceMethod() uses.
+      if (!sourceModules.has(m[1])) continue;
+      if (projectedToolNames.has(ref)) continue;
+      const v = refAgainstProjection(ref);
+      if (v.verdict === 'ok') continue;
+      if (v.verdict === 'warn') { warn('prose-dangling-projection', jsonPath, `${label}: ${field} names "${ref}", which is not an exposed tool — ${v.why}`); continue; }
+      fail('prose-dangling-projection', jsonPath, `${label}: ${field} names "${ref}", which no client can call — ${v.why}`);
+    }
+  }
+  for (const row of projectionRows) {
+    checkProseProjection(row.description, `${manifestRel} (${row.name})`, row.name, 'description');
+  }
+  for (const row of operations) {
+    const name = opNameOf(row);
+    if (!name) continue;
+    for (const field of PROSE_FIELDS) {
+      checkProseProjection(row.metadata ? row.metadata[field] : null, `${PLAN_ARG}.metadata.${field}`, name, field);
+    }
+  }
+  if (registry) {
+    for (const [name, rec] of registry) {
+      for (const field of PROSE_FIELDS) {
+        checkProseProjection(rec[field], `CAPABILITY_REGISTRY['${name}'].${field}`, name, field);
+      }
+    }
+  }
+}
+
+
 // ---------------------------------------------------------------- the one search tool's contract
 // Three rules for `hudu_search` (design `.run/design/search/single-search-tool.md` 5.3). They are
 // mechanical, they read the SAME artifacts the tool is built from (the plan, the projected schema,

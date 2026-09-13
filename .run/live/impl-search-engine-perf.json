@@ -1,8 +1,8 @@
 {
   "documents": 5000,
-  "buildMs": 60,
-  "exactMs": 56,
-  "twoTokenMs": 84,
+  "buildMs": 63,
+  "exactMs": 55,
+  "twoTokenMs": 80,
   "exactScanned": 5,
   "twoTokenScanned": 5000,
   "unmatchedScanned": 0,

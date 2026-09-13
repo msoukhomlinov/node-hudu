@@ -108,6 +108,48 @@ export interface SearchAcrossResourcesOptions {
   limit?: number;
   /** Return the full records instead of the compact summaries. */
   expand?: boolean;
+  /**
+   * Failure isolation. Default `false`: a resource that fails rejects the whole call — the
+   * all-or-nothing contract, kept as the default because a caller who receives a bare array cannot
+   * be told that a source was skipped, and silence about a failed source is a lie by omission.
+   *
+   * `true`: a failing resource is reported in `errors`/`failed` (with its error code and message)
+   * and the other resources still answer, so the call succeeds and incomplete coverage is visible.
+   */
+  isolateErrors?: boolean;
+}
+
+/**
+ * One requested resource that did not answer inside an isolated `searchAcrossResources` fan-out.
+ *
+ * The shape mirrors `KnowledgeSearchError`, which is what the search engine reports for exactly the
+ * same situation ("a 5xx in one resource never loses the call").
+ */
+export interface SearchAcrossResourcesFailure {
+  /** The resource that failed: the source that was skipped. */
+  resource: SearchableResource;
+  /** The error code the SDK would otherwise have thrown (`SERVER_ERROR`, `RATE_LIMIT`, `NETWORK_ERROR`, …). */
+  code: string;
+  /** The error message, verbatim. */
+  message: string;
+}
+
+/**
+ * The result of `searchAcrossResources({ isolateErrors: true })`.
+ *
+ * `hits` holds what DID answer, in fan-out order; `errors` names every resource that did not, so
+ * "no hit in `assets`" and "`assets` never answered" can never be confused. `complete` is true only
+ * when every requested resource answered — the honest form of an empty result.
+ */
+export interface SearchAcrossResourcesResult<H = SearchHit> {
+  /** The hits of every resource that answered, in fan-out order. */
+  hits: H[];
+  /** One entry per skipped resource, in fan-out order; empty when nothing failed. */
+  errors: SearchAcrossResourcesFailure[];
+  /** The same list under the name the capability plan uses (`searchKnowledge` spells it this way too). */
+  failed: SearchAcrossResourcesFailure[];
+  /** True only when every requested resource answered. */
+  complete: boolean;
 }
 
 /**

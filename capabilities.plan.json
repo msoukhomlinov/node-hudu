@@ -2317,6 +2317,11 @@
           "id": "assets.search.limit",
           "file": "test/resources/assets.test.ts",
           "title": "honours limit and never exceeds 100"
+        },
+        {
+          "id": "assets.search.serial",
+          "file": "test/resources/assets.test.ts",
+          "title": "sends the exact primary_serial filter when given, and ignores an empty one"
         }
       ],
       "group": "A",
@@ -10391,7 +10396,7 @@
       "metadata": {
         "purpose": "Delete an upload.",
         "usage": "Mutating path for uploads; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": "Irreversible; prefer uploads.upload to store the file again if it is needed later.",
+        "preferredWhen": "Irreversible; uploads backs no MCP tool (binary surface), so nothing exposed can put the file back.",
         "related": [
           "uploads.delete"
         ]
@@ -10441,7 +10446,7 @@
       "metadata": {
         "purpose": "Get a list of all uploads.",
         "usage": "Read path for uploads returning the full typed record; helpers return compact shapes.",
-        "preferredWhen": "Use when many records are needed; prefer uploads.resolve for a single lookup.",
+        "preferredWhen": "Use when many records are needed; the single-record lookup is client-only — uploads backs no MCP tool.",
         "related": [
           "uploads.resolve"
         ]
@@ -10490,7 +10495,7 @@
       "metadata": {
         "purpose": "Get a specific upload or download the file.",
         "usage": "Read path for uploads returning the full typed record; helpers return compact shapes.",
-        "preferredWhen": "Preferred when the numeric id is already known; uploads.resolve is for a name, slug or domain.",
+        "preferredWhen": "Preferred when the numeric id is already known; the name/slug/domain lookup is client-only — uploads backs no MCP tool.",
         "related": [
           "uploads.list",
           "uploads.resolve"
@@ -10541,7 +10546,7 @@
       "metadata": {
         "purpose": "Upload a file.",
         "usage": "Mutating path for uploads; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": "The only create path for uploads; photos.create is the photo-specific upload.",
+        "preferredWhen": "The only create path for uploads; the photo-specific upload belongs to another binary resource and is client-only.",
         "related": [
           "uploads.get",
           "uploads.list"
@@ -10656,7 +10661,7 @@
       "metadata": {
         "purpose": "Delete a Photo.",
         "usage": "Mutating path for photos; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": "Irreversible; prefer photos.update when the record may be needed again.",
+        "preferredWhen": "Irreversible; the update form is client-only — photos backs no MCP tool.",
         "related": [
           "photos.delete"
         ]
@@ -10715,7 +10720,7 @@
       "metadata": {
         "purpose": "Get a list of Photos.",
         "usage": "Read path for photos returning the full typed record; helpers return compact shapes.",
-        "preferredWhen": "Use when many records are needed; prefer photos.findByPhotoable for one record's photos, or photos.resolve for a single lookup.",
+        "preferredWhen": "Use when many records are needed; the per-record listing and the single-record lookup are both client-only — photos backs no MCP tool.",
         "related": [
           "photos.resolve"
         ]
@@ -10764,7 +10769,7 @@
       "metadata": {
         "purpose": "Get a specific Photo.",
         "usage": "Read path for photos returning the full typed record; helpers return compact shapes.",
-        "preferredWhen": "Preferred when the numeric id is already known; photos.resolve is for a name, slug or domain.",
+        "preferredWhen": "Preferred when the numeric id is already known; the name/slug/domain lookup is client-only — photos backs no MCP tool.",
         "related": [
           "photos.list",
           "photos.resolve"
@@ -10815,7 +10820,7 @@
       "metadata": {
         "purpose": "Create a new Photo.",
         "usage": "Mutating path for photos; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": "Only for a record that does not exist yet; prefer photos.update for an id you already have.",
+        "preferredWhen": "Only for a record that does not exist yet; the update form is client-only — photos backs no MCP tool.",
         "related": [
           "photos.update"
         ]
@@ -10929,8 +10934,8 @@
       "dryRun": false,
       "metadata": {
         "purpose": "Resolve a photo from an id or from the record it is attached to.",
-        "usage": "Bare values are read in the order: numeric id, {photoableType, photoableId}. An id is fetched directly; a photoable lookup uses the vendor filters and can legitimately match several photos, so it throws RESOLUTION_AMBIGUOUS with candidate ids (use photos.findByPhotoable for the list).",
-        "preferredWhen": "Use when the identifier is a photoable pair; photos.get is cheaper for a known id.",
+        "usage": "Bare values are read in the order: numeric id, {photoableType, photoableId}. An id is fetched directly; a photoable lookup uses the vendor filters and can legitimately match several photos, so it throws RESOLUTION_AMBIGUOUS with candidate ids (the per-record listing is the client-only form).",
+        "preferredWhen": "Use when the identifier is a photoable pair; the direct id read is client-only — photos backs no MCP tool.",
         "related": [
           "photos.findByPhotoable",
           "photos.get"
@@ -11055,7 +11060,7 @@
       "metadata": {
         "purpose": "Get a list of public photos.",
         "usage": "Read path for public_photos returning the full typed record; helpers return compact shapes.",
-        "preferredWhen": "Use when many records are needed; prefer public_photos.resolve for a single lookup.",
+        "preferredWhen": "Use when many records are needed; the single-record lookup is client-only — public_photos backs no MCP tool.",
         "related": [
           "public_photos.resolve"
         ]
@@ -11105,7 +11110,7 @@
       "metadata": {
         "purpose": "Get public photo details or download public photo file.",
         "usage": "Read path for public_photos returning the full typed record; helpers return compact shapes.",
-        "preferredWhen": "Preferred when the numeric id is already known; public_photos.resolve is for a name, slug or domain.",
+        "preferredWhen": "Preferred when the numeric id is already known; the name/slug/domain lookup is client-only — public_photos backs no MCP tool.",
         "related": [
           "public_photos.list",
           "public_photos.resolve"
@@ -11156,7 +11161,7 @@
       "metadata": {
         "purpose": "Create a public photo.",
         "usage": "Mutating path for public_photos; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": "Only for a record that does not exist yet; prefer public_photos.update for an id you already have.",
+        "preferredWhen": "Only for a record that does not exist yet; the update form is client-only — public_photos backs no MCP tool.",
         "related": [
           "public_photos.update"
         ]
@@ -11326,7 +11331,7 @@
       "metadata": {
         "purpose": "Get available exports for download.",
         "usage": "Read path for exports returning the full typed record; helpers return compact shapes.",
-        "preferredWhen": "Use when many records are needed; prefer exports.resolve for a single lookup.",
+        "preferredWhen": "Use when many records are needed; the single-record lookup is client-only — exports backs no MCP tool.",
         "related": [
           "exports.resolve"
         ]
@@ -11375,7 +11380,7 @@
       "metadata": {
         "purpose": "Get export details or download export file.",
         "usage": "Read path for exports returning the full typed record; helpers return compact shapes.",
-        "preferredWhen": "Preferred when the numeric id is already known; exports.resolve is for a name, slug or domain.",
+        "preferredWhen": "Preferred when the numeric id is already known; the name/slug/domain lookup is client-only — exports backs no MCP tool.",
         "related": [
           "exports.list",
           "exports.resolve"
@@ -11474,7 +11479,7 @@
       "metadata": {
         "purpose": "Resolve an export by its id or file name.",
         "usage": "An id is fetched directly. Hudu declares no filters on GET /exports (a non-paginated list), so a file-name lookup is a bounded single-fetch scan with an exact compare. Accepted kinds are id and file name. The Export record is already compact (9 scalar fields), so no summary shape is declared.",
-        "preferredWhen": "Use when the identifier is a file name; exports.get is cheaper for a known id.",
+        "preferredWhen": "Use when the identifier is a file name; the direct id read is client-only — exports backs no MCP tool.",
         "related": [
           "exports.get",
           "exports.list"
