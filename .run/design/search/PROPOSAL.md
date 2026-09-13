@@ -140,3 +140,21 @@ The audit found the 27 search/find tools overlap badly and cost real context:
 3. Do as a new minor release (0.4.0) with the registry/MCP changes, or land the engine first behind the
    existing tool surface?
 4. Should the index be configurable (TTL, caps) through `HuduConfig`, or fixed with documented defaults?
+
+
+---
+
+## 11. Amendment (user, post-approval): two added requirements
+
+**11.1 `hudu_search_knowledge` must PARSE HTML before it builds snippets.** Hudu article bodies are HTML
+(e.g. article 16 is 9,136 bytes of markup), so a raw tag-stripped slice would surface markup fragments as the
+"matched text". The extraction pipeline therefore needs real HTML handling with zero runtime dependencies:
+block-level boundaries, entity decoding, whitespace collapsing, script/style removal, and a snippet taken from
+the EXTRACTED text with spans into that same text. The index should store the extracted plain text, which also
+changes the memory maths (the `maxIndexTextBytes` cap then covers extracted text, not raw HTML).
+
+**11.2 COLLAPSE THE SEARCH SURFACE TO ONE TOOL - self-describing, not many descriptions.** Instead of 27 tools
+(or 14), expose a SINGLE search entry point that can BOTH execute a search AND return help/resources/how-to-use
+guidance on demand. Rationale: the 27 search tools are ~59 KB (~15k tokens) of MCP context that every client
+pays for on every turn, while a help payload is fetched only when needed (progressive disclosure). The SDK
+keeps its full helper tier (28 operations) - only the MCP projection consolidates.
