@@ -50,6 +50,12 @@
 //                            (expectedUpdatedAt outside an update-shaped operation)
 //   related-dangling          a `related` entry names an operation with no registry record —
 //                            checked on the plan rows AND on the registry records
+//   prose-dangling            a prose field (purpose/usage/preferredWhen) names an operation the
+//                            client cannot call (no public method of that name) — the prose is
+//                            projected into the MCP tool descriptions, so a name an agent is told
+//                            to call must exist; checked on the plan rows AND on the registry
+//                            records. The plan-side scan is unscoped (a wrong name is wrong in
+//                            every group), unlike related-dangling
 //   pagination                a record's pagination is absent, or claims nonPaginated AND mode "page"
 //   inputSchema-name          an inputSchema field object omits the `name` key CapabilityField declares
 //   test-title               a row at "tested": no test with that exact title in the named file
@@ -164,6 +170,23 @@ function sourceMethod(opName) {
   if (!mod) return { ok: false, why: `no module src/resources/${resource}.ts (or src/operations/${resource}.ts)` };
   if (!mod.methods.has(method)) return { ok: false, why: `no public method ${method}() in ${mod.rel}` };
   return { ok: true, mod };
+}
+
+// Prose fields are agent-facing guidance: they are projected verbatim into the MCP tool
+// descriptions an LLM reads, so every operation they tell an agent to call must be callable.
+// The `X.method` shape is the same one the prose uses throughout; a reference to a resource the
+// client does not expose at all is reported too ("no module ..."). sourceMethod() is reused rather
+// than re-implemented: one answer to "does the client have this?".
+const PROSE_FIELDS = ['purpose', 'usage', 'preferredWhen'];
+const PROSE_REF = /\b([a-z_]+)\.([a-zA-Z][A-Za-z0-9_]*)\b/g;
+function checkProseRefs(text, jsonPath, opName, field) {
+  if (typeof text !== 'string' || text.length === 0) return;
+  for (const m of text.matchAll(PROSE_REF)) {
+    const ref = `${m[1]}.${m[2]}`;
+    const src = sourceMethod(ref);
+    if (src.ok) continue;
+    fail('prose-dangling', jsonPath, `${opName}: ${field} tells an agent to call "${ref}", which the client cannot call — ${src.why}`);
+  }
 }
 
 // ---------------------------------------------------------------- registry
@@ -301,6 +324,11 @@ for (const { row, jsonPath } of operations.map((row, idx) => ({ row, jsonPath: `
     continue;
   }
   planNames.add(name);
+  // Prose is checked for EVERY row, not only the scoped ones: a prose field that names a method
+  // the client does not have is wrong whatever group gate is being run.
+  for (const field of PROSE_FIELDS) {
+    checkProseRefs(row.metadata ? row.metadata[field] : null, `${jsonPath}.metadata.${field}`, name, field);
+  }
   if (row.endpoint) {
     const ep = `${row.endpoint.split(' ')[0]} ${row.endpoint.split(' ').slice(1).join(' ')}`.replace(/\s+/g, ' ').replace(/\/\d+/g, '/{id}');
     const key = `${name.split('.')[0]}#${ep}`;
@@ -459,6 +487,11 @@ if (registry) {
     }
     if (planRow && planRow.staleCheck === 'updated_at' && !recErrors.includes('STALE_OBJECT')) {
       fail('errors-vocabulary', `CAPABILITY_REGISTRY['${name}'].errors`, `${name}: staleCheck is updated_at, so the emitted record must list STALE_OBJECT`);
+    }
+    // prose references are gated on the EMITTED record too: the record is what the MCP projection
+    // and the consumers read, so a hand-edited generated file must not smuggle a bad name back in.
+    for (const field of PROSE_FIELDS) {
+      checkProseRefs(rec[field], `CAPABILITY_REGISTRY['${name}'].${field}`, name, field);
     }
     // related edges are gated on the EMITTED record too.
     const recRelated = Array.isArray(rec.related) ? rec.related : [];

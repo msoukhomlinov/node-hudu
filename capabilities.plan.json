@@ -2359,7 +2359,7 @@
       "metadata": {
         "purpose": "Get a list of Asset Layouts.",
         "usage": "Read path for asset_layouts returning the full typed record; helpers return compact shapes.",
-        "preferredWhen": "Use when many records are needed; prefer asset_layouts.search or asset_layouts.resolve for a single lookup.",
+        "preferredWhen": "Use when many records are needed; prefer asset_layouts.resolve for a single lookup.",
         "related": [
           "asset_layouts.resolve"
         ]
@@ -3245,7 +3245,7 @@
       "metadata": {
         "purpose": "Delete a Website.",
         "usage": "Mutating path for websites; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": "Irreversible; prefer websites.archive when the record may be needed again.",
+        "preferredWhen": "Irreversible; prefer websites.update when the record may be needed again.",
         "related": [
           "websites.delete"
         ]
@@ -3697,7 +3697,7 @@
       "metadata": {
         "purpose": "Delete a folder.",
         "usage": "Mutating path for folders; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": "Irreversible; prefer folders.archive when the record may be needed again.",
+        "preferredWhen": "Irreversible; prefer folders.update when the record may be needed again.",
         "related": [
           "folders.delete"
         ]
@@ -3752,7 +3752,7 @@
       "metadata": {
         "purpose": "Retrieve a list of folders.",
         "usage": "Read path for folders returning the full typed record; helpers return compact shapes.",
-        "preferredWhen": "Use when many records are needed; prefer folders.search or folders.resolve for a single lookup.",
+        "preferredWhen": "Use when many records are needed; prefer folders.resolve for a single lookup.",
         "related": [
           "folders.resolve"
         ]
@@ -4048,7 +4048,7 @@
       "metadata": {
         "purpose": "Delete a password folder.",
         "usage": "Mutating path for password_folders; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": "Irreversible; prefer password_folders.archive when the record may be needed again.",
+        "preferredWhen": "Irreversible; prefer password_folders.update when the record may be needed again.",
         "related": [
           "password_folders.delete"
         ]
@@ -4695,7 +4695,7 @@
       "metadata": {
         "purpose": "Delete a network.",
         "usage": "Mutating path for networks; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": "Irreversible; prefer networks.archive when the record may be needed again.",
+        "preferredWhen": "Irreversible; prefer networks.update when the record may be needed again.",
         "related": [
           "networks.delete"
         ]
@@ -4755,7 +4755,7 @@
       "metadata": {
         "purpose": "Get a list of networks.",
         "usage": "Read path for networks returning the full typed record; helpers return compact shapes.",
-        "preferredWhen": "Use when many records are needed; prefer networks.search or networks.resolve for a single lookup.",
+        "preferredWhen": "Use when many records are needed; prefer networks.findByAddress or networks.resolve for a single lookup.",
         "related": [
           "networks.resolve"
         ]
@@ -5103,7 +5103,7 @@
       "metadata": {
         "purpose": "Delete a VLAN.",
         "usage": "Mutating path for vlans; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": "Irreversible; prefer vlans.archive when the record may be needed again.",
+        "preferredWhen": "Irreversible; prefer vlans.update when the record may be needed again.",
         "related": [
           "vlans.delete"
         ]
@@ -5161,7 +5161,7 @@
       "metadata": {
         "purpose": "Get a list of VLANs.",
         "usage": "Read path for vlans returning the full typed record; helpers return compact shapes.",
-        "preferredWhen": "Use when many records are needed; prefer vlans.search or vlans.resolve for a single lookup.",
+        "preferredWhen": "Use when many records are needed; prefer vlans.findByVlanId or vlans.resolve for a single lookup.",
         "related": [
           "vlans.resolve"
         ]
@@ -5504,7 +5504,7 @@
       "metadata": {
         "purpose": "Delete a VLAN Zone.",
         "usage": "Mutating path for vlan_zones; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": "Irreversible; prefer vlan_zones.archive when the record may be needed again.",
+        "preferredWhen": "Irreversible; prefer vlan_zones.update when the record may be needed again.",
         "related": [
           "vlan_zones.delete"
         ]
@@ -5560,7 +5560,7 @@
       "metadata": {
         "purpose": "Get a list of VLAN Zones.",
         "usage": "Read path for vlan_zones returning the full typed record; helpers return compact shapes.",
-        "preferredWhen": "Use when many records are needed; prefer vlan_zones.search or vlan_zones.resolve for a single lookup.",
+        "preferredWhen": "Use when many records are needed; prefer vlan_zones.resolve for a single lookup.",
         "related": [
           "vlan_zones.resolve"
         ]
@@ -5849,7 +5849,7 @@
       "metadata": {
         "purpose": "Delete an IP address.",
         "usage": "Mutating path for ip_addresses; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": "Irreversible; prefer ip_addresses.archive when the record may be needed again.",
+        "preferredWhen": "Irreversible; prefer ip_addresses.update when the record may be needed again.",
         "related": [
           "ip_addresses.delete"
         ]
@@ -5908,7 +5908,7 @@
       "metadata": {
         "purpose": "Get a list of IP addresses.",
         "usage": "Read path for ip_addresses returning the full typed record; helpers return compact shapes.",
-        "preferredWhen": "Use when many records are needed; prefer ip_addresses.search or ip_addresses.resolve for a single lookup.",
+        "preferredWhen": "Use when many records are needed; prefer ip_addresses.findByAddress or ip_addresses.resolve for a single lookup.",
         "related": [
           "ip_addresses.resolve"
         ]
@@ -6256,7 +6256,7 @@
       "metadata": {
         "purpose": "Delete a Rack Storage.",
         "usage": "Mutating path for rack_storages; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": "Irreversible; prefer rack_storages.archive when the record may be needed again.",
+        "preferredWhen": "Irreversible; prefer rack_storages.update when the record may be needed again.",
         "related": [
           "rack_storages.delete"
         ]
@@ -6314,7 +6314,7 @@
       "metadata": {
         "purpose": "Get a list of Rack Storages.",
         "usage": "Read path for rack_storages returning the full typed record; helpers return compact shapes.",
-        "preferredWhen": "Use when many records are needed; prefer rack_storages.search or rack_storages.resolve for a single lookup.",
+        "preferredWhen": "Use when many records are needed; prefer rack_storages.resolve for a single lookup.",
         "related": [
           "rack_storages.resolve"
         ]
@@ -6612,7 +6612,7 @@
       "metadata": {
         "purpose": "Delete a Rack Storage Item.",
         "usage": "Mutating path for rack_storage_items; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": "Irreversible; prefer rack_storage_items.archive when the record may be needed again.",
+        "preferredWhen": "Irreversible; prefer rack_storage_items.update when the record may be needed again.",
         "related": [
           "rack_storage_items.delete"
         ]
@@ -6671,7 +6671,7 @@
       "metadata": {
         "purpose": "Get a list of Rack Storage Items.",
         "usage": "Read path for rack_storage_items returning the full typed record; helpers return compact shapes.",
-        "preferredWhen": "Use when many records are needed; prefer rack_storage_items.search or rack_storage_items.resolve for a single lookup.",
+        "preferredWhen": "Use when many records are needed; prefer rack_storage_items.resolve for a single lookup.",
         "related": [
           "rack_storage_items.resolve"
         ]
@@ -6943,7 +6943,7 @@
       "metadata": {
         "purpose": "Delete a Relation.",
         "usage": "Mutating path for relations; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": "Irreversible; prefer relations.archive when the record may be needed again.",
+        "preferredWhen": "Irreversible; Hudu exposes no relation update, so a deleted relation can only be re-created with relations.create.",
         "related": [
           "relations.delete"
         ]
@@ -7002,7 +7002,7 @@
       "metadata": {
         "purpose": "Get a list of Relations.",
         "usage": "Read path for relations returning the full typed record; helpers return compact shapes.",
-        "preferredWhen": "Use when many records are needed; prefer relations.search or relations.resolve for a single lookup.",
+        "preferredWhen": "Use when many records are needed; prefer relations.findByEndpoints for one record pair's relations, or relations.resolve for a single lookup.",
         "related": [
           "relations.resolve"
         ]
@@ -7051,7 +7051,7 @@
       "metadata": {
         "purpose": "Create a Relation.",
         "usage": "Mutating path for relations; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": "Only for a record that does not exist yet; prefer relations.update for an id you already have.",
+        "preferredWhen": "Only for a new relation; Hudu exposes no relation update, so changing an existing relation means relations.delete followed by relations.create.",
         "related": []
       },
       "compact": null,
@@ -7222,7 +7222,7 @@
       "metadata": {
         "purpose": "Delete a Flag.",
         "usage": "Mutating path for flags; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": "Irreversible; prefer flags.archive when the record may be needed again.",
+        "preferredWhen": "Irreversible; prefer flags.update when the record may be needed again.",
         "related": [
           "flags.delete"
         ]
@@ -7280,7 +7280,7 @@
       "metadata": {
         "purpose": "Get a list of Flags.",
         "usage": "Read path for flags returning the full typed record; helpers return compact shapes.",
-        "preferredWhen": "Use when many records are needed; prefer flags.search or flags.resolve for a single lookup.",
+        "preferredWhen": "Use when many records are needed; prefer flags.findByFlagable for one record's flags, or flags.resolve for a single lookup.",
         "related": [
           "flags.resolve"
         ]
@@ -7607,7 +7607,7 @@
       "metadata": {
         "purpose": "Delete a Flag Type.",
         "usage": "Mutating path for flag_types; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": "Irreversible; prefer flag_types.archive when the record may be needed again.",
+        "preferredWhen": "Irreversible; prefer flag_types.update when the record may be needed again.",
         "related": [
           "flag_types.delete"
         ]
@@ -7664,7 +7664,7 @@
       "metadata": {
         "purpose": "Get a list of Flag Types.",
         "usage": "Read path for flag_types returning the full typed record; helpers return compact shapes.",
-        "preferredWhen": "Use when many records are needed; prefer flag_types.search or flag_types.resolve for a single lookup.",
+        "preferredWhen": "Use when many records are needed; prefer flag_types.resolve for a single lookup.",
         "related": [
           "flag_types.resolve"
         ]
@@ -7954,7 +7954,7 @@
       "metadata": {
         "purpose": "Delete a Process or Run.",
         "usage": "Mutating path for procedures; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": "Irreversible; prefer procedures.archive when the record may be needed again.",
+        "preferredWhen": "Irreversible; prefer procedures.update when the record may be needed again.",
         "related": [
           "procedures.delete"
         ]
@@ -8018,7 +8018,7 @@
       "metadata": {
         "purpose": "Get a list of Processes and Runs.",
         "usage": "Read path for procedures returning the full typed record; helpers return compact shapes.",
-        "preferredWhen": "Use when many records are needed; prefer procedures.search or procedures.resolve for a single lookup.",
+        "preferredWhen": "Use when many records are needed; prefer procedures.resolve for a single lookup.",
         "related": [
           "procedures.resolve"
         ]
@@ -8532,7 +8532,7 @@
       "metadata": {
         "purpose": "Delete a Task from a Process.",
         "usage": "Mutating path for procedure_tasks; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": "Irreversible; prefer procedure_tasks.archive when the record may be needed again.",
+        "preferredWhen": "Irreversible; prefer procedure_tasks.update when the record may be needed again.",
         "related": [
           "procedure_tasks.delete"
         ]
@@ -8586,7 +8586,7 @@
       "metadata": {
         "purpose": "Get a list of Process/Run Tasks.",
         "usage": "Read path for procedure_tasks returning the full typed record; helpers return compact shapes.",
-        "preferredWhen": "Use when many records are needed; prefer procedure_tasks.search or procedure_tasks.resolve for a single lookup.",
+        "preferredWhen": "Use when many records are needed; prefer procedure_tasks.resolve for a single lookup.",
         "related": [
           "procedure_tasks.resolve"
         ]
@@ -8869,7 +8869,7 @@
       "metadata": {
         "purpose": "Jump to an asset with integration details without API key authentication, only requiring authentication at the time of jump.",
         "usage": "Read path for cards returning the full typed record; helpers return compact shapes.",
-        "preferredWhen": "Preferred when the caller has an integration identifier instead of a Hudu id; cards.get is for a known id.",
+        "preferredWhen": "Preferred when the caller has an integration identifier instead of a Hudu id; Hudu exposes no card read by id, so cards.lookup is the JSON path for the same identifiers.",
         "related": []
       },
       "compact": null,
@@ -9098,7 +9098,7 @@
       "metadata": {
         "purpose": "Retrieve a list of activity logs.",
         "usage": "Read path for activity_logs returning the full typed record; helpers return compact shapes.",
-        "preferredWhen": "Use when many records are needed; prefer activity_logs.search or activity_logs.resolve for a single lookup.",
+        "preferredWhen": "Use when many records are needed; prefer activity_logs.findByResource for one resource's entries, or activity_logs.resolve for a single lookup.",
         "related": [
           "activity_logs.resolve"
         ]
@@ -9270,7 +9270,7 @@
       "metadata": {
         "purpose": "Delete an expiration.",
         "usage": "Mutating path for expirations; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": "Irreversible; prefer expirations.archive when the record may be needed again.",
+        "preferredWhen": "Irreversible; prefer expirations.update when the record may be needed again.",
         "related": [
           "expirations.delete"
         ]
@@ -9327,7 +9327,7 @@
       "metadata": {
         "purpose": "Retrieve expirations for the account.",
         "usage": "Read path for expirations returning the full typed record; helpers return compact shapes.",
-        "preferredWhen": "Use when many records are needed; prefer expirations.search or expirations.resolve for a single lookup.",
+        "preferredWhen": "Use when many records are needed; prefer expirations.findByResource for one resource's expirations, or expirations.resolve for a single lookup.",
         "related": [
           "expirations.resolve"
         ]
@@ -9439,7 +9439,7 @@
       "metadata": {
         "purpose": "Resolve an expiration from an id or from its resource.",
         "usage": "Bare values are read in the order: numeric id, {resourceType, resourceId} (server filter). An id is fetched directly; a resource lookup can legitimately match several expirations and then throws RESOLUTION_AMBIGUOUS with the candidate ids.",
-        "preferredWhen": "Use when the identifier is a resource pair; expirations.get is cheaper for a known id.",
+        "preferredWhen": "Use when the identifier is a resource pair; a known id is resolved directly, without a scan.",
         "related": [
           "expirations.findByResource"
         ]
@@ -9566,7 +9566,7 @@
       "metadata": {
         "purpose": "Delete a Matcher.",
         "usage": "Mutating path for matchers; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": "Irreversible; prefer matchers.archive when the record may be needed again.",
+        "preferredWhen": "Irreversible; prefer matchers.update when the record may be needed again.",
         "related": [
           "matchers.delete"
         ]
@@ -9622,7 +9622,7 @@
       "metadata": {
         "purpose": "List matchers for an integration.",
         "usage": "Read path for matchers returning the full typed record; helpers return compact shapes.",
-        "preferredWhen": "Use when many records are needed; prefer matchers.search or matchers.resolve for a single lookup.",
+        "preferredWhen": "Use when many records are needed; prefer matchers.findBySyncId for the matchers of one sync id, or matchers.resolve for a single lookup.",
         "related": [
           "matchers.resolve"
         ]
@@ -9847,7 +9847,7 @@
       "metadata": {
         "purpose": "Delete a Magic Dash Item without an ID.",
         "usage": "Mutating path for magic_dash; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": "Irreversible; prefer magic_dash.archive when the record may be needed again.",
+        "preferredWhen": "Irreversible; a deleted item can be re-created with magic_dash.create using the same title and company.",
         "related": [
           "magic_dash.delete"
         ]
@@ -9976,7 +9976,7 @@
       "metadata": {
         "purpose": "Retrieve a list of Magic Dash Items.",
         "usage": "Read path for magic_dash returning the full typed record; helpers return compact shapes.",
-        "preferredWhen": "Use when many records are needed; prefer magic_dash.search or magic_dash.resolve for a single lookup.",
+        "preferredWhen": "Use when many records are needed; prefer magic_dash.findByCompany for one company's items, or magic_dash.resolve for a single lookup.",
         "related": [
           "magic_dash.resolve"
         ]
@@ -10026,7 +10026,7 @@
       "metadata": {
         "purpose": "Create or update a Magic Dash Item.",
         "usage": "Mutating path for magic_dash; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": "Only for a record that does not exist yet; prefer magic_dash.update for an id you already have.",
+        "preferredWhen": "Only for a new item; posting an existing title and company updates that item instead of creating a second one.",
         "related": []
       },
       "compact": null,
@@ -10356,7 +10356,7 @@
       "metadata": {
         "purpose": "Delete an upload.",
         "usage": "Mutating path for uploads; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": "Irreversible; prefer uploads.archive when the record may be needed again.",
+        "preferredWhen": "Irreversible; prefer uploads.upload to store the file again if it is needed later.",
         "related": [
           "uploads.delete"
         ]
@@ -10406,7 +10406,7 @@
       "metadata": {
         "purpose": "Get a list of all uploads.",
         "usage": "Read path for uploads returning the full typed record; helpers return compact shapes.",
-        "preferredWhen": "Use when many records are needed; prefer uploads.search or uploads.resolve for a single lookup.",
+        "preferredWhen": "Use when many records are needed; prefer uploads.resolve for a single lookup.",
         "related": [
           "uploads.resolve"
         ]
@@ -10621,7 +10621,7 @@
       "metadata": {
         "purpose": "Delete a Photo.",
         "usage": "Mutating path for photos; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": "Irreversible; prefer photos.archive when the record may be needed again.",
+        "preferredWhen": "Irreversible; prefer photos.update when the record may be needed again.",
         "related": [
           "photos.delete"
         ]
@@ -10680,7 +10680,7 @@
       "metadata": {
         "purpose": "Get a list of Photos.",
         "usage": "Read path for photos returning the full typed record; helpers return compact shapes.",
-        "preferredWhen": "Use when many records are needed; prefer photos.search or photos.resolve for a single lookup.",
+        "preferredWhen": "Use when many records are needed; prefer photos.findByPhotoable for one record's photos, or photos.resolve for a single lookup.",
         "related": [
           "photos.resolve"
         ]
@@ -11020,7 +11020,7 @@
       "metadata": {
         "purpose": "Get a list of public photos.",
         "usage": "Read path for public_photos returning the full typed record; helpers return compact shapes.",
-        "preferredWhen": "Use when many records are needed; prefer public_photos.search or public_photos.resolve for a single lookup.",
+        "preferredWhen": "Use when many records are needed; prefer public_photos.resolve for a single lookup.",
         "related": [
           "public_photos.resolve"
         ]
@@ -11291,7 +11291,7 @@
       "metadata": {
         "purpose": "Get available exports for download.",
         "usage": "Read path for exports returning the full typed record; helpers return compact shapes.",
-        "preferredWhen": "Use when many records are needed; prefer exports.search or exports.resolve for a single lookup.",
+        "preferredWhen": "Use when many records are needed; prefer exports.resolve for a single lookup.",
         "related": [
           "exports.resolve"
         ]
@@ -11391,7 +11391,7 @@
       "metadata": {
         "purpose": "Initiate an export of a company.",
         "usage": "Mutating path for exports; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": "Only for a record that does not exist yet; prefer exports.update for an id you already have.",
+        "preferredWhen": "Only for a new export request; Hudu exposes no update for an existing export.",
         "related": []
       },
       "compact": null,
@@ -11556,7 +11556,7 @@
       "metadata": {
         "purpose": "Delete a List.",
         "usage": "Mutating path for lists; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": "Irreversible; prefer lists.archive when the record may be needed again.",
+        "preferredWhen": "Irreversible; prefer lists.update when the record may be needed again.",
         "related": [
           "lists.delete"
         ]
@@ -11610,7 +11610,7 @@
       "metadata": {
         "purpose": "Get a list of Lists.",
         "usage": "Read path for lists returning the full typed record; helpers return compact shapes.",
-        "preferredWhen": "Use when many records are needed; prefer lists.search or lists.resolve for a single lookup.",
+        "preferredWhen": "Use when many records are needed; prefer lists.findByName or lists.resolve for a single lookup.",
         "related": [
           "lists.resolve"
         ]
@@ -11945,7 +11945,7 @@
       "metadata": {
         "purpose": "Delete a Label Type.",
         "usage": "Mutating path for label_types; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": "Irreversible; prefer label_types.archive when the record may be needed again.",
+        "preferredWhen": "Irreversible; prefer label_types.update when the record may be needed again.",
         "related": [
           "label_types.delete"
         ]
@@ -12002,7 +12002,7 @@
       "metadata": {
         "purpose": "Get a list of Label Types.",
         "usage": "Read path for label_types returning the full typed record; helpers return compact shapes.",
-        "preferredWhen": "Use when many records are needed; prefer label_types.search or label_types.resolve for a single lookup.",
+        "preferredWhen": "Use when many records are needed; prefer label_types.resolve for a single lookup.",
         "related": [
           "label_types.resolve"
         ]
@@ -12287,7 +12287,7 @@
       "metadata": {
         "purpose": "Delete a Label.",
         "usage": "Mutating path for labels; supports { dryRun: true }, which validates without issuing the write.",
-        "preferredWhen": "Irreversible; prefer labels.archive when the record may be needed again.",
+        "preferredWhen": "Irreversible; prefer labels.update when the record may be needed again.",
         "related": [
           "labels.delete"
         ]
@@ -12345,7 +12345,7 @@
       "metadata": {
         "purpose": "Get a list of Labels.",
         "usage": "Read path for labels returning the full typed record; helpers return compact shapes.",
-        "preferredWhen": "Use when many records are needed; prefer labels.search or labels.resolve for a single lookup.",
+        "preferredWhen": "Use when many records are needed; prefer labels.findByLabelable for one record's labels, or labels.resolve for a single lookup.",
         "related": [
           "labels.resolve"
         ]
