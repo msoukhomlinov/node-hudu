@@ -40,6 +40,7 @@ import type { HelperOptions, Identifier, IdentifierObject, Resolution } from '..
 import type { Page } from '../pagination.js';
 import type { KnowledgeSearchOptions, KnowledgeSearchResult } from '../types/search_knowledge.js';
 import { KnowledgeSearchEngine, type EngineConfig } from '../search/engine.js';
+import { invokeOperation, type InvokeOptions } from './invoke.js';
 import type {
   ResolveAnyOptions,
   ResolveAnyResult,
@@ -494,6 +495,38 @@ export class Operations {
    */
   async searchKnowledge(query: string, opts?: KnowledgeSearchOptions): Promise<KnowledgeSearchResult> {
     return knowledgeEngine(this.client).search(query, opts ?? {});
+  }
+
+  /**
+   * Invoke ANY operation named in the capability registry, by its exact registry key.
+   *
+   * Why this exists: the catalog lists every operation the SDK implements, including the ones the
+   * MCP projection never exposes as a tool. Discovery is not reachability — without this method
+   * those operations are catalogued but un-callable, and the catalog is a promise the SDK cannot
+   * keep. This is plain SDK code: it imports nothing from the MCP layer and has no tool concept.
+   *
+   * `operation` is an EXACT registry key (`articles.get`, `companies.update`, `operations.resolveAny`),
+   * never a tool name and never fuzzy. An unknown key refuses with the nearest keys named.
+   *
+   * `input` carries the operation's arguments exactly as the registry declares them, and it is
+   * VALIDATED against that record's `inputSchema` BEFORE any request: unknown fields, missing
+   * required fields, wrong types and out-of-enum values all refuse with the offending field path.
+   * An operation the registry excludes (the binary/download surface) is refused too, so the escape
+   * hatch cannot bypass the projection rule. No argument the target method cannot honour is ever
+   * accepted, and nothing is silently clamped or dropped.
+   *
+   * SAFETY: writes are DRY-RUN-FIRST. Omit `dryRun` (or pass `true`) and the call runs on the
+   * SDK's dry-run path — no request is issued and the result is a `DryRunResult` with
+   * `simulated: true`. Only an explicit `{ dryRun: false }` executes a write. A destructive or
+   * approval-gated operation additionally needs `{ confirm: '<operation>' }`, the exact key, as a
+   * deliberate act. This governor stops accidents; it is not a security boundary.
+   *
+   * Dispatch calls the SAME typed method the SDK publishes, so retries, bounded scans, the
+   * `expectedUpdatedAt` stale guard, redaction and the error vocabulary are that path's, and the
+   * result is that path's result — never an invoke-specific envelope.
+   */
+  async invoke(operation: string, input?: Record<string, unknown>, opts?: InvokeOptions): Promise<unknown> {
+    return invokeOperation(this.client, operation, input, opts);
   }
 
   /**
