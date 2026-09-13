@@ -7,6 +7,7 @@
  * record — returned data is never redacted implicitly.
  */
 import type { HttpClient } from '../http.js';
+import { assertScanDecided } from './agent-layer-helpers.js';
 import { BaseResource } from './base.js';
 import type { ListParams, Page } from '../pagination.js';
 import type { AssetPassword, AssetPasswordCreate, AssetPasswordUpdate } from '../types/index.js';
@@ -355,6 +356,9 @@ export class AssetPasswordsResource extends BaseResource<AssetPassword> {
         { operation, resourceIds: exact.map((entry) => entry.id) },
       );
     }
+    // A cap that stopped the scan cannot prove uniqueness: a single exact match must not be
+    // handed back as a confident hit, so the shared guard throws RESOLUTION_TRUNCATED (policy §6).
+    assertScanDecided({ operation, scanned: fetched.length, truncated: scan.scanTruncated });
     const only = exact.length === 1 ? (exact[0] as AssetPassword) : undefined;
     if (only !== undefined) {
       return {
@@ -364,13 +368,6 @@ export class AssetPasswordsResource extends BaseResource<AssetPassword> {
         scanTruncated: false,
         candidates: [{ id: only.id, label: passwordLabel(only) } satisfies ResolutionCandidate],
       };
-    }
-    if (scan.scanTruncated) {
-      throw ResolutionError.truncated(
-        `${operation}: the bounded scan stopped after ${scan.scanned} asset password record(s), so the record ` +
-          'may exist beyond the resolution cap and cannot be decided.',
-        { operation },
-      );
     }
     if (fetched.length > 1) {
       throw ResolutionError.ambiguous(

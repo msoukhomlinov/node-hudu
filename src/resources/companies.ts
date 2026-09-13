@@ -2,6 +2,7 @@
  * CompaniesResource — Hudu "companies" resource.
  */
 import type { HttpClient } from '../http.js';
+import { assertScanDecided } from './agent-layer-helpers.js';
 import { BaseResource } from './base.js';
 import type { ListParams, Page } from '../pagination.js';
 import type { Company, CompanyCreate, CompanyUpdate } from '../types/index.js';
@@ -440,6 +441,9 @@ export class CompaniesResource extends BaseResource<Company> {
         { operation, resourceIds: exact.map((company) => company.id) },
       );
     }
+    // A cap that stopped the scan cannot prove uniqueness: a single exact match must not be
+    // handed back as a confident hit, so the shared guard throws RESOLUTION_TRUNCATED (policy §6).
+    assertScanDecided({ operation, scanned: fetched.length, truncated: scan.scanTruncated });
     const only = exact.length === 1 ? (exact[0] as Company) : undefined;
     if (only !== undefined) {
       return {
@@ -449,13 +453,6 @@ export class CompaniesResource extends BaseResource<Company> {
         scanTruncated: false,
         candidates: [{ id: only.id, label: companyLabel(only) } satisfies ResolutionCandidate],
       };
-    }
-    if (scan.scanTruncated) {
-      throw ResolutionError.truncated(
-        `${operation}: the bounded scan stopped after ${scan.scanned} company record(s), so the record ` +
-          'may exist beyond the resolution cap and cannot be decided.',
-        { operation },
-      );
     }
     if (fetched.length > 1) {
       throw ResolutionError.ambiguous(

@@ -395,6 +395,23 @@ describe('AssetPasswordsResource helper edge branches and validation', () => {
     expect(spy.calls).toHaveLength(1);
   });
 
+  it('throws RESOLUTION_TRUNCATED instead of the one matching password when the cap stopped the scan', async () => {
+    const rows = [
+      { ...password, id: 900 },
+      ...Array.from({ length: 24 }, (_, i) => ({ ...password, id: 300 + i, slug: `other-${i}`, name: `Other ${i}` })),
+    ];
+    stubFetch(() => json({ asset_passwords: rows }));
+    const capped = new HuduClient({
+      baseUrl: 'https://hudu.example.com',
+      apiKey: 'k',
+      resolution: { maxScanRecords: 25, maxScanPages: 1 },
+    });
+    await expect(capped.assetPasswords.resolve('root')).rejects.toMatchObject({
+      code: 'RESOLUTION_TRUNCATED',
+      category: 'resolution',
+    });
+  });
+
   it('throws RESOLUTION_AMBIGUOUS when two records match exactly', async () => {
     stubFetch(() => json({ asset_passwords: [{ ...password, id: 91 }, { ...password, id: 92 }] }));
     await expect(makeClient().assetPasswords.resolve('root')).rejects.toMatchObject({ code: 'RESOLUTION_AMBIGUOUS', resourceIds: [91, 92] });

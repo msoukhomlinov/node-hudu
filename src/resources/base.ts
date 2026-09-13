@@ -6,7 +6,7 @@ import { unwrapByKey, unwrapList } from '../http.js';
 import { isRecord } from '../utils.js';
 import type { ListParams, Page } from '../pagination.js';
 import { collectAll, paginate, paginateItems } from '../pagination.js';
-import { HuduConfigError, ResolutionError, StaleObjectError } from '../errors.js';
+import { HuduConfigError, NotFoundError, ResolutionError, StaleObjectError } from '../errors.js';
 import { refuseDryRunInPayload } from './agent-layer-helpers.js';
 import type {
   DryRunCheck,
@@ -196,15 +196,41 @@ export abstract class BaseResource<T = unknown> {
     return this.http.request<U>(opts);
   }
 
-  /** GET single with envelope unwrap; throws NotFoundError on 404. */
+  /**
+   * A single-record read that unwrapped to `null`/`undefined` is a MISS, not a record.
+   *
+   * Live-verified on Hudu 2.45.1: `articles`, `asset_layouts`, `asset_passwords`, `folders` and
+   * `websites` answer `200` with a body of `null` for an unknown id instead of `404`, so `get(id)`
+   * typed the `null` as the record and downstream code (`resolve` -> `record.id`) threw a RAW
+   * TypeError. The policy is one shape for "your id does not exist" whatever wire form the endpoint
+   * chose: NOT_FOUND. `null` stays reserved for a COMPLETE helper-tier scan that found nothing.
+   */
+  protected assertSingleFound<U>(record: U | null | undefined, operation: string, ids?: number[]): U {
+    if (record === null || record === undefined) {
+      throw new NotFoundError(
+        `${operation}: the vendor answered 200 with an empty body, so no ${this.resourcePath} record has this id.`,
+        undefined,
+        undefined,
+        { operation, resourceIds: ids },
+      );
+    }
+    return record;
+  }
+
+  /** GET single with envelope unwrap; throws NotFoundError on 404, and on a `200` + null body. */
   protected async getOne<U = T>(id: number | string, query?: Record<string, unknown>): Promise<U> {
-    return this.unwrapSingle<U>(await this.http.request<unknown>({
-      method: 'GET',
-      path: `/${this.resourcePath}/${id}`,
-      query,
-      operation: `${this.resourcePath}.get`,
-      resourceIds: identifierIds(id),
-    }));
+    const ids = identifierIds(id);
+    return this.assertSingleFound<U>(
+      this.unwrapSingle<U>(await this.http.request<unknown>({
+        method: 'GET',
+        path: `/${this.resourcePath}/${id}`,
+        query,
+        operation: `${this.resourcePath}.get`,
+        resourceIds: ids,
+      })),
+      `${this.resourcePath}.get`,
+      ids,
+    );
   }
 
   /** POST create, normalised by createType. */

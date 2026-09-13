@@ -280,6 +280,37 @@ describe('CompaniesResource agent-execution-layer helpers', () => {
     expect(spy.calls).toHaveLength(1);
   });
 
+  it('throws RESOLUTION_TRUNCATED instead of the one matching company when the cap stopped the scan', async () => {
+    // The live repro: two companies share a domain, and the capped + limit:1 scan sees only
+    // ONE of them. A single exact match on a truncated scan cannot prove uniqueness.
+    const rows = [
+      { ...company, id: 31, name: 'ZZ Dup Domain', website: 'https://dup.example.com' },
+      ...companiesPage(24, { website: 'https://other.example' }),
+    ];
+    const spy = stubFetch((url) => {
+      const size = Number(new URL(url).searchParams.get('page_size') ?? '25');
+      return json({ companies: rows.slice(0, size) });
+    });
+    await expect(
+      cappedClient(25, 1).companies.findByDomain('dup.example.com', { limit: 1, resolutionDetails: true }),
+    ).rejects.toMatchObject({ code: 'RESOLUTION_TRUNCATED', category: 'resolution' });
+    await expect(cappedClient(25, 1).companies.findByDomain('dup.example.com')).rejects.toMatchObject({
+      code: 'RESOLUTION_TRUNCATED',
+    });
+    expect(spy.calls.length).toBeGreaterThan(0);
+  });
+
+  it('still returns the single exact match after a COMPLETE scan', async () => {
+    const rows = [
+      { ...company, id: 31, name: 'ZZ Dup Domain', website: 'https://dup.example.com' },
+      ...companiesPage(24, { website: 'https://other.example' }),
+    ];
+    stubFetch((url) => (url.includes('page=1') ? json({ companies: rows }) : json({ companies: [] })));
+    const resolution = await makeClient().companies.findByDomain('dup.example.com', { resolutionDetails: true });
+    expect(resolution.value).toMatchObject({ id: 31 });
+    expect(resolution.scanTruncated).toBe(false);
+  });
+
   it('returns CompanySummary and omits exactly the documented fields', async () => {
     stubFetch(() => json({ companies: [full] }));
     const summary = asRecord(await makeClient().companies.findByDomain('acme.example.com'));

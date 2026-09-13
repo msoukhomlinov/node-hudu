@@ -17,6 +17,7 @@ import type {
 } from '../types/password_folder.js';
 import type { DryRunResult, HelperOptions, MutationOptions, Resolution } from '../types/common.js';
 import { HuduConfigError, ResolutionError, ValidationFailedError } from '../errors.js';
+import { assertScanDecided, identifierError } from './agent-layer-helpers.js';
 
 export interface PasswordFoldersListParams extends ListParams {
   name?: string;
@@ -87,6 +88,11 @@ type PasswordFolderLookup =
 
 /** Normalize the accepted identifier forms, refusing anything the vendor cannot support. */
 function passwordFolderLookup(identifier: number | string | PasswordFolderIdentifier): PasswordFolderLookup {
+  // Live-verified: `passwordFolders.resolve(undefined)` read `.id` off `undefined` and threw a RAW
+  // TypeError. An absent identifier is an SDK-caller bug: CONFIG_ERROR naming the accepted kinds.
+  if (identifier === null || identifier === undefined) {
+    throw identifierError('password_folders.resolve', ACCEPTED_KINDS);
+  }
   if (typeof identifier === 'number') {
     if (!Number.isInteger(identifier) || identifier < 1) {
       throw new ValidationFailedError(
@@ -294,6 +300,9 @@ export class PasswordFoldersResource extends BaseResource<PasswordFolder> {
         { operation, resourceIds: ids },
       );
     }
+    // A cap that stopped the scan cannot prove uniqueness: "exactly one match" is undecided,
+    // so the shared guard throws RESOLUTION_TRUNCATED instead of returning a confident hit.
+    assertScanDecided({ operation, scanned: scan.scanned, truncated: scan.scanTruncated, detail });
     if (first !== undefined) {
       return {
         value: first,
@@ -302,13 +311,6 @@ export class PasswordFoldersResource extends BaseResource<PasswordFolder> {
         scanTruncated: false,
         candidates: [{ id: first.id, label: first.name }],
       };
-    }
-    if (scan.scanTruncated) {
-      throw ResolutionError.truncated(
-        `${operation}: the bounded client scan was truncated after ${String(scan.scanned)} record(s); ` +
-          `${detail} may exist beyond the scan cap.`,
-        { operation },
-      );
     }
     return { value: null, resolutionCost: 'server-filter', scanned: scan.scanned, scanTruncated: false };
   }

@@ -281,16 +281,6 @@ export class IpAddressesResource extends BaseResource<IpAddress> {
     truncated: boolean,
     descriptor: string,
   ): Resolution<IpAddress> {
-    if (truncated) {
-      throw ResolutionError.truncated(
-        `Client scan for ip_addresses was truncated after ${scanned} record(s) while resolving ${descriptor}; ` +
-          'a match may exist beyond the scan cap, so the lookup is undecided.',
-        {
-          operation: 'ip_addresses.resolve',
-          suggestedAction: 'Resolve by { id }, narrow the filter, or raise resolution.maxScanRecords/maxScanPages.',
-        },
-      );
-    }
     // Only an id the vendor actually returned is listed as a candidate: the record
     // definition does not guarantee one, and a fabricated id would be a lie.
     const candidates: ResolutionCandidate[] = [];
@@ -303,6 +293,18 @@ export class IpAddressesResource extends BaseResource<IpAddress> {
         {
           operation: 'ip_addresses.resolve',
           resourceIds: candidates.length > 0 ? candidates.map((candidate) => candidate.id) : undefined,
+        },
+      );
+    }
+    // A cap that stopped the scan is checked AFTER ambiguity: two or more exact matches
+    // already decide the lookup, so RESOLUTION_AMBIGUOUS wins (policy §6).
+    if (truncated) {
+      throw ResolutionError.truncated(
+        `Client scan for ip_addresses was truncated after ${scanned} record(s) while resolving ${descriptor}; ` +
+          'a match may exist beyond the scan cap, so the lookup is undecided.',
+        {
+          operation: 'ip_addresses.resolve',
+          suggestedAction: 'Resolve by { id }, narrow the filter, or raise resolution.maxScanRecords/maxScanPages.',
         },
       );
     }

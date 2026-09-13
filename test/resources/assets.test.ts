@@ -284,6 +284,16 @@ describe('AssetsResource agent-execution-layer helpers', () => {
     expect(spy.calls).toHaveLength(1);
   });
 
+  it('throws RESOLUTION_TRUNCATED instead of the one matching asset when the cap stopped the scan', async () => {
+    const rows = [{ ...asset, id: 900, primary_serial: 'ZZ-DUP' }, ...accountPage(24)];
+    const spy = accountStub({}, rows);
+    await expect(cappedClient(25, 1).assets.resolve('ZZ-DUP')).rejects.toMatchObject({
+      code: 'RESOLUTION_TRUNCATED',
+      category: 'resolution',
+    });
+    expect(spy.calls).toHaveLength(1);
+  });
+
   it('returns AssetSummary', async () => {
     stubFetch(() => json({ asset }));
     const summary = asRecord(await makeClient().assets.resolve({ companyId: 1, id: 10 }));

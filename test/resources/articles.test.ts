@@ -101,6 +101,15 @@ describe('ArticlesResource agent-execution-layer helpers', () => {
     expect(spy.calls).toHaveLength(1);
   });
 
+  it('throws RESOLUTION_TRUNCATED instead of the one matching article when the cap stopped the scan', async () => {
+    const rows = [{ ...article, id: 31 }, ...rowsPage(24, { slug: 'other', name: 'Row' })];
+    listStub({ slug: rows });
+    await expect(cappedClient(25, 1).articles.resolve('vpn-setup')).rejects.toMatchObject({
+      code: 'RESOLUTION_TRUNCATED',
+      category: 'resolution',
+    });
+  });
+
   it('returns ArticleSummary', async () => {
     stubFetch(() => json({ article }));
     const summary = asRecord(await makeClient().articles.resolve(1));

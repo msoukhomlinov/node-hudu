@@ -322,6 +322,16 @@ describe('WebsitesResource helpers', () => {
     expect(spy.calls).toHaveLength(4);
   });
 
+  it('throws RESOLUTION_TRUNCATED instead of the one matching website when the cap stopped the scan', async () => {
+    const page = [website({ id: 1 }), ...Array.from({ length: 24 }, (_, i) => website({ id: 100 + i, slug: `s${i}` }))];
+    const others = Array.from({ length: 25 }, (_, i) => website({ id: 200 + i, slug: `o${i}` }));
+    stubFetch((url) => json(url.includes('page=1') ? page : others));
+    await expect(makeClient().websites.resolve({ slug: 'acme' })).rejects.toMatchObject({
+      code: 'RESOLUTION_TRUNCATED',
+      category: 'resolution',
+    });
+  });
+
   it('reports the resolution cost and candidates with resolutionDetails', async () => {
     stubFetch(() => json([website()]));
     const resolution = await makeClient().websites.resolve({ slug: 'acme' }, { resolutionDetails: true });

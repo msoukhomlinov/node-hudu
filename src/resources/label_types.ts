@@ -9,6 +9,10 @@ import type { HttpClient } from '../http.js';
 import { BaseResource } from './base.js';
 import type { ListParams, Page } from '../pagination.js';
 import { HuduConfigError, ResolutionError } from '../errors.js';
+import { identifierError } from './agent-layer-helpers.js';
+
+/** What `label_types.resolve` accepts, named in every refusal. */
+const ACCEPTED_LABEL_TYPE_KINDS = 'a numeric id, a slug, an exact name, { id }, { slug } or { name }';
 import type { DryRunResult, MutationOptions, Resolution } from '../types/common.js';
 import type { LabelType, LabelTypeCreate, LabelTypeUpdate } from '../types/index.js';
 import type { LabelTypeIdentifier, LabelTypeSummary } from '../types/label_type.js';
@@ -41,6 +45,11 @@ interface LabelTypeRef {
 
 /** Read the id/slug/name a caller supplied, without guessing a kind the vendor cannot support. */
 function readLabelTypeIdentifier(identifier: number | string | LabelTypeIdentifier): LabelTypeRef {
+  // Live-verified: `labelTypes.resolve(undefined)` read `.id` off `undefined` and threw a RAW
+  // TypeError. An absent identifier is an SDK-caller bug: CONFIG_ERROR naming the accepted kinds.
+  if (identifier === null || identifier === undefined) {
+    throw identifierError('label_types.resolve', ACCEPTED_LABEL_TYPE_KINDS);
+  }
   if (typeof identifier === 'number') return { id: identifier };
   if (typeof identifier === 'string') {
     return /^\d+$/.test(identifier.trim())

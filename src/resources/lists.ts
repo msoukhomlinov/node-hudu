@@ -11,6 +11,10 @@ import type { HttpClient } from '../http.js';
 import { BaseResource } from './base.js';
 import type { ListParams, Page } from '../pagination.js';
 import { HuduConfigError, ResolutionError } from '../errors.js';
+import { identifierError } from './agent-layer-helpers.js';
+
+/** What `lists.resolve` accepts, named in every refusal. */
+const ACCEPTED_LIST_KINDS = 'a numeric id, an exact name, { id } or { name }';
 import type { DryRunResult, MutationOptions, Resolution } from '../types/common.js';
 import type { List, ListCreate, ListUpdate } from '../types/index.js';
 import type { ListIdentifier } from '../types/list.js';
@@ -35,6 +39,10 @@ export interface ListsListParams extends ListParams {
 
 /** Read the id/name a caller supplied, without guessing a kind the vendor cannot support. */
 function readListIdentifier(identifier: number | string | ListIdentifier): { id?: number; name?: string } {
+  // Live-verified: `lists.resolve(undefined)` read `.id` off `undefined` and threw a RAW TypeError.
+  if (identifier === null || identifier === undefined) {
+    throw identifierError('lists.resolve', ACCEPTED_LIST_KINDS);
+  }
   if (typeof identifier === 'number') return { id: identifier };
   if (typeof identifier === 'string') {
     return /^\d+$/.test(identifier.trim()) ? { id: Number(identifier.trim()) } : { name: identifier };

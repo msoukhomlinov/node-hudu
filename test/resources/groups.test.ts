@@ -190,6 +190,16 @@ describe('GroupsResource helpers', () => {
     expect(spy.calls).toHaveLength(4);
   });
 
+  it('throws RESOLUTION_TRUNCATED instead of the one matching group when the cap stopped the scan', async () => {
+    const page = [group({ id: 1 }), ...Array.from({ length: 24 }, (_, i) => group({ id: 100 + i, name: 'other', slug: `s${i}` }))];
+    const others = Array.from({ length: 25 }, (_, i) => group({ id: 200 + i, name: 'other', slug: `o${i}` }));
+    stubFetch((url) => json(url.includes('page=1') ? page : others));
+    await expect(makeClient().groups.resolve({ slug: 'engineering' })).rejects.toMatchObject({
+      code: 'RESOLUTION_TRUNCATED',
+      category: 'resolution',
+    });
+  });
+
   it('reports the resolution cost and candidates with resolutionDetails', async () => {
     stubFetch(() => json([group()]));
     const resolution = await makeClient().groups.resolve({ name: 'Engineering' }, { resolutionDetails: true });

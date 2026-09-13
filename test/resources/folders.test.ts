@@ -265,6 +265,16 @@ describe('FoldersResource helpers', () => {
     expect(spy.calls).toHaveLength(4);
   });
 
+  it('throws RESOLUTION_TRUNCATED instead of the one matching folder when the cap stopped the scan', async () => {
+    const page = [folder({ id: 1 }), ...Array.from({ length: 24 }, (_, i) => folder({ id: 100 + i, name: 'other', slug: `s${i}` }))];
+    const others = Array.from({ length: 25 }, (_, i) => folder({ id: 200 + i, name: 'other', slug: `o${i}` }));
+    stubFetch((url) => json({ folders: url.includes('page=1') ? page : others }));
+    await expect(makeClient().folders.resolve({ name: 'Runbooks' })).rejects.toMatchObject({
+      code: 'RESOLUTION_TRUNCATED',
+      category: 'resolution',
+    });
+  });
+
   it('reports resolution details for the expanded record', async () => {
     stubFetch(() => json({ folders: [folder()] }));
     const resolution = await makeClient().folders.resolve({ name: 'Runbooks' }, { expand: true, resolutionDetails: true });

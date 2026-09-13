@@ -247,6 +247,15 @@ export class RackStoragesResource extends BaseResource<RackStorage> {
     truncated: boolean,
     descriptor: string,
   ): Resolution<RackStorage> {
+    const candidates = matches.map((match) => ({ id: match.id, label: rackLabel(match) }));
+    if (matches.length > 1) {
+      throw ResolutionError.ambiguous(
+        `Ambiguous rack_storages.resolve for ${descriptor}: ${matches.length} rack storages match exactly.`,
+        { operation: 'rack_storages.resolve', resourceIds: candidates.map((candidate) => candidate.id) },
+      );
+    }
+    // A cap that stopped the scan is checked AFTER ambiguity: two or more exact matches
+    // already decide the lookup, so RESOLUTION_AMBIGUOUS wins (policy §6).
     if (truncated) {
       throw ResolutionError.truncated(
         `Client scan for rack_storages was truncated after ${scanned} record(s) while resolving ${descriptor}; ` +
@@ -256,13 +265,6 @@ export class RackStoragesResource extends BaseResource<RackStorage> {
           resourceIds: matches.map((match) => match.id),
           suggestedAction: 'Resolve by { id }, or raise resolution.maxScanRecords/maxScanPages.',
         },
-      );
-    }
-    const candidates = matches.map((match) => ({ id: match.id, label: rackLabel(match) }));
-    if (matches.length > 1) {
-      throw ResolutionError.ambiguous(
-        `Ambiguous rack_storages.resolve for ${descriptor}: ${matches.length} rack storages match exactly.`,
-        { operation: 'rack_storages.resolve', resourceIds: candidates.map((candidate) => candidate.id) },
       );
     }
     const value = matches.length === 1 ? (matches[0] as RackStorage) : null;

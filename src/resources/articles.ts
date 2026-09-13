@@ -2,6 +2,7 @@
  * ArticlesResource — Hudu "articles" resource.
  */
 import type { HttpClient } from '../http.js';
+import { assertScanDecided } from './agent-layer-helpers.js';
 import { BaseResource } from './base.js';
 import type { ListParams, Page } from '../pagination.js';
 import type { Article, ArticleCreate, ArticleUpdate } from '../types/index.js';
@@ -373,6 +374,9 @@ export class ArticlesResource extends BaseResource<Article> {
         { operation, resourceIds: exact.map((article) => article.id) },
       );
     }
+    // A cap that stopped the scan cannot prove uniqueness: a single exact match must not be
+    // handed back as a confident hit, so the shared guard throws RESOLUTION_TRUNCATED (policy §6).
+    assertScanDecided({ operation, scanned: fetched.length, truncated: scan.scanTruncated });
     const only = exact.length === 1 ? (exact[0] as Article) : undefined;
     if (only !== undefined) {
       return {
@@ -382,13 +386,6 @@ export class ArticlesResource extends BaseResource<Article> {
         scanTruncated: false,
         candidates: [{ id: only.id, label: articleLabel(only) } satisfies ResolutionCandidate],
       };
-    }
-    if (scan.scanTruncated) {
-      throw ResolutionError.truncated(
-        `${operation}: the bounded scan stopped after ${scan.scanned} article record(s), so the record ` +
-          'may exist beyond the resolution cap and cannot be decided.',
-        { operation },
-      );
     }
     if (fetched.length > 1) {
       throw ResolutionError.ambiguous(

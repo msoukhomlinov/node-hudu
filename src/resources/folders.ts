@@ -7,6 +7,7 @@ import type { ListParams, Page } from '../pagination.js';
 import type { Folder, FolderCreate, FolderIdentifier, FolderSummary, FolderUpdate } from '../types/folder.js';
 import type { DryRunResult, HelperOptions, MutationOptions, Resolution } from '../types/common.js';
 import { HuduConfigError, ResolutionError, ValidationFailedError } from '../errors.js';
+import { assertScanDecided, identifierError } from './agent-layer-helpers.js';
 
 export interface FoldersListParams extends ListParams {
   name?: string;
@@ -53,6 +54,12 @@ type FolderLookup =
 
 /** Normalize the accepted identifier forms, refusing anything the vendor cannot support. */
 function folderLookup(identifier: number | string | FolderIdentifier): FolderLookup {
+  // Live-verified: `folders.resolve(undefined)` used to read `.id` off `undefined` and throw a RAW
+  // TypeError. An absent identifier is an SDK-caller bug, so it gets the SDK's own validation shape
+  // (CONFIG_ERROR naming the accepted kinds), consistently with `companies.resolve(undefined)`.
+  if (identifier === null || identifier === undefined) {
+    throw identifierError('folders.resolve', ACCEPTED_KINDS);
+  }
   if (typeof identifier === 'number') {
     if (!Number.isInteger(identifier) || identifier < 1) {
       throw new ValidationFailedError(
@@ -243,6 +250,9 @@ export class FoldersResource extends BaseResource<Folder> {
         { operation, resourceIds: ids },
       );
     }
+    // A cap that stopped the scan cannot prove uniqueness: "exactly one match" is undecided,
+    // so the shared guard throws RESOLUTION_TRUNCATED instead of returning a confident hit.
+    assertScanDecided({ operation, scanned: scan.scanned, truncated: scan.scanTruncated, detail });
     if (first !== undefined) {
       return {
         value: first,
@@ -251,13 +261,6 @@ export class FoldersResource extends BaseResource<Folder> {
         scanTruncated: false,
         candidates: [{ id: first.id, label: first.name }],
       };
-    }
-    if (scan.scanTruncated) {
-      throw ResolutionError.truncated(
-        `${operation}: the bounded client scan was truncated after ${String(scan.scanned)} record(s); ` +
-          `${detail} may exist beyond the scan cap.`,
-        { operation },
-      );
     }
     return { value: null, resolutionCost: 'server-filter', scanned: scan.scanned, scanTruncated: false };
   }

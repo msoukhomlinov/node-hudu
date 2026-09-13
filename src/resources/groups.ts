@@ -7,6 +7,7 @@ import type { ListParams, Page } from '../pagination.js';
 import type { Group, GroupIdentifier, GroupSummary } from '../types/group.js';
 import type { HelperOptions, Resolution } from '../types/common.js';
 import { HuduConfigError, ResolutionError, ValidationFailedError } from '../errors.js';
+import { assertScanDecided, identifierError } from './agent-layer-helpers.js';
 
 export interface GroupsListParams extends ListParams {
   name?: string;
@@ -72,6 +73,11 @@ type GroupLookup =
 
 /** Normalize the accepted identifier forms, refusing anything the vendor cannot support. */
 function groupLookup(identifier: number | string | GroupIdentifier): GroupLookup {
+  // Live-verified: `groups.resolve(undefined)` read `.id` off `undefined` and threw a RAW TypeError.
+  // An absent identifier is an SDK-caller bug: CONFIG_ERROR naming the accepted kinds.
+  if (identifier === null || identifier === undefined) {
+    throw identifierError('groups.resolve', ACCEPTED_KINDS);
+  }
   if (typeof identifier === 'number') {
     if (!Number.isInteger(identifier) || identifier < 1) {
       throw new ValidationFailedError(
@@ -237,6 +243,9 @@ export class GroupsResource extends BaseResource<Group> {
         { operation, resourceIds: ids },
       );
     }
+    // A cap that stopped the scan cannot prove uniqueness: "exactly one match" is undecided,
+    // so the shared guard throws RESOLUTION_TRUNCATED instead of returning a confident hit.
+    assertScanDecided({ operation, scanned: scan.scanned, truncated: scan.scanTruncated, detail });
     if (first !== undefined) {
       return {
         value: first,
@@ -245,13 +254,6 @@ export class GroupsResource extends BaseResource<Group> {
         scanTruncated: false,
         candidates: [{ id: first.id, label: first.name }],
       };
-    }
-    if (scan.scanTruncated) {
-      throw ResolutionError.truncated(
-        `${operation}: the bounded client scan was truncated after ${String(scan.scanned)} record(s); ` +
-          `${detail} may exist beyond the scan cap.`,
-        { operation },
-      );
     }
     return { value: null, resolutionCost: 'server-filter', scanned: scan.scanned, scanTruncated: false };
   }

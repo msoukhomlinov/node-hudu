@@ -316,6 +316,15 @@ describe('AssetLayoutsResource paged resolution scan (QA finding 2)', () => {
     expect(spy.calls).toHaveLength(4);
   });
 
+  it('throws RESOLUTION_TRUNCATED instead of the one matching layout when the cap stopped the walk', async () => {
+    const others = Array.from({ length: 26 }, (_, i) => ({ ...layout, id: 700 + i, slug: `other-${i}`, name: `Other ${i}` }));
+    stubFetch((url) => json({ asset_layouts: url.includes('page=1') ? [layout, ...others.slice(1)] : others }));
+    await expect(makeClient().assetLayouts.resolve('server')).rejects.toMatchObject({
+      code: 'RESOLUTION_TRUNCATED',
+      category: 'resolution',
+    });
+  });
+
   it('reports the found layout on page 2 with resolutionDetails', async () => {
     stubFetch((url) => (url.includes('page=1')
       ? json({ asset_layouts: fullNonMatchingPage() })

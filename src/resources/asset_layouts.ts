@@ -2,6 +2,7 @@
  * AssetLayoutsResource — Hudu "asset_layouts" resource.
  */
 import type { HttpClient } from '../http.js';
+import { assertScanDecided } from './agent-layer-helpers.js';
 import { BaseResource } from './base.js';
 import type { ListParams, Page } from '../pagination.js';
 import type { AssetLayout, AssetLayoutCreate, AssetLayoutUpdate } from '../types/index.js';
@@ -274,6 +275,9 @@ export class AssetLayoutsResource extends BaseResource<AssetLayout> {
         { operation, resourceIds: exact.map((layout) => layout.id) },
       );
     }
+    // A cap that stopped the scan cannot prove uniqueness: a single exact match must not be
+    // handed back as a confident hit, so the shared guard throws RESOLUTION_TRUNCATED (policy §6).
+    assertScanDecided({ operation, scanned: fetched.length, truncated: scan.scanTruncated });
     const only = exact.length === 1 ? (exact[0] as AssetLayout) : undefined;
     if (only !== undefined) {
       return {
@@ -283,15 +287,6 @@ export class AssetLayoutsResource extends BaseResource<AssetLayout> {
         scanTruncated: false,
         candidates: [{ id: only.id, label: layoutLabel(only) } satisfies ResolutionCandidate],
       };
-    }
-    if (scan.scanTruncated) {
-      // The cap stopped the walk before the data ran out, so "not found" cannot be
-      // decided: returning null here would be a lie.
-      throw ResolutionError.truncated(
-        `${operation}: the bounded client scan was truncated after ${String(fetched.length)} record(s), ` +
-          'so no exact match could be decided.',
-        { operation },
-      );
     }
     if (fetched.length > 1) {
       throw ResolutionError.ambiguous(

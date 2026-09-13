@@ -9,7 +9,7 @@ import type { Asset, AssetCreate, AssetUpdate } from '../types/index.js';
 import type { AssetContext, AssetContextExpand, AssetIdentifier, AssetSummary } from '../types/asset.js';
 import type { DryRunResult, HelperOptions, Resolution, ResolutionCandidate } from '../types/common.js';
 import { HuduConfigError, HuduError, NotFoundError, ResolutionError } from '../errors.js';
-import { refuseDryRunInPayload } from './agent-layer-helpers.js';
+import { assertScanDecided, refuseDryRunInPayload } from './agent-layer-helpers.js';
 import { AssetLayoutsResource } from './asset_layouts.js';
 import { ExpirationsResource } from './expirations.js';
 import { RelationsResource } from './relations.js';
@@ -551,6 +551,9 @@ export class AssetsResource extends BaseResource<Asset> {
         { operation, resourceIds: exact.map((asset) => asset.id) },
       );
     }
+    // A cap that stopped the scan cannot prove uniqueness: a single exact match must not be
+    // handed back as a confident hit, so the shared guard throws RESOLUTION_TRUNCATED (policy §6).
+    assertScanDecided({ operation, scanned: fetched.length, truncated: scan.scanTruncated });
     const only = exact.length === 1 ? (exact[0] as Asset) : undefined;
     if (only !== undefined) {
       return {
@@ -560,13 +563,6 @@ export class AssetsResource extends BaseResource<Asset> {
         scanTruncated: false,
         candidates: [{ id: only.id, label: assetLabel(only) } satisfies ResolutionCandidate],
       };
-    }
-    if (scan.scanTruncated) {
-      throw ResolutionError.truncated(
-        `${operation}: the bounded scan stopped after ${scan.scanned} asset record(s), so the record ` +
-          'may exist beyond the resolution cap and cannot be decided.',
-        { operation },
-      );
     }
     if (fetched.length > 1) {
       throw ResolutionError.ambiguous(

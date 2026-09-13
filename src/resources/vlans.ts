@@ -282,6 +282,15 @@ export class VlansResource extends BaseResource<Vlan> {
     truncated: boolean,
     descriptor: string,
   ): Resolution<Vlan> {
+    const candidates = matches.map((match) => ({ id: match.id, label: vlanLabel(match) }));
+    if (matches.length > 1) {
+      throw ResolutionError.ambiguous(
+        `Ambiguous vlans.resolve for ${descriptor}: ${matches.length} VLANs match exactly.`,
+        { operation: 'vlans.resolve', resourceIds: candidates.map((candidate) => candidate.id) },
+      );
+    }
+    // A cap that stopped the scan is checked AFTER ambiguity: two or more exact matches
+    // already decide the lookup, so RESOLUTION_AMBIGUOUS wins (policy §6).
     if (truncated) {
       throw ResolutionError.truncated(
         `Client scan for vlans was truncated after ${scanned} record(s) while resolving ${descriptor}; ` +
@@ -290,13 +299,6 @@ export class VlansResource extends BaseResource<Vlan> {
           operation: 'vlans.resolve',
           suggestedAction: 'Resolve by { id }, narrow the filter, or raise resolution.maxScanRecords/maxScanPages.',
         },
-      );
-    }
-    const candidates = matches.map((match) => ({ id: match.id, label: vlanLabel(match) }));
-    if (matches.length > 1) {
-      throw ResolutionError.ambiguous(
-        `Ambiguous vlans.resolve for ${descriptor}: ${matches.length} VLANs match exactly.`,
-        { operation: 'vlans.resolve', resourceIds: candidates.map((candidate) => candidate.id) },
       );
     }
     const value = matches.length === 1 ? (matches[0] as Vlan) : null;

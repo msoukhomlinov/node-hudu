@@ -95,17 +95,6 @@ export interface DecideResolutionOptions<T> {
  */
 export function decideResolution<T>(opts: DecideResolutionOptions<T>): Resolution<T> {
   const ids = opts.matches.map(opts.idOf);
-  if (opts.truncated) {
-    throw ResolutionError.truncated(
-      `${opts.operation}: the bounded scan stopped after ${opts.scanned} record(s) before the data ran out, ` +
-        'so the record cannot be decided.',
-      {
-        operation: opts.operation,
-        resourceIds: ids.length > 0 ? ids : undefined,
-        suggestedAction: 'Pass { id }, narrow with a vendor filter, or raise resolution.maxScanRecords/maxScanPages.',
-      },
-    );
-  }
   if (opts.matches.length > 1) {
     const preview = ids.slice(0, 10).join(', ');
     throw ResolutionError.ambiguous(
@@ -115,6 +104,19 @@ export function decideResolution<T>(opts: DecideResolutionOptions<T>): Resolutio
         operation: opts.operation,
         resourceIds: ids,
         suggestedAction: 'Pass the numeric id of the record you want.',
+      },
+    );
+  }
+  // Two or more exact matches already decide the lookup ambiguously, so the ambiguity is
+  // reported BEFORE the cap: the caller learns the real reason the identifier is unusable.
+  if (opts.truncated) {
+    throw ResolutionError.truncated(
+      `${opts.operation}: the bounded scan stopped after ${opts.scanned} record(s) before the data ran out, ` +
+        'so the record cannot be decided.',
+      {
+        operation: opts.operation,
+        resourceIds: ids.length > 0 ? ids : undefined,
+        suggestedAction: 'Pass { id }, narrow with a vendor filter, or raise resolution.maxScanRecords/maxScanPages.',
       },
     );
   }
@@ -146,6 +148,38 @@ export function numericIds(identifier: Identifier | undefined): number[] | undef
   if (typeof identifier === 'number') return [identifier];
   if (typeof identifier === 'string') return /^\d+$/.test(identifier) ? [Number(identifier)] : undefined;
   return typeof identifier.id === 'number' ? [identifier.id] : undefined;
+}
+
+/**
+ * A scan cap that stopped the search cannot prove uniqueness (policy §6): the record
+ * may sit beyond the cap, so "exactly one match" is NOT a confident hit and "no match"
+ * is NOT a miss. This is the ONE guard every resolution decision consults before it
+ * returns a match, so a truncated scan throws `RESOLUTION_TRUNCATED` — never a value,
+ * never `null`. Lives here so the decision is not re-derived per resource.
+ */
+export function assertScanDecided(opts: {
+  /** Registry-style operation name, e.g. 'companies.findByDomain'. */
+  operation: string;
+  /** Records the scan actually examined. */
+  scanned: number;
+  /** True when a scan cap stopped the search before the data ran out. */
+  truncated: boolean;
+  /** Optional human descriptor of what was being resolved, e.g. 'name "Acme"'. */
+  detail?: string;
+  /** The identifier the caller passed; its numeric id (when any) reaches the error. */
+  identifier?: Identifier;
+}): void {
+  if (!opts.truncated) return;
+  throw ResolutionError.truncated(
+    `${opts.operation}: the bounded client scan was truncated after ${opts.scanned} record(s)` +
+      `${opts.detail === undefined ? '' : ` while resolving ${opts.detail}`}; a truncated scan cannot prove ` +
+      'uniqueness, so the record may exist beyond the resolution cap and cannot be decided.',
+    {
+      operation: opts.operation,
+      resourceIds: numericIds(opts.identifier),
+      suggestedAction: 'Pass { id }, narrow with a vendor filter, or raise resolution.maxScanRecords/maxScanPages.',
+    },
+  );
 }
 
 /** Refuse a fallback client scan when the caller set `allowClientScan: false` (policy §6). */

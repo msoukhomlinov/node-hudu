@@ -9,6 +9,10 @@ import type { HttpClient } from '../http.js';
 import { BaseResource } from './base.js';
 import type { ListParams, Page } from '../pagination.js';
 import { HuduConfigError, ResolutionError } from '../errors.js';
+import { identifierError } from './agent-layer-helpers.js';
+
+/** What `labels.resolve` accepts, named in every refusal. */
+const ACCEPTED_LABEL_KINDS = 'a numeric id, { id } or { labelableType, labelableId }';
 import type { DryRunResult, MutationOptions, Resolution } from '../types/common.js';
 import type { Label, LabelCreate, LabelUpdate } from '../types/index.js';
 import type { LabelIdentifier, LabelSummary } from '../types/label.js';
@@ -61,6 +65,10 @@ function readLabelIdentifier(identifier: number | string | LabelIdentifier): {
   labelableType?: string;
   labelableId?: number;
 } {
+  // Live-verified: `labels.resolve(undefined)` read `.id` off `undefined` and threw a RAW TypeError.
+  if (identifier === null || identifier === undefined) {
+    throw identifierError('labels.resolve', ACCEPTED_LABEL_KINDS);
+  }
   if (typeof identifier === 'number') return { id: identifier };
   if (typeof identifier === 'string') {
     return /^\d+$/.test(identifier.trim()) ? { id: Number(identifier.trim()) } : {};

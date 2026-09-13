@@ -12,6 +12,7 @@ import type {
   Resolution,
 } from '../types/common.js';
 import { HuduConfigError, ResolutionError, ValidationFailedError } from '../errors.js';
+import { assertScanDecided, identifierError } from './agent-layer-helpers.js';
 
 export interface WebsitesListParams extends ListParams {
   name?: string;
@@ -88,6 +89,12 @@ type WebsiteLookup =
 
 /** Normalize the accepted identifier forms, refusing anything the vendor cannot support. */
 function websiteLookup(identifier: number | string | WebsiteIdentifier): WebsiteLookup {
+  // Live-verified: `websites.resolve(undefined)` used to read `.id` off `undefined` and throw a RAW
+  // TypeError. An absent identifier is an SDK-caller bug, so it gets the SDK's own validation shape
+  // (CONFIG_ERROR naming the accepted kinds), consistently with `companies.resolve(undefined)`.
+  if (identifier === null || identifier === undefined) {
+    throw identifierError('websites.resolve', ACCEPTED_KINDS);
+  }
   if (typeof identifier === 'number') {
     if (!Number.isInteger(identifier) || identifier < 1) {
       throw new ValidationFailedError(
@@ -312,6 +319,9 @@ export class WebsitesResource extends BaseResource<Website> {
         { operation, resourceIds: ids },
       );
     }
+    // A cap that stopped the scan cannot prove uniqueness: "exactly one match" is undecided,
+    // so the shared guard throws RESOLUTION_TRUNCATED instead of returning a confident hit.
+    assertScanDecided({ operation, scanned: scan.scanned, truncated: scan.scanTruncated, detail });
     if (first !== undefined) {
       return {
         value: first,
@@ -320,13 +330,6 @@ export class WebsitesResource extends BaseResource<Website> {
         scanTruncated: false,
         candidates: [{ id: first.id, label: first.name }],
       };
-    }
-    if (scan.scanTruncated) {
-      throw ResolutionError.truncated(
-        `${operation}: the bounded client scan was truncated after ${String(scan.scanned)} record(s); ` +
-          `${detail} may exist beyond the scan cap.`,
-        { operation },
-      );
     }
     return { value: null, resolutionCost: 'server-filter', scanned: scan.scanned, scanTruncated: false };
   }

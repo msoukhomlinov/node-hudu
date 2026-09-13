@@ -291,6 +291,16 @@ describe('PasswordFoldersResource helpers', () => {
     expect(spy.calls).toHaveLength(4);
   });
 
+  it('throws RESOLUTION_TRUNCATED instead of the one matching password folder when the cap stopped the scan', async () => {
+    const page = [passwordFolder({ id: 1 }), ...Array.from({ length: 24 }, (_, i) => passwordFolder({ id: 100 + i, name: 'other', slug: `s${i}` }))];
+    const others = Array.from({ length: 25 }, (_, i) => passwordFolder({ id: 200 + i, name: 'other', slug: `o${i}` }));
+    stubFetch((url) => json({ password_folders: url.includes('page=1') ? page : others }));
+    await expect(makeClient().passwordFolders.resolve({ name: 'Prod secrets' })).rejects.toMatchObject({
+      code: 'RESOLUTION_TRUNCATED',
+      category: 'resolution',
+    });
+  });
+
   it('reports the resolution cost with resolutionDetails', async () => {
     stubFetch(() => json({ password_folders: [passwordFolder()] }));
     const resolution = await makeClient().passwordFolders.resolve({ name: 'Prod secrets' }, { resolutionDetails: true });

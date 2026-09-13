@@ -12,6 +12,11 @@ import { HuduConfigError, ResolutionError } from '../errors.js';
 import type { Resolution } from '../types/common.js';
 import type { User } from '../types/index.js';
 import type { UserIdentifier, UserSummary } from '../types/user.js';
+import { identifierError } from './agent-layer-helpers.js';
+
+/** What `users.resolve` and `users.findByEmail` accept, named the same way in every refusal. */
+const ACCEPTED_USER_KINDS =
+  'a numeric id, an email, a slug, an exact name, { id }, { email }, { slug } or { name }';
 
 export interface UsersListParams extends ListParams {
   first_name?: string;
@@ -75,6 +80,12 @@ interface UserRef {
 }
 
 function readUserIdentifier(identifier: number | string | UserIdentifier): UserRef {
+  // Live-verified: `users.resolve(undefined)` used to reach `identifier.id` and throw a RAW
+  // TypeError. An absent identifier is a caller bug, so it is refused in the SDK's own shape
+  // (CONFIG_ERROR naming the accepted kinds), the same way `companies.resolve(undefined)` is.
+  if (identifier === null || identifier === undefined) {
+    throw identifierError('users.resolve', ACCEPTED_USER_KINDS);
+  }
   if (typeof identifier === 'number') return { id: identifier };
   if (typeof identifier === 'string') {
     return /^\d+$/.test(identifier.trim()) ? { id: Number(identifier.trim()) } : { bare: identifier };
@@ -186,8 +197,7 @@ export class UsersResource extends BaseResource<User> {
     }
     if (stages.length === 0) {
       throw new HuduConfigError(
-        'users.resolve accepts a numeric id, an email, a slug, an exact name, { id }, { email }, { slug } or { name }; ' +
-          `${JSON.stringify(identifier)} matches none`,
+        `users.resolve accepts ${ACCEPTED_USER_KINDS}; ${JSON.stringify(identifier)} matches none`,
       );
     }
     let resolution: Resolution<User> | undefined;
