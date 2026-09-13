@@ -228,3 +228,79 @@ Gate: one composite plan row (both resolution caps, `redaction: credentials`, 10
 **Warning carried forward:** `prose-dangling-projection` cannot ship as a hard failure - 48 surviving sections
 name the tools this change retires and 59 already name tools absent from the projection, so it must be scoped
 (e.g. only over text this change touches), or the prose must be cleaned first.
+
+
+---
+
+## 14. Final reconciled plan (all six designs landed)
+
+Six documents now agree on the architecture. The one thing they changed about the original brief: **the
+context win comes from progressive disclosure, not from the search consolidation** (see section 13).
+
+### 14.1 New vendor behaviour found while designing the extractor (measured)
+
+Writing an article MUTATES its HTML: the vendor decodes entities (`&nbsp;` -> U+00A0, `&mdash;` -> em dash),
+re-escapes bare `&` (`&foo;` -> `&amp;foo;`), **ingests inline base64 images to `/public_photo/<id>`**, DELETES
+CDATA, auto-closes unclosed tags and inserts block newlines - but **keeps `<script>`/`<style>` verbatim**.
+So the extractor must BOTH decode entities and drop raw script/style, and it must not assume what it sent is
+what it stored. (Side finding: article writes can create public_photo rows, which explains extra rows in that
+resource.)
+
+### 14.2 The pipeline, as designed and measured
+
+| Stage | Design | Evidence |
+|---|---|---|
+| Extract | single O(n) character scan, no tag regex: block elements -> newline, table cells -> space, inline -> nothing, raw-skip `script`/`style`/`head`/`svg`, `pre` keeps line breaks, unknown entities stay literal | 0.216 ms for a real 9.1 KB article, ~24 ms/MB, worst adversarial 200 KB case 4.2 ms |
+| Why not regex | a tag regex **leaks script bodies**, mishandles `if (1<2)` (silent content loss) and glues cells together (`Low EndFortiGateRugged-35D` vs `Low End FortiGateRugged-35D`), which kills every phrase crossing an element boundary | measured against real markup |
+| Index | extracted text is **0.47-0.49x** the raw HTML (9,136 -> 4,268 bytes), so the 64 MB `maxIndexTextBytes` cap still covers ~20,000 typical articles and stays consistent with `maxDocs` 20,000; `maxDocBytes` 256 KB stays on RAW, plus a new `maxOutChars` | cold-build extraction for 2,000 articles ~0.3 s, ~10% of the page walk |
+| Match/score | postings-first: trigram-Dice candidates + bounded Levenshtein, per-field BM25 (title 3.0 / custom-field 1.6 / asset ident 1.6 / slug 1.2 / body 1.0) x coverage x resource prior | naive doc-loop scoring measured 18.4 s (exact) and 229 s (2 tokens) over 5,000 docs; postings-driven 4.5 ms / 310 ms |
+| Snippet | `text` is EXACTLY `extracted.slice(textStart, textEnd)` - ellipsis lives in `truncated.before/after`, never in the text; `spans` are absolute UTF-16 offsets into the extracted text, merged on overlap, capped at 8, with `omittedSpans` counted | **300/300 terms verified for slice equality AND span read-back equality** |
+| Honesty | the snippet is DERIVED text and the offsets do NOT apply to the raw `content` (raw HTML is a follow-up `get`); a title-only match returns `available: false` with empty spans rather than a fabricated highlight | - |
+
+### 14.3 The agent-facing surface
+
+- **`hudu_search`** - one tool, optional `mode` = `search | help | resources` (default `search`), refusing
+  ambiguity by construction: a missing `query` in search mode is a `CONFIG_ERROR`, never a silent help
+  fallback; a field the mode cannot honour is a `CONFIG_ERROR` naming the honoured fields; each mode returns a
+  distinct shape with the mode echoed.
+- **Progressive disclosure** - a **16-tool always-present core (~6,294 tokens, -91.6%)** plus **3 meta tools**
+  (`hudu_catalog`, `hudu_describe`, `hudu_invoke`) that make all 225 registry operations reachable on demand.
+  This is the change that matters for context: a 20-turn session falls from ~1.50M to ~126k tokens.
+- **Reachability** - today **78 of 225 operations are unreachable from any MCP client** (22 by projection rule,
+  56 by curation) with 0 tier overrides populated; the meta tools are what expose them.
+- Search consolidation alone saves only ~1.6k tokens (9 retireable tools), so it rides along rather than
+  leading.
+
+### 14.4 Build order (each step gated, each step shippable)
+
+1. **Extractor + snippet pipeline** (`src/search/html.ts`, `src/search/snippet.ts`) - pure, unit-testable,
+   no engine dependency. Gate: the 300/300 slice-and-span property test, the naive-regex counter-examples as
+   regression cases, and the adversarial 200 KB timing bound.
+2. **Engine + `operations.searchKnowledge`** - tokeniser, postings, fuzzy candidates, BM25, tiers T0/T1/T2,
+   in-memory index with TTL + `updated_at` watermark, honest `complete`/`reasons`/`degraded`/`scoreScope`.
+   Gate: plan row (both resolution caps, `redaction: credentials`), perf bound (postings-first, with the
+   18.4 s naive path as an explicit anti-regression note), live verification against the sandbox.
+3. **`hudu_search` MCP tool** + the 9-tool retirement and the `hudu_list_*_for_*` renames. Gate:
+   `--check-example` regenerates `examples/mcp-server.ts` (20 -> 15 registrations), plus the new rules
+   `searchable-resource-parity`, `help-mode-documents-resources`, `mode-honours-fields`.
+4. **Progressive disclosure** - core set + 3 meta tools + generated catalog. Gate: every unexposed operation
+   reachable (catalog-minus-core subset proof with a negative fixture), `hudu_invoke` validating against the
+   registry record with a shape-enumeration test (the agent's G4 - without it, validation silently no-ops),
+   dry-run forced on writes and destructive operations refused without a confirmation flag.
+5. **Optional**: the additive `{ primary_serial }` filter option; per-resource failure isolation in
+   `searchAcrossResources` (today one 5xx loses the whole call).
+
+### 14.5 Known unknowns (stated, not hidden)
+
+Asset custom-field snippets (the `field:Label` path - the row shape `{id,label,value}` IS verified); CJK/Thai
+folding; whether the Trix editor preserves `<script>` the way a direct API write does; any MCP host's
+`tools/list` filtering or list-changed behaviour (a projection document cannot control the server); and the
+`prose-dangling-projection` rule, which cannot ship as a hard failure until the 48 sections naming retired
+tools and the 59 naming unprojected tools are reconciled.
+
+### 14.6 What this does NOT include
+
+No persistent/on-disk index; no new runtime dependency; no vector/embedding search (lexical + fuzzy only);
+no fabricated scores or invented highlight spans; no `expand` on the search tool; no folding of the 18
+identity `find_*` lookups into search (that would trade capability for a number we have now measured
+correctly).
