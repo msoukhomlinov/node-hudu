@@ -9,19 +9,22 @@
       "helperCap": 4,
       "compact": "CompanySummary",
       "workflowResource": true,
-      "group": "A"
+      "group": "A",
+      "searchCovers": "name only"
     },
     "articles": {
       "helperCap": 4,
       "compact": "ArticleSummary",
       "workflowResource": true,
-      "group": "A"
+      "group": "A",
+      "searchCovers": "name (the TITLE) only \u2014 never the body, never the slug"
     },
     "assets": {
       "helperCap": 4,
       "compact": "AssetSummary",
       "workflowResource": true,
-      "group": "A"
+      "group": "A",
+      "searchCovers": "name and custom-field VALUES only \u2014 never field labels, never primary_serial / primary_model / primary_mail"
     },
     "asset_layouts": {
       "helperCap": 4,
@@ -33,13 +36,15 @@
       "helperCap": 4,
       "compact": "AssetPasswordSummary",
       "workflowResource": false,
-      "group": "A"
+      "group": "A",
+      "searchCovers": "name only, and the snippet is suppressed (credentials redaction)"
     },
     "websites": {
       "helperCap": 4,
       "compact": "WebsiteSummary",
       "workflowResource": false,
-      "group": "A"
+      "group": "A",
+      "searchCovers": "name only"
     },
     "folders": {
       "helperCap": 4,
@@ -51,13 +56,15 @@
       "helperCap": 4,
       "compact": "PasswordFolderSummary",
       "workflowResource": false,
-      "group": "A"
+      "group": "A",
+      "searchCovers": "name only, and the snippet is suppressed (credentials redaction)"
     },
     "groups": {
       "helperCap": 4,
       "compact": null,
       "workflowResource": false,
-      "group": "A"
+      "group": "A",
+      "searchCovers": "name only"
     },
     "networks": {
       "helperCap": 4,
@@ -213,7 +220,8 @@
       "helperCap": 4,
       "compact": "UserSummary",
       "workflowResource": false,
-      "group": "D"
+      "group": "D",
+      "searchCovers": "first / last name only \u2014 never the email"
     }
   },
   "operations": [
@@ -13106,13 +13114,83 @@
       "dryRun": false,
       "metadata": {
         "purpose": "Search the knowledge base by meaning-bearing text, articles first and assets second, with typo tolerance, ranked hits and verbatim snippets.",
-        "usage": "Runs an in-memory body index (articles and account-wide assets) unioned with Hudu's own text search, so a record written a second ago still surfaces. The index is built from list pages: no per-record fetch is issued. With a cold index this answers from Hudu's search alone and reports degraded body-not-indexed, because Hudu never matches article body content. limit defaults to 8 and is hard-capped at 25 (a larger value throws CONFIG_ERROR, never a silent clamp); scope defaults to articles and assets. Each hit carries a snippet (a verbatim slice of the stripped text) and a fetch call for the full record. Every bound that bites is named in the response reasons list with complete false, and one resource failing becomes a failure entry instead of losing the call. The scoreScope field says whether the scores are comparable across resources.",
+        "usage": "Mode-selecting helper with ONE entry point. mode:\"search\" (the default) needs query and returns ranked hits with plain-text snippets, scores and the follow-up call; it defaults to tier \"index\" when called as the MCP tool (the SDK default stays lazy). mode:\"help\" returns how to use the tool. mode:\"resources\" returns the searchable-resource table derived from the plan rows that declare a search vendor filter. A field the selected mode cannot honour throws CONFIG_ERROR naming the fields it does honour, and a missing query in search mode is CONFIG_ERROR \u2014 never a silent help fallback. Runs an in-memory body index (articles and account-wide assets) unioned with Hudu's own text search, so a record written a second ago still surfaces. The index is built from list pages: no per-record fetch is issued. With a cold index this answers from Hudu's search alone and reports degraded body-not-indexed, because Hudu never matches article body content. limit defaults to 8 and is hard-capped at 25 (a larger value throws CONFIG_ERROR, never a silent clamp); scope defaults to articles and assets. Each hit carries a snippet (a verbatim slice of the stripped text) and a fetch call for the full record. Every bound that bites is named in the response reasons list with complete false, and one resource failing becomes a failure entry instead of losing the call. The scoreScope field says whether the scores are comparable across resources.",
         "preferredWhen": "Preferred over articles.search, assets.search or any resource list whenever the caller is looking for CONTENT rather than an exact field: a phrase in an article body, a mistyped title, a serial or a custom-field value. Use the exact-match helper tier instead when the caller already holds an id, a slug or a domain.",
         "related": [
           "articles.search",
           "assets.search",
           "operations.searchAcrossResources"
-        ]
+        ],
+        "modes": {
+          "search": {
+            "shape": "KnowledgeSearchResult",
+            "fields": [
+              "mode",
+              "query",
+              "resources",
+              "limit",
+              "snippetChars",
+              "company_id",
+              "updated_since",
+              "min_score",
+              "exact_only",
+              "tier",
+              "refresh"
+            ],
+            "requires": [
+              "query"
+            ],
+            "rejects": [
+              "topic"
+            ],
+            "vendorRequest": true,
+            "summary": "run the query: ranked, fuzzy, snippet-bearing hits over article bodies and record text"
+          },
+          "help": {
+            "shape": "SearchHelpResult",
+            "fields": [
+              "mode",
+              "topic"
+            ],
+            "requires": [],
+            "rejects": [
+              "query",
+              "resources",
+              "limit",
+              "snippetChars",
+              "company_id",
+              "updated_since",
+              "min_score",
+              "exact_only",
+              "tier",
+              "refresh"
+            ],
+            "vendorRequest": false,
+            "summary": "how to use this tool: defaults, limits, score bands, degradation and empty-result semantics"
+          },
+          "resources": {
+            "shape": "SearchResourcesResult",
+            "fields": [
+              "mode"
+            ],
+            "requires": [],
+            "rejects": [
+              "topic",
+              "query",
+              "resources",
+              "limit",
+              "snippetChars",
+              "company_id",
+              "updated_since",
+              "min_score",
+              "exact_only",
+              "tier",
+              "refresh"
+            ],
+            "vendorRequest": false,
+            "summary": "what is searchable, the exact vendor text filter per resource, and what is silently not"
+          }
+        }
       },
       "compact": "KnowledgeSearchResult",
       "resolution": {

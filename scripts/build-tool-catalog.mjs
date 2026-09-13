@@ -316,10 +316,39 @@ function matchesType(expected, value) {
 function checkValue(field, value, path, problems) {
   const expected = field.type;
   if (expected === 'union') {
-    const anyOf = Array.isArray(field.anyOf) ? field.anyOf : (Array.isArray(field.variants) ? field.variants.map((v) => v.type) : ['unknown']);
+    const variants = Array.isArray(field.variants) ? field.variants : [];
+    const anyOf = Array.isArray(field.anyOf) ? field.anyOf : (variants.length ? variants.map((v) => v.type) : ['unknown']);
     let okType = false;
     for (let i = 0; i < anyOf.length; i += 1) if (matchesType(anyOf[i], value)) okType = true;
-    if (!okType) problems.push({ path, message: 'expected one of ' + anyOf.join(' | ') + ', got ' + typeNameOf(value) });
+    if (!okType) {
+      problems.push({ path, message: 'expected one of ' + anyOf.join(' | ') + ', got ' + typeNameOf(value) });
+      return;
+    }
+    // An ENUM carried on the union itself is enforced here too. Without this the branch accepted
+    // any value of a matching type and returned, so the registry row for procedures.create (process_type)
+    // (string|string|null WITH enum ["global","company","null"]) accepted "anything" and would have
+    // forwarded it to the vendor: a validator that looks like it checked is worse than none.
+    if (Array.isArray(field.enum) && field.enum.indexOf(value) === -1) {
+      problems.push({ path, message: 'expected one of ' + JSON.stringify(field.enum) + ', got ' + JSON.stringify(value) });
+      return;
+    }
+    // ...and a VARIANT's own enum, when the union declares one per variant: a value must satisfy at
+    // least one variant (its enum when present, its type otherwise).
+    if (variants.length) {
+      for (let i = 0; i < variants.length; i += 1) {
+        const variant = variants[i];
+        if (variant === null || typeof variant !== 'object') continue;
+        if (Array.isArray(variant.enum)) {
+          if (variant.enum.indexOf(value) !== -1) return;
+          continue;
+        }
+        if (matchesType(variant.type, value)) return;
+      }
+      problems.push({
+        path,
+        message: 'expected one of ' + variants.map((v) => (v && Array.isArray(v.enum) ? JSON.stringify(v.enum) : (v && v.type) || 'unknown')).join(' | ') + ', got ' + JSON.stringify(value),
+      });
+    }
     return;
   }
   if (!matchesType(expected, value)) {
@@ -413,6 +442,115 @@ export function governInvoke(record, options) {
 }
 
 `;
+// ---------------------------------------------------------------- the one search tool (contract)
+const planPath = path.resolve(ROOT, argValue('--plan', 'capabilities.plan.json'));
+const plan = existsSync(planPath) ? JSON.parse(readFileSync(planPath, 'utf8')) : { resources: {}, operations: [] };
+const planRows = Array.isArray(plan.operations) ? plan.operations : [];
+const resourceOfRow = (row) => {
+  const key = row.primitive || row.endpoint || '';
+  if (row.primitive) return String(row.primitive).split('.')[0];
+  const m = /^GET\/([a-z_]+)$/.exec(String(row.endpoint).replace(/\s+/g, ''));
+  return m ? m[1] : null;
+};
+const searchTool = projectedTools.find((t) => t.backingOperation === 'operations.searchKnowledge') || null;
+const searchRow = planRows.find((r) => r.helper === 'operations.searchKnowledge') || null;
+const searchModes = Object.entries((searchRow && searchRow.metadata && searchRow.metadata.modes) || {})
+  .map(([mode, m]) => ({ mode, shape: m.shape, fields: m.fields, requires: m.requires, rejects: m.rejects, vendorRequest: m.vendorRequest === true, summary: m.summary }));
+if (!searchTool) violations.push('operations.searchKnowledge is not exposed as a tool: mode="help" and mode="resources" would have no entry point');
+if (!searchModes.length) violations.push('operations.searchKnowledge declares no metadata.modes: the mode table (and the mode-honours-fields gate) has nothing to read');
+const searchableRows = planRows.filter((r) => r.search === 'search');
+const searchResources = {
+  derivedFrom: path.basename(planPath) + ' -> operations[] rows declaring `search: "search"`; text coverage from resources[].searchCovers',
+  count: searchableRows.length,
+  searchable: searchableRows.map((r) => {
+    const resource = resourceOfRow(r);
+    const covers = (plan.resources && plan.resources[resource] && plan.resources[resource].searchCovers) || null;
+    if (!covers) violations.push(`${resource}: declares a search vendor filter but the plan records no searchCovers text for it (mode="resources" would have to invent one)`);
+    return {
+      resource,
+      textFilter: covers,
+      otherFilters: (r.vendorFilters || []).filter((f) => f !== 'search').sort(),
+      redaction: r.redaction === 'credentials' ? 'credentials' : 'none',
+      snippetAllowed: r.redaction !== 'credentials',
+    };
+  }).sort((a, b) => (a.resource < b.resource ? -1 : 1)),
+  notSearchable: Object.keys(plan.resources || {})
+    .filter((r) => !searchableRows.some((row) => resourceOfRow(row) === r))
+    .sort()
+    .map((resource) => ({ resource, reason: 'declares no search vendor filter: ?search= is SILENTLY IGNORED and an unfiltered page comes back. Never read those rows as matches.' })),
+};
+const advertisedFields = searchTool
+  ? Object.values(searchTool.inputSchema || {}).filter((f) => f && typeof f === 'object' && typeof f.name === 'string')
+  : [];
+const searchFieldLines = advertisedFields
+  .filter((f) => (searchModes.find((m) => m.mode === 'search') || { fields: [] }).fields.indexOf(f.name) !== -1)
+  .map((f) => `  ${f.name.padEnd(15)} ${f.description || '(no description in the curated schema — a gate failure)'}`);
+const modeLines = searchModes.map((m) => `  mode="${m.mode}"${m.mode === 'search' ? ' (default)' : ''} ${m.summary}\n`
+  + `      honours : ${m.fields.join(', ')}\n`
+  + `      refuses : ${(m.rejects || []).join(', ') || '(nothing)'} (a CONFIG_ERROR naming the honoured fields, never a silent ignore)\n`
+  + `      returns : {mode:"${m.mode}", ${m.shape}}${m.vendorRequest ? ' - issues vendor requests' : ' - no vendor request, no index build, no state change'}`);
+const helpSections = {
+  modes: 'MODES\n' + modeLines.join('\n'),
+  limits: 'LIMITS AND DEFAULTS (a bound is REFUSED, never silently clamped)\n' + searchFieldLines.join('\n'),
+  degradation: [
+    'DEGRADATION, AND WHAT AN EMPTY ANSWER MEANS',
+    '  meta.complete   false when ANY bound bit (result limit, response bytes, candidate cap, fetch budget,',
+    '                  body truncation) or when the body index could not be used. meta.reasons names every bound',
+    '                  that bit; meta.truncation carries the detail. A truncated answer is never reported as complete.',
+    '  meta.degraded   null when article BODIES were searched. Otherwise {kind, advice}:',
+    '                  kind "body-not-indexed"  bodies exist but are not indexed (indexArticles:false, or every body',
+    '                                           exceeded maxDocBytes), or the index could not be built.',
+    '                  kind "vendor-only"       no index was used, so titles, names, custom-field values and',
+    '                                           identifiers were searched and article bodies were NOT.',
+    '  THE RULE        hits=[] with complete=true and degraded=null is the ONLY complete "nothing matched" answer.',
+    '                  In every other case the answer is partial or body-blind, and reporting "not documented" from',
+    '                  it is a wrong answer. This TOOL defaults to tier "index" (build or await the body index), so a',
+    '                  cold, body-blind answer is not the default it hands an agent - and when it happens it says so.',
+    '  Per-resource failure is isolated: the resource appears in meta.errors and the other hits survive.',
+  ].join('\n'),
+  results: [
+    'RESULTS',
+    '  Hit: {resource,id,title,score,relevance,scoreScope,match:{fields,terms,coverage,fuzzy},snippet:{text,spans,truncated},fetch,url}.',
+    '  match.fields says WHY it matched (title|slug|body|custom_field|ident); a fuzzy match is weaker evidence',
+    '  than an exact one, so say so when you report it. snippet.text is a verbatim slice of the record\'s',
+    '  HTML-stripped text, never a summary; it is DERIVED text, so its spans do not index the raw content - fetch',
+    '  the record for that. Full bodies are never returned: use the hit\'s fetch call (hudu_get_article / hudu_get_asset).',
+    '  meta.tokens_unmatched lists query terms that matched nothing: drop them and re-query rather than reporting failure.',
+  ].join('\n'),
+  followup: [
+    'FOLLOW-UP PATTERN',
+    '  1. hudu_search({query:"vpn tunnel down"})               -> ranked hits with snippets',
+    '  2. the hit\'s fetch call, e.g. hudu_get_article({id:28}) -> the full body (the only way to spend context on it)',
+    '  Identity lookup by exact key (serial, slug, domain, email) is hudu_find_* / hudu_get_*; paging and',
+    '  enumeration are the resource\'s hudu_list_* tools. This tool ranks; it does not list and it does not write.',
+    '  asset_passwords / password_folders hits are redacted with snippets suppressed (meta.redaction:"credentials").',
+  ].join('\n'),
+  query: [
+    'QUERY SYNTAX',
+    '  Free text: terms match independently (order does not matter), fuzzily within a bounded edit distance, and',
+    '  partial words match by prefix. exact_only:true disables fuzziness (vendor-style exact substring) while',
+    '  keeping ranking and snippets. min_score drops weak hits and reports how many it dropped, so a threshold',
+    '  never looks like absence. Prefer 2-4 meaning-bearing words over a sentence, and a serial or a field VALUE',
+    '  over the label of that field.',
+  ].join('\n'),
+  scoring: [
+    'SCORE BANDS',
+    '  90-100  exact title or identifier hit (or every term exact in a strong field)',
+    '  70-89   every query term matched, not all in the strongest field',
+    '  50-69   partial coverage (some terms matched)',
+    '  <50     fuzzy-only evidence - report it as such',
+    '  scoreScope:"per-resource" means do not compare scores across resources; "cross-resource" means you may.',
+    '  Ties break on updated_at desc, then (resource,id) ascending. relevance (1.0 = best in THIS response) is',
+    '  the number to show a human.',
+  ].join('\n'),
+};
+const searchHelp = {
+  sections: Object.keys(helpSections),
+  default: 'core',
+  core: ['modes', 'limits', 'degradation', 'results', 'followup'],
+  all: ['modes', 'limits', 'degradation', 'results', 'followup', 'query', 'scoring'],
+  text: helpSections,
+};
 const exposures = [...exposedByOp.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1));
 const lines = [];
 lines.push('// MACHINE-GENERATED by scripts/build-tool-catalog.mjs — DO NOT HAND-EDIT.');
@@ -434,6 +572,42 @@ lines.push(`export const CORE_TOOLS = ${JSON.stringify(CORE_TOOL_NAMES, null, 2)
 lines.push('');
 lines.push('/** The three META tools. Their descriptions are owned by the projection (scripts/project-mcp-tools.mjs). */');
 lines.push(`export const META_TOOLS = ${JSON.stringify(META_TOOLS, null, 2)};`);
+lines.push('');
+// ---------------------------------------------------------------- the one search tool
+// `hudu_search` has three modes, and the meta modes must answer from GENERATED data or they drift
+// from what the tool can actually do: the mode table comes from the plan row's `metadata.modes`,
+// the resources table from the plan rows that declare a search vendor filter, and the help text
+// from the curated schema plus those two. Nothing below is re-typed prose about a bound.
+lines.push('/** Curated descriptions of the CORE tools, so a consumer never re-types (or drifts from) them. */');
+lines.push('export const TOOL_DESCRIPTIONS = {');
+for (const name of CORE_TOOL_NAMES) {
+  const t = projectedTools.find((x) => x.name === name);
+  if (t) lines.push(`  ${JSON.stringify(name)}: ${JSON.stringify(t.description)},`);
+}
+lines.push('};');
+lines.push('');
+lines.push('/**');
+lines.push(' * mode -> the fields it honours, the fields it REFUSES (a CONFIG_ERROR, never a silent ignore),');
+lines.push(' * the shape it returns and whether it touches the vendor. Source: capabilities.plan.json ->');
+lines.push(' * operations[operations.searchKnowledge].metadata.modes, cross-checked against the curated schema');
+lines.push(' * by the `mode-honours-fields` gate.');
+lines.push(' */');
+lines.push(`export const SEARCH_MODES = ${JSON.stringify(searchModes, null, 2)};`);
+lines.push('');
+lines.push('/**');
+lines.push(' * The EXACT searchable-resource set, derived from capabilities.plan.json: a resource is searchable');
+lines.push(' * only when its list row declares a `search` vendor filter. Every other resource IGNORES ?search=');
+lines.push(' * and returns an unfiltered page, so advertising it would make the tool promise a search it cannot');
+lines.push(' * perform. Gated by `searchable-resource-parity`.');
+lines.push(' */');
+lines.push(`export const SEARCH_RESOURCES = ${JSON.stringify(searchResources, null, 2)};`);
+lines.push('');
+lines.push('/**');
+lines.push(' * mode="help" sections. GENERATED: the mode list, the field/limit list and the resource table are');
+lines.push(' * built from the projection + the plan, so help cannot advertise a field or a bound the tool does');
+lines.push(' * not have (gated by `help-mode-documents-resources`).');
+lines.push(' */');
+lines.push(`export const SEARCH_HELP = ${JSON.stringify(searchHelp, null, 2)};`);
 lines.push('');
 lines.push('/** operation -> the tool that exposes it (an operation absent here has no tool of its own). */');
 lines.push('export const EXPOSED = {');

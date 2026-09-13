@@ -69,6 +69,15 @@
 //                            stale manifest is a shipped lie about helper coverage, so it fails
 //                            here. Test it directly with --manifest <path>.
 //   catalog-planhash         the generated catalog is stale (planHash mismatch)
+//   searchable-resource-parity  a search tool advertises a resource whose `?search=` the vendor ignores
+//                            (the plan, the projected `resources` enum and the generated SEARCH_RESOURCES
+//                            table must name the same set) — an advertised resource that does not filter
+//                            is a false-match generator for every query
+//   help-mode-documents-resources  the generated help payload does not document every declared mode, the
+//                            fields that mode honours, complete/degraded semantics, or does not derive the
+//                            resources table from the plan
+//   mode-honours-fields      a mode claims a field it refuses, advertises a field no mode honours, or a
+//                            field only one mode honours does not say so in its description
 //   catalog-reachability     a registry operation has no catalog row, or has no tool and no reason
 //   catalog-op-exists        a catalog row names an unknown operation, or a tool that is not curated
 //   invoke-refusals          an operation excluded by the projection rule is not refused with a reason
@@ -675,7 +684,7 @@ if (!existsSync(CATALOG_PATH)) {
   const found = {};
   const visit = (node) => {
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
-      if (['CATALOG', 'CATALOG_PLAN_HASH', 'EXPOSED', 'REFUSALS', 'CORE_TOOLS', 'META_TOOLS', 'CORE_RULE'].includes(node.name.text)) {
+      if (['CATALOG', 'CATALOG_PLAN_HASH', 'EXPOSED', 'REFUSALS', 'CORE_TOOLS', 'META_TOOLS', 'CORE_RULE', 'SEARCH_MODES', 'SEARCH_RESOURCES', 'SEARCH_HELP', 'TOOL_DESCRIPTIONS'].includes(node.name.text)) {
         found[node.name.text] = literalToValue(node.initializer);
       }
     }
@@ -810,6 +819,143 @@ if (catalogData) {
     fail('core-budget', `${catalogRel} (CORE_TOOLS)`, `the CORE tools/list payload is ${payloadBytes} bytes (> ${CORE_BUDGET_BYTES} ≈ 8k tokens) — the profile is creeping back toward the flat surface`);
   } else {
     console.log(`capabilities:check — CORE profile: ${coreNames.length} tools, tools/list payload ${payloadBytes} bytes (budget ${CORE_BUDGET_BYTES}; the curated surface a client would otherwise carry is ${Buffer.byteLength(JSON.stringify(projectionRows))} bytes / ${projectionRows.length} tools)`);
+  }
+}
+
+
+// ---------------------------------------------------------------- the one search tool's contract
+// Three rules for `hudu_search` (design `.run/design/search/single-search-tool.md` 5.3). They are
+// mechanical, they read the SAME artifacts the tool is built from (the plan, the projected schema,
+// the generated catalog), and each of them was proven non-vacuous by injecting the violation it
+// names and watching this checker exit 1 (see `.run/live/impl-search-tool.md`).
+const searchManifestRel = path.relative(ROOT, MANIFEST_PATH);
+const planSearchRows = operations.filter((r) => r.search === 'search');
+const planSearchSet = new Set(
+  planSearchRows.map((r) => String(r.primitive || '').split('.')[0]).filter((x) => x.length > 0),
+);
+const planResourceCovers = (plan.resources && typeof plan.resources === 'object') ? plan.resources : {};
+const searchToolRow = projectionRows.find((r) => r.backingOperation === 'operations.searchKnowledge') || null;
+const planSearchRow = operations.find((r) => r.helper === 'operations.searchKnowledge') || null;
+const searchModeTable = (planSearchRow && planSearchRow.metadata && planSearchRow.metadata.modes) || null;
+const advertisedFields = (() => {
+  if (searchToolRow === null || searchToolRow.inputSchema === null || typeof searchToolRow.inputSchema !== 'object') return [];
+  return Object.values(searchToolRow.inputSchema).filter((f) => f && typeof f === 'object' && typeof f.name === 'string');
+})();
+
+// 1. `searchable-resource-parity` - a search tool may only advertise resources whose `?search=`
+// the vendor actually filters. Three copies must agree: the plan (the source), the projected
+// `resources` enum, and the generated `mode:"resources"` table.
+if (searchToolRow === null) {
+  fail('searchable-resource-parity', `${searchManifestRel} (projection)`, 'operations.searchKnowledge is not projected as a tool, so its advertised resource set cannot be checked');
+} else {
+  const resourcesField = advertisedFields.find((f) => f.name === 'resources') || null;
+  const advertisedSet = new Set(
+    resourcesField && resourcesField.items && Array.isArray(resourcesField.items.enum) ? resourcesField.items.enum : [],
+  );
+  const generatedSet = new Set(((catalogData && catalogData.SEARCH_RESOURCES && catalogData.SEARCH_RESOURCES.searchable) || []).map((r) => r.resource));
+  const cmp = (label, got) => {
+    const missing = [...planSearchSet].filter((x) => !got.has(x));
+    const extra = [...got].filter((x) => !planSearchSet.has(x));
+    if (missing.length || extra.length) {
+      fail('searchable-resource-parity', label,
+        `advertises ${JSON.stringify([...got].sort())} but the plan declares ${JSON.stringify([...planSearchSet].sort())} `
+        + `(missing: ${missing.join(', ') || 'none'}; advertises a resource whose ?search= the vendor ignores: ${extra.join(', ') || 'none'}). `
+        + 'A resource without a declared search filter returns an unfiltered page, so advertising it would make the tool promise a search it cannot perform.');
+    }
+  };
+  if (!advertisedSet.size && planSearchSet.size) {
+    fail('searchable-resource-parity', `${searchManifestRel} (hudu_search.inputSchema.resources)`,
+      `the tool advertises NO resource enum while the plan declares ${planSearchSet.size} searchable resource(s) - the contract would be unchecked`);
+  } else {
+    cmp(`${searchManifestRel} (hudu_search.inputSchema.resources.enum)`, advertisedSet);
+  }
+  cmp(`${path.relative(ROOT, CATALOG_PATH)} (SEARCH_RESOURCES.searchable)`, generatedSet);
+  for (const r of planSearchSet) {
+    const covers = planResourceCovers[r] && planResourceCovers[r].searchCovers;
+    if (typeof covers !== 'string' || covers.length === 0) {
+      fail('searchable-resource-parity', `capabilities.plan.json (resources.${r}.searchCovers)`,
+        `${r} declares a search vendor filter but the plan records no prose for what that filter covers — mode="resources" would have to invent it`);
+    }
+  }
+}
+
+// 2. `help-mode-documents-resources` - the help payload must document the modes, the fields each
+// one honours and the degradation semantics, and the resources payload must be GENERATED.
+if (searchModeTable === null) {
+  fail('help-mode-documents-resources', 'capabilities.plan.json (operations.searchKnowledge.metadata.modes)',
+    'the tool declares no mode table, so nothing can hold help to the modes it documents');
+} else if (!catalogData || !catalogData.SEARCH_HELP || !catalogData.SEARCH_HELP.text) {
+  fail('help-mode-documents-resources', `${catalogRel} (SEARCH_HELP)`,
+    'the generated help payload is missing — a hand-written help would drift from the tool it describes');
+} else {
+  const help = catalogData.SEARCH_HELP.text;
+  const modeNames = Object.keys(searchModeTable);
+  for (const mode of modeNames) {
+    if (typeof help.modes !== 'string' || help.modes.indexOf(`mode="${mode}"`) === -1) {
+      fail('help-mode-documents-resources', `${catalogRel} (SEARCH_HELP.text.modes)`, `mode "${mode}" is not documented in the help payload`);
+    }
+    const spec = searchModeTable[mode] || {};
+    for (const field of Array.isArray(spec.fields) ? spec.fields : []) {
+      if (typeof help.modes !== 'string' || help.modes.indexOf(field) === -1) {
+        fail('help-mode-documents-resources', `${catalogRel} (SEARCH_HELP.text.modes)`, `mode "${mode}" honours "${field}" but the help payload never names it`);
+      }
+    }
+  }
+  for (const word of ['complete', 'degraded', 'body-not-indexed', 'vendor-only', 'meta.reasons']) {
+    if (typeof help.degradation !== 'string' || help.degradation.indexOf(word) === -1) {
+      fail('help-mode-documents-resources', `${catalogRel} (SEARCH_HELP.text.degradation)`,
+        `the help payload does not explain "${word}" — complete:false and a degraded answer are the two facts an agent must not miss`);
+    }
+  }
+  const searchSpec = searchModeTable.search || null;
+  for (const field of searchSpec && Array.isArray(searchSpec.fields) ? searchSpec.fields : []) {
+    if (typeof help.limits !== 'string' || help.limits.indexOf(field) === -1) {
+      fail('help-mode-documents-resources', `${catalogRel} (SEARCH_HELP.text.limits)`,
+        `mode "search" honours "${field}" but the limits section never states its default or bound`);
+    }
+  }
+  if (!catalogData.SEARCH_RESOURCES || typeof catalogData.SEARCH_RESOURCES.derivedFrom !== 'string'
+      || catalogData.SEARCH_RESOURCES.derivedFrom.indexOf('capabilities.plan.json') === -1) {
+    fail('help-mode-documents-resources', `${catalogRel} (SEARCH_RESOURCES.derivedFrom)`,
+      'the resources payload does not say it is derived from the plan — a hand-written table in a model\'s context is a wrong-answer generator');
+  }
+}
+
+// 3. `mode-honours-fields` - every advertised field must be honoured by at least one mode, no mode
+// may claim a field it refuses, and a field only one mode honours must say so in its description.
+if (searchModeTable !== null) {
+  const honoured = new Set();
+  for (const mode of Object.keys(searchModeTable)) {
+    const spec = searchModeTable[mode] || {};
+    const fields = Array.isArray(spec.fields) ? spec.fields : [];
+    for (const field of fields) honoured.add(field);
+    for (const field of Array.isArray(spec.rejects) ? spec.rejects : []) {
+      if (fields.indexOf(field) !== -1) {
+        fail('mode-honours-fields', `capabilities.plan.json (modes.${mode})`, `mode "${mode}" both honours and refuses "${field}"`);
+      }
+    }
+  }
+  for (const field of advertisedFields) {
+    if (!honoured.has(field.name)) {
+      fail('mode-honours-fields', `${searchManifestRel} (hudu_search.inputSchema.${field.name})`,
+        `"${field.name}" is advertised by the tool but no mode honours it — the schema would advertise a field nothing can act on`);
+    }
+  }
+  for (const field of honoured) {
+    if (!advertisedFields.some((f) => f.name === field)) {
+      fail('mode-honours-fields', `capabilities.plan.json (operations.searchKnowledge.metadata.modes)`,
+        `a mode claims to honour "${field}", which the curated schema does not advertise`);
+    }
+  }
+  const owningModes = (field) => Object.keys(searchModeTable).filter((m) => ((searchModeTable[m] || {}).fields || []).indexOf(field) !== -1);
+  for (const field of advertisedFields) {
+    const owners = owningModes(field.name);
+    if (owners.length !== 1) continue;
+    const text = typeof field.description === 'string' ? field.description : '';
+    if (text.indexOf(owners[0]) === -1) {
+      fail('mode-honours-fields', `${searchManifestRel} (hudu_search.inputSchema.${field.name}.description)`,
+        `"${field.name}" is honoured by mode "${owners[0]}" alone, but its description never names that mode — a caller cannot tell when the field applies`);
+    }
   }
 }
 

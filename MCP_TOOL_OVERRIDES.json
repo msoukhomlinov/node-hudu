@@ -43,7 +43,7 @@
   {
     "tool": "hudu_find_activity_logs_by_resource",
     "field": "description",
-    "newValue": "List the activity log entries for one resource. Preferred over activity_logs.listAll for 'what happened to this record'. Returns one record: a compact ActivityLogSummary (updated_at, \u2026 dropped); expand: true returns the full ActivityLog. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_activity_logs or hudu_get_activity_log for that).",
+    "newValue": "List the activity log entries for one resource. Preferred over activity_logs.listAll for 'what happened to this record'. Returns one record: a compact ActivityLogSummary (updated_at, \u2026 dropped); expand: true returns the full ActivityLog. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search or hudu_get_activity_log for that).",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -73,7 +73,7 @@
   {
     "tool": "hudu_get_activity_log",
     "field": "description",
-    "newValue": "Resolve an activity log entry by its id. Use activity_logs.findByResource instead whenever the resource is known - it uses server filters and needs no scan. Returns one record: a compact ActivityLogSummary (updated_at, \u2026 dropped); expand: true returns the full ActivityLog. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_activity_logs (or hudu_search_across_resources when the resource type is unknown).",
+    "newValue": "Resolve an activity log entry by its id. Use activity_logs.findByResource instead whenever the resource is known - it uses server filters and needs no scan. Returns one record: a compact ActivityLogSummary (updated_at, \u2026 dropped); expand: true returns the full ActivityLog. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Not for text discovery: call hudu_search.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -103,7 +103,7 @@
   {
     "tool": "hudu_get_api_info",
     "field": "description",
-    "newValue": "Return the API information document. Prefer api_info.get; this exists so every resource satisfies the same floor. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_api_info (or hudu_search_across_resources when the resource type is unknown).",
+    "newValue": "Return the API information document. Prefer api_info.get; this exists so every resource satisfies the same floor. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Not for text discovery: call hudu_search.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -214,7 +214,7 @@
   {
     "tool": "hudu_find_articles_by_slug",
     "field": "description",
-    "newValue": "Find one article by its URL slug. Preferred over articles.list for a slug lookup. Returns one record: a compact ArticleSummary (content, url, object_type, \u2026 dropped); expand: true returns the full Article. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_articles or hudu_get_article for that).",
+    "newValue": "Find one article by its URL slug. Preferred over articles.list for a slug lookup. Returns one record: a compact ArticleSummary (content, url, object_type, \u2026 dropped); expand: true returns the full Article. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search or hudu_get_article for that).",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -244,7 +244,7 @@
   {
     "tool": "hudu_get_article_context",
     "field": "description",
-    "newValue": "Fetch an article with its company and folder context. Preferred over three separate calls when an agent starts from an article. Returns ArticleContext. Bounded: every sub-list is fetched with limit, default 25, hard maximum 100 \u2014 no sub-fetch walks the account. Do not use it to page a resource: call hudu_search_articles. It issues several bounded reads per call.",
+    "newValue": "Fetch an article with its company and folder context. Preferred over three separate calls when an agent starts from an article. Returns ArticleContext. Bounded: every sub-list uses limit (default 25, max 100) \u2014 no sub-fetch walks the account. Not for paging: call hudu_search.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -257,7 +257,7 @@
     "tool": "hudu_articles_list",
     "field": "exclude",
     "newValue": true,
-    "reason": "Duplicate outcome: after re-pointing it backs onto articles.search, exactly like hudu_search_articles (the retained name). hudu_search_articles is the search-first name for the same bounded read. A tools/list where two tools do the same job is worse than a slightly shorter list."
+    "reason": "Duplicate outcome: after re-pointing it backs onto articles.search, exactly like hudu_search (the retained name). hudu_search performs the same bounded search with body-aware ranking and snippets. A tools/list where two tools do the same job is worse than a slightly shorter list."
   },
   {
     "tool": "hudu_articles_resolve",
@@ -274,7 +274,7 @@
   {
     "tool": "hudu_get_article",
     "field": "description",
-    "newValue": "Resolve a knowledge-base article from an id, name or slug. Use when the article identifier is a name or slug; articles.get is cheaper for a known id. Returns one record: a compact ArticleSummary (content, url, object_type, \u2026 dropped); expand: true returns the full Article. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_articles (or hudu_search_across_resources when the resource type is unknown).",
+    "newValue": "Resolve a knowledge-base article from an id, name or slug. Use when the article identifier is a name or slug; articles.get is cheaper for a known id. Returns one record: a compact ArticleSummary (content, url, object_type, \u2026 dropped); expand: true returns the full Article. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Not for text discovery: call hudu_search.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -427,7 +427,7 @@
   {
     "tool": "hudu_get_asset_layout",
     "field": "description",
-    "newValue": "Resolve an asset layout from an id, name or slug. Use when the identifier is a layout name or slug; asset_layouts.get is cheaper for a known id. Returns one record: a compact AssetLayoutSummary (icon_color, sidebar_folder_id, include_passwords, \u2026 dropped); expand: true returns the full AssetLayout. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_asset_layouts (or hudu_search_across_resources when the resource type is unknown).",
+    "newValue": "Resolve an asset layout from an id, name or slug. Use when the identifier is a layout name or slug; asset_layouts.get is cheaper for a known id. Returns one record: a compact AssetLayoutSummary (icon_color, sidebar_folder_id, include_passwords, \u2026 dropped); expand: true returns the full AssetLayout. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Not for text discovery: call hudu_search.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -573,7 +573,7 @@
   {
     "tool": "hudu_find_asset_passwords_by_slug",
     "field": "description",
-    "newValue": "Find one password record by its URL slug. Preferred over asset_passwords.list for a slug lookup. Returns one record: a compact AssetPasswordSummary (passwordable_id, passwordable_type, description, \u2026 dropped); expand: true returns the full AssetPassword. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_asset_passwords or hudu_get_asset_password for that). Sensitive: it returns credential-shaped fields; the SDK redacts them from logs and audit payloads by default.",
+    "newValue": "Find one password record by its URL slug. Preferred over asset_passwords.list for a slug lookup. Returns one record: a compact AssetPasswordSummary (passwordable_id, passwordable_type, description, \u2026 dropped); expand: true returns the full AssetPassword. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search or hudu_get_asset_password for that). Sensitive: returns credential-shaped fields; the SDK redacts them from logs by default.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -592,7 +592,7 @@
     "tool": "hudu_asset_passwords_list",
     "field": "exclude",
     "newValue": true,
-    "reason": "Duplicate outcome: after re-pointing it backs onto asset_passwords.search, exactly like hudu_search_asset_passwords (the retained name). hudu_search_asset_passwords is the search-first name for the same bounded read. A tools/list where two tools do the same job is worse than a slightly shorter list."
+    "reason": "Duplicate outcome: after re-pointing it backs onto asset_passwords.search, exactly like hudu_search (the retained name). hudu_search performs the same bounded search with body-aware ranking and snippets. A tools/list where two tools do the same job is worse than a slightly shorter list."
   },
   {
     "tool": "hudu_asset_passwords_resolve",
@@ -609,7 +609,7 @@
   {
     "tool": "hudu_get_asset_password",
     "field": "description",
-    "newValue": "Resolve a password record from an id, name or slug. Use when the identifier is a name or slug; asset_passwords.get returns the full record including the secret. Returns one record: a compact AssetPasswordSummary (passwordable_id, passwordable_type, description, \u2026 dropped); expand: true returns the full AssetPassword. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_asset_passwords (or hudu_search_across_resources when the resource type is unknown). Sensitive: it returns credential-shaped fields; the SDK redacts them from logs and audit payloads by default.",
+    "newValue": "Resolve a password record from an id, name or slug. Use when the identifier is a name or slug; asset_passwords.get returns the full record including the secret. Returns one record: a compact AssetPasswordSummary (passwordable_id, passwordable_type, description, \u2026 dropped); expand: true returns the full AssetPassword. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Not for text discovery: call hudu_search. Sensitive: returns credential-shaped fields; the SDK redacts them from logs by default.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -633,7 +633,7 @@
   {
     "tool": "hudu_search_asset_passwords",
     "field": "description",
-    "newValue": "Search password records by a free-text query. Preferred over asset_passwords.list for any text search. Returns rows: a compact AssetPasswordSummary (passwordable_id, passwordable_type, description, \u2026 dropped); expand: true returns the full AssetPassword. Bounded: limit defaults to 25 and is hard-capped at 100; a larger value throws CONFIG_ERROR and is never silently clamped. Do not use it when you already have an id, slug or domain: call hudu_get_asset_password instead. Sensitive: it returns credential-shaped fields; the SDK redacts them from logs and audit payloads by default.",
+    "newValue": "Search password records by a free-text query. Preferred over asset_passwords.list for any text search. Returns rows: a compact AssetPasswordSummary (passwordable_id, passwordable_type, description, \u2026 dropped); expand: true returns the full AssetPassword. Bounded: limit defaults to 25 and is hard-capped at 100; a larger value throws CONFIG_ERROR and is never silently clamped. Do not use it when you already have an id, slug or domain: call hudu_get_asset_password instead. Sensitive: returns credential-shaped fields; the SDK redacts them from logs by default.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -808,7 +808,7 @@
   {
     "tool": "hudu_find_assets_by_serial",
     "field": "description",
-    "newValue": "Find one asset by its primary serial number. Preferred over assets.listAllAcrossCompanies for any serial lookup. Returns one record: a compact AssetSummary (slug, primary_mail, primary_model, \u2026 dropped); expand: true returns the full Asset. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_assets or hudu_get_asset for that).",
+    "newValue": "Find one asset by its primary serial number. Preferred over assets.listAllAcrossCompanies for any serial lookup. Returns one record: a compact AssetSummary (slug, primary_mail, primary_model, \u2026 dropped); expand: true returns the full Asset. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search or hudu_get_asset for that).",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -838,7 +838,7 @@
   {
     "tool": "hudu_get_asset_context",
     "field": "description",
-    "newValue": "Fetch an asset with the context an agent needs about it. Preferred over four separate calls when an agent starts from an asset. Returns AssetContext. Bounded: every sub-list is fetched with limit, default 25, hard maximum 100 \u2014 no sub-fetch walks the account. Do not use it to page a resource: call hudu_search_assets. It issues several bounded reads per call.",
+    "newValue": "Fetch an asset with the context an agent needs about it. Preferred over four separate calls when an agent starts from an asset. Returns AssetContext. Bounded: every sub-list uses limit (default 25, max 100) \u2014 no sub-fetch walks the account. Not for paging: call hudu_search.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -851,13 +851,13 @@
     "tool": "hudu_assets_list",
     "field": "exclude",
     "newValue": true,
-    "reason": "Duplicate outcome: after re-pointing it backs onto assets.search, exactly like hudu_search_assets (the retained name). hudu_search_assets is the search-first name for the same bounded read. A tools/list where two tools do the same job is worse than a slightly shorter list."
+    "reason": "Duplicate outcome: after re-pointing it backs onto assets.search, exactly like hudu_search (the retained name). hudu_search performs the same bounded search with body-aware ranking and snippets. A tools/list where two tools do the same job is worse than a slightly shorter list."
   },
   {
     "tool": "hudu_assets_listAcrossCompanies",
     "field": "exclude",
     "newValue": true,
-    "reason": "Duplicate outcome: after re-pointing it backs onto assets.search, exactly like hudu_search_assets (the retained name). hudu_search_assets covers the same account-wide bounded search (pass company_id for one company). A tools/list where two tools do the same job is worse than a slightly shorter list."
+    "reason": "Duplicate outcome: after re-pointing it backs onto assets.search, exactly like hudu_search (the retained name). hudu_search covers the same account-wide bounded search (pass company_id for one company). A tools/list where two tools do the same job is worse than a slightly shorter list."
   },
   {
     "tool": "hudu_assets_moveLayout",
@@ -903,7 +903,7 @@
   {
     "tool": "hudu_get_asset",
     "field": "description",
-    "newValue": "Resolve an asset from an id, serial, name or slug. Use when the identifier is a serial or a name; assets.get is cheaper for a known id. Returns one record: a compact AssetSummary (slug, primary_mail, primary_model, \u2026 dropped); expand: true returns the full Asset. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_assets (or hudu_search_across_resources when the resource type is unknown).",
+    "newValue": "Resolve an asset from an id, serial, name or slug. Use when the identifier is a serial or a name; assets.get is cheaper for a known id. Returns one record: a compact AssetSummary (slug, primary_mail, primary_model, \u2026 dropped); expand: true returns the full Asset. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Not for text discovery: call hudu_search.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -1021,7 +1021,7 @@
   {
     "tool": "hudu_get_card",
     "field": "description",
-    "newValue": "Resolve an integrator card from an integration identifier. Preferred over calling cards.lookup and cards.jump directly when the goal is 'give me the card for this integration record'. Returns one record: a compact IntegratorCardSummary (data, office_365_assigned_products, exchange_license_assign_date, \u2026 dropped); expand: true returns the full IntegratorCard. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_cards (or hudu_search_across_resources when the resource type is unknown).",
+    "newValue": "Resolve an integrator card from an integration identifier. Preferred over calling cards.lookup and cards.jump directly when the goal is 'give me the card for this integration record'. Returns one record: a compact IntegratorCardSummary (data, office_365_assigned_products, exchange_license_assign_date, \u2026 dropped); expand: true returns the full IntegratorCard. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Not for text discovery: call hudu_search.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -1132,7 +1132,7 @@
   {
     "tool": "hudu_find_companies_by_domain",
     "field": "description",
-    "newValue": "Find one company by its website/domain. Preferred over companies.list for any domain lookup. Returns one record: a compact CompanySummary (address_line_1, address_line_2, zip, \u2026 dropped); expand: true returns the full Company. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_companies or hudu_get_company for that).",
+    "newValue": "Find one company by its website/domain. Preferred over companies.list for any domain lookup. Returns one record: a compact CompanySummary (address_line_1, address_line_2, zip, \u2026 dropped); expand: true returns the full Company. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search or hudu_get_company for that).",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -1156,7 +1156,7 @@
   {
     "tool": "hudu_find_companies_by_slug",
     "field": "description",
-    "newValue": "Find one company by its URL slug. Preferred over companies.list for a slug lookup. Returns one record: a compact CompanySummary (address_line_1, address_line_2, zip, \u2026 dropped); expand: true returns the full Company. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_companies or hudu_get_company for that).",
+    "newValue": "Find one company by its URL slug. Preferred over companies.list for a slug lookup. Returns one record: a compact CompanySummary (address_line_1, address_line_2, zip, \u2026 dropped); expand: true returns the full Company. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search or hudu_get_company for that).",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -1186,7 +1186,7 @@
   {
     "tool": "hudu_get_company_context",
     "field": "description",
-    "newValue": "Fetch a company together with the bounded context an agent needs about it. Preferred over four separate list calls when an agent starts work on a company. Returns CompanyContext. Bounded: every sub-list is fetched with limit, default 25, hard maximum 100 \u2014 no sub-fetch walks the account. Do not use it to page a resource: call hudu_search_companies. It issues several bounded reads per call.",
+    "newValue": "Fetch a company together with the bounded context an agent needs about it. Preferred over four separate list calls when an agent starts work on a company. Returns CompanyContext. Bounded: every sub-list uses limit (default 25, max 100) \u2014 no sub-fetch walks the account. Not for paging: call hudu_search.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -1205,7 +1205,7 @@
     "tool": "hudu_companies_list",
     "field": "exclude",
     "newValue": true,
-    "reason": "Duplicate outcome: after re-pointing it backs onto companies.search, exactly like hudu_search_companies (the retained name). hudu_search_companies is the search-first name for the same bounded read. A tools/list where two tools do the same job is worse than a slightly shorter list."
+    "reason": "Duplicate outcome: after re-pointing it backs onto companies.search, exactly like hudu_search (the retained name). hudu_search performs the same bounded search with body-aware ranking and snippets. A tools/list where two tools do the same job is worse than a slightly shorter list."
   },
   {
     "tool": "hudu_companies_resolve",
@@ -1222,7 +1222,7 @@
   {
     "tool": "hudu_get_company",
     "field": "description",
-    "newValue": "Resolve a company from an id, name, slug or domain. Use when the caller has an identifier rather than a numeric id; companies.get is cheaper when the id is known. Returns one record: a compact CompanySummary (address_line_1, address_line_2, zip, \u2026 dropped); expand: true returns the full Company. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_companies (or hudu_search_across_resources when the resource type is unknown).",
+    "newValue": "Resolve a company from an id, name, slug or domain. Use when the caller has an identifier rather than a numeric id; companies.get is cheaper when the id is known. Returns one record: a compact CompanySummary (address_line_1, address_line_2, zip, \u2026 dropped); expand: true returns the full Company. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Not for text discovery: call hudu_search.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -1363,7 +1363,7 @@
   {
     "tool": "hudu_find_expirations_by_resource",
     "field": "description",
-    "newValue": "List the expirations attached to one resource. Preferred over expirations.listAll for 'when does this record expire'. Returns one record: a compact ExpirationSummary (account_id, archived_at, created_at, \u2026 dropped); expand: true returns the full Expiration. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_expirations or hudu_get_expiration for that).",
+    "newValue": "List the expirations attached to one resource. Preferred over expirations.listAll for 'when does this record expire'. Returns one record: a compact ExpirationSummary (account_id, archived_at, created_at, \u2026 dropped); expand: true returns the full Expiration. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search or hudu_get_expiration for that).",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -1393,7 +1393,7 @@
   {
     "tool": "hudu_get_expiration",
     "field": "description",
-    "newValue": "Resolve an expiration from an id or from its resource. Use when the identifier is a resource pair; expirations.get is cheaper for a known id. Returns one record: a compact ExpirationSummary (account_id, archived_at, created_at, \u2026 dropped); expand: true returns the full Expiration. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_expirations (or hudu_search_across_resources when the resource type is unknown).",
+    "newValue": "Resolve an expiration from an id or from its resource. Use when the identifier is a resource pair; expirations.get is cheaper for a known id. Returns one record: a compact ExpirationSummary (account_id, archived_at, created_at, \u2026 dropped); expand: true returns the full Expiration. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Not for text discovery: call hudu_search.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -1522,7 +1522,7 @@
   {
     "tool": "hudu_get_flag_type",
     "field": "description",
-    "newValue": "Resolve a flag type from an id, name or slug. Use when the identifier is a flag-type name; flag_types.get is cheaper for a known id. Returns one record: a compact FlagTypeSummary (created_at, updated_at, \u2026 dropped); expand: true returns the full FlagType. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_flag_types (or hudu_search_across_resources when the resource type is unknown).",
+    "newValue": "Resolve a flag type from an id, name or slug. Use when the identifier is a flag-type name; flag_types.get is cheaper for a known id. Returns one record: a compact FlagTypeSummary (created_at, updated_at, \u2026 dropped); expand: true returns the full FlagType. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Not for text discovery: call hudu_search.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -1639,7 +1639,7 @@
   {
     "tool": "hudu_find_flags_by_flagable",
     "field": "description",
-    "newValue": "List the flags attached to one record. Preferred over flags.listAll for the 'is this record flagged' question. Returns one record: a compact FlagSummary (created_at, \u2026 dropped); expand: true returns the full Flag. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_flags or hudu_get_flag for that).",
+    "newValue": "List the flags attached to one record. Preferred over flags.listAll for the 'is this record flagged' question. Returns one record: a compact FlagSummary (created_at, \u2026 dropped); expand: true returns the full Flag. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search or hudu_get_flag for that).",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -1675,7 +1675,7 @@
   {
     "tool": "hudu_get_flag",
     "field": "description",
-    "newValue": "Resolve a flag by its id. Prefer flags.findByFlagable when the flagged record is known; resolve is for a known flag id. Returns one record: a compact FlagSummary (created_at, \u2026 dropped); expand: true returns the full Flag. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_flags (or hudu_search_across_resources when the resource type is unknown).",
+    "newValue": "Resolve a flag by its id. Prefer flags.findByFlagable when the flagged record is known; resolve is for a known flag id. Returns one record: a compact FlagSummary (created_at, \u2026 dropped); expand: true returns the full Flag. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Not for text discovery: call hudu_search.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -1804,7 +1804,7 @@
   {
     "tool": "hudu_get_folder",
     "field": "description",
-    "newValue": "Resolve a folder from an id or name, optionally scoped to a company. Use when the identifier is a folder name; folders.get is cheaper for a known id. Returns one record: a compact FolderSummary (description, created_at, \u2026 dropped); expand: true returns the full Folder. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_folders (or hudu_search_across_resources when the resource type is unknown).",
+    "newValue": "Resolve a folder from an id or name, optionally scoped to a company. Use when the identifier is a folder name; folders.get is cheaper for a known id. Returns one record: a compact FolderSummary (description, created_at, \u2026 dropped); expand: true returns the full Folder. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Not for text discovery: call hudu_search.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -1858,7 +1858,7 @@
     "tool": "hudu_groups_list",
     "field": "exclude",
     "newValue": true,
-    "reason": "Duplicate outcome: after re-pointing it backs onto groups.search, exactly like hudu_search_groups (the retained name). hudu_search_groups is the search-first name for the same bounded read. A tools/list where two tools do the same job is worse than a slightly shorter list."
+    "reason": "Duplicate outcome: after re-pointing it backs onto groups.search, exactly like hudu_search (the retained name). hudu_search performs the same bounded search with body-aware ranking and snippets. A tools/list where two tools do the same job is worse than a slightly shorter list."
   },
   {
     "tool": "hudu_groups_resolve",
@@ -1875,7 +1875,7 @@
   {
     "tool": "hudu_get_group",
     "field": "description",
-    "newValue": "Resolve a user group from an id, name or slug. Use when the identifier is a group name; groups.get is cheaper for a known id. Returns one record: a compact GroupSummary (url, created_at, members, \u2026 dropped); expand: true returns the full Group. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_groups (or hudu_search_across_resources when the resource type is unknown).",
+    "newValue": "Resolve a user group from an id, name or slug. Use when the identifier is a group name; groups.get is cheaper for a known id. Returns one record: a compact GroupSummary (url, created_at, members, \u2026 dropped); expand: true returns the full Group. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Not for text discovery: call hudu_search.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -1981,7 +1981,7 @@
   {
     "tool": "hudu_find_ip_addresses_by_address",
     "field": "description",
-    "newValue": "Find one IP address record by its address. Preferred over ip_addresses.listAll for any address lookup. Returns one record: a compact IpAddressSummary (notes, skip_dns_validation, \u2026 dropped); expand: true returns the full IpAddress. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_ip_addresses or hudu_get_ip_address for that).",
+    "newValue": "Find one IP address record by its address. Preferred over ip_addresses.listAll for any address lookup. Returns one record: a compact IpAddressSummary (notes, skip_dns_validation, \u2026 dropped); expand: true returns the full IpAddress. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search or hudu_get_ip_address for that).",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -2017,7 +2017,7 @@
   {
     "tool": "hudu_get_ip_address",
     "field": "description",
-    "newValue": "Resolve an IP address record from an id, the address, or its FQDN. Use when the identifier is a CIDR address or an FQDN; ip_addresses.get is cheaper for a known id. Returns one record: a compact IpAddressSummary (notes, skip_dns_validation, \u2026 dropped); expand: true returns the full IpAddress. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_ip_addresses (or hudu_search_across_resources when the resource type is unknown).",
+    "newValue": "Resolve an IP address record from an id, the address, or its FQDN. Use when the identifier is a CIDR address or an FQDN; ip_addresses.get is cheaper for a known id. Returns one record: a compact IpAddressSummary (notes, skip_dns_validation, \u2026 dropped); expand: true returns the full IpAddress. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Not for text discovery: call hudu_search.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -2146,7 +2146,7 @@
   {
     "tool": "hudu_get_label_type",
     "field": "description",
-    "newValue": "Resolve a label type from an id, slug or exact name. Use when the identifier is a label-type name; label_types.get is cheaper for a known id. Returns one record: a compact LabelTypeSummary (allowed_company_ids, created_at, updated_at, \u2026 dropped); expand: true returns the full LabelType. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_label_types (or hudu_search_across_resources when the resource type is unknown).",
+    "newValue": "Resolve a label type from an id, slug or exact name. Use when the identifier is a label-type name; label_types.get is cheaper for a known id. Returns one record: a compact LabelTypeSummary (allowed_company_ids, created_at, updated_at, \u2026 dropped); expand: true returns the full LabelType. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Not for text discovery: call hudu_search.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -2263,7 +2263,7 @@
   {
     "tool": "hudu_find_labels_by_labelable",
     "field": "description",
-    "newValue": "List the labels attached to one record. Preferred over labels.listAll for 'what is this record tagged with'. Returns one record: a compact LabelSummary (created_at, \u2026 dropped); expand: true returns the full Label. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_labels or hudu_get_label for that).",
+    "newValue": "List the labels attached to one record. Preferred over labels.listAll for 'what is this record tagged with'. Returns one record: a compact LabelSummary (created_at, \u2026 dropped); expand: true returns the full Label. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search or hudu_get_label for that).",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -2299,7 +2299,7 @@
   {
     "tool": "hudu_get_label",
     "field": "description",
-    "newValue": "Resolve a label by its id or by the record it is attached to. Use labels.findByLabelable for the list form; resolve is for a single known label. Returns one record: a compact LabelSummary (created_at, \u2026 dropped); expand: true returns the full Label. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_labels (or hudu_search_across_resources when the resource type is unknown).",
+    "newValue": "Resolve a label by its id or by the record it is attached to. Use labels.findByLabelable for the list form; resolve is for a single known label. Returns one record: a compact LabelSummary (created_at, \u2026 dropped); expand: true returns the full Label. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Not for text discovery: call hudu_search.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -2416,7 +2416,7 @@
   {
     "tool": "hudu_find_lists_by_name",
     "field": "description",
-    "newValue": "Find a list by its exact name. Preferred over lists.listAll for a name lookup. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_lists or hudu_get_list for that).",
+    "newValue": "Find a list by its exact name. Preferred over lists.listAll for a name lookup. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search or hudu_get_list for that).",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -2452,7 +2452,7 @@
   {
     "tool": "hudu_get_list",
     "field": "description",
-    "newValue": "Resolve a list from an id or its exact name. Use when the identifier is a list name; lists.get is cheaper for a known id. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_lists (or hudu_search_across_resources when the resource type is unknown).",
+    "newValue": "Resolve a list from an id or its exact name. Use when the identifier is a list name; lists.get is cheaper for a known id. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Not for text discovery: call hudu_search.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -2598,7 +2598,7 @@
   {
     "tool": "hudu_find_magic_dash_by_company",
     "field": "description",
-    "newValue": "List the Magic Dash items of one company. Preferred over magic_dash.listAll for the per-company dashboard read. Returns one record: a compact MagicDashSummary (content_link, content, \u2026 dropped); expand: true returns the full MagicDash. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_magic_dash or hudu_get_magic_dash for that).",
+    "newValue": "List the Magic Dash items of one company. Preferred over magic_dash.listAll for the per-company dashboard read. Returns one record: a compact MagicDashSummary (content_link, content, \u2026 dropped); expand: true returns the full MagicDash. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search or hudu_get_magic_dash for that).",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -2628,7 +2628,7 @@
   {
     "tool": "hudu_get_magic_dash",
     "field": "description",
-    "newValue": "Resolve a Magic Dash item from an id or a title. Use when the identifier is a dashboard title; magic_dash.findByCompany is the company-scoped path. Returns one record: a compact MagicDashSummary (content_link, content, \u2026 dropped); expand: true returns the full MagicDash. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_magic_dash (or hudu_search_across_resources when the resource type is unknown).",
+    "newValue": "Resolve a Magic Dash item from an id or a title. Use when the identifier is a dashboard title; magic_dash.findByCompany is the company-scoped path. Returns one record: a compact MagicDashSummary (content_link, content, \u2026 dropped); expand: true returns the full MagicDash. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Not for text discovery: call hudu_search.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -2710,7 +2710,7 @@
   {
     "tool": "hudu_find_matchers_by_sync_id",
     "field": "description",
-    "newValue": "Find the matcher for an external sync id. Preferred over matchers.listAll for any sync-id lookup. Returns array. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_matchers or hudu_get_matcher for that).",
+    "newValue": "Find the matcher for an external sync id. Preferred over matchers.listAll for any sync-id lookup. Returns array. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search or hudu_get_matcher for that).",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -2740,7 +2740,7 @@
   {
     "tool": "hudu_get_matcher",
     "field": "description",
-    "newValue": "Resolve a matcher from an id, a sync_id or an integration identifier. Use when correlating a Hudu record with an external system; matchers.listAll is the enumeration path. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_matchers (or hudu_search_across_resources when the resource type is unknown).",
+    "newValue": "Resolve a matcher from an id, a sync_id or an integration identifier. Use when correlating a Hudu record with an external system; matchers.listAll is the enumeration path. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Not for text discovery: call hudu_search.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -2857,7 +2857,7 @@
   {
     "tool": "hudu_find_networks_by_address",
     "field": "description",
-    "newValue": "Find one network by its CIDR address. Preferred over networks.list for any CIDR lookup. Returns one record: a compact NetworkSummary (description, notes, ancestry, \u2026 dropped); expand: true returns the full Network. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_networks or hudu_get_network for that).",
+    "newValue": "Find one network by its CIDR address. Preferred over networks.list for any CIDR lookup. Returns one record: a compact NetworkSummary (description, notes, ancestry, \u2026 dropped); expand: true returns the full Network. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search or hudu_get_network for that).",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -2893,7 +2893,7 @@
   {
     "tool": "hudu_get_network",
     "field": "description",
-    "newValue": "Resolve a network from an id, name, slug or address. Use when the identifier is a name, slug or CIDR; networks.get is cheaper for a known id. Returns one record: a compact NetworkSummary (description, notes, ancestry, \u2026 dropped); expand: true returns the full Network. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_networks (or hudu_search_across_resources when the resource type is unknown).",
+    "newValue": "Resolve a network from an id, name, slug or address. Use when the identifier is a name, slug or CIDR; networks.get is cheaper for a known id. Returns one record: a compact NetworkSummary (description, notes, ancestry, \u2026 dropped); expand: true returns the full Network. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Not for text discovery: call hudu_search.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -3053,7 +3053,7 @@
     "tool": "hudu_password_folders_list",
     "field": "exclude",
     "newValue": true,
-    "reason": "Duplicate outcome: after re-pointing it backs onto password_folders.search, exactly like hudu_search_password_folders (the retained name). hudu_search_password_folders is the search-first name for the same bounded read. A tools/list where two tools do the same job is worse than a slightly shorter list."
+    "reason": "Duplicate outcome: after re-pointing it backs onto password_folders.search, exactly like hudu_search (the retained name). hudu_search performs the same bounded search with body-aware ranking and snippets. A tools/list where two tools do the same job is worse than a slightly shorter list."
   },
   {
     "tool": "hudu_password_folders_resolve",
@@ -3070,7 +3070,7 @@
   {
     "tool": "hudu_get_password_folder",
     "field": "description",
-    "newValue": "Resolve a password folder from an id or name, optionally scoped to a company. Use when the identifier is a folder name; password_folders.get is cheaper for a known id. Returns one record: a compact PasswordFolderSummary (description, allowed_groups, created_at, \u2026 dropped); expand: true returns the full PasswordFolder. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_password_folders (or hudu_search_across_resources when the resource type is unknown). Sensitive: it returns credential-shaped fields; the SDK redacts them from logs and audit payloads by default.",
+    "newValue": "Resolve a password folder from an id or name, optionally scoped to a company. Use when the identifier is a folder name; password_folders.get is cheaper for a known id. Returns one record: a compact PasswordFolderSummary (description, allowed_groups, created_at, \u2026 dropped); expand: true returns the full PasswordFolder. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Not for text discovery: call hudu_search. Sensitive: returns credential-shaped fields; the SDK redacts them from logs by default.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -3094,7 +3094,7 @@
   {
     "tool": "hudu_search_password_folders",
     "field": "description",
-    "newValue": "Search password folders by a free-text query. Preferred over password_folders.list for any text search. Returns rows: a compact PasswordFolderSummary (description, allowed_groups, created_at, \u2026 dropped); expand: true returns the full PasswordFolder. Bounded: limit defaults to 25 and is hard-capped at 100; a larger value throws CONFIG_ERROR and is never silently clamped. Do not use it when you already have an id, slug or domain: call hudu_get_password_folder instead. Sensitive: it returns credential-shaped fields; the SDK redacts them from logs and audit payloads by default.",
+    "newValue": "Search password folders by a free-text query. Preferred over password_folders.list for any text search. Returns rows: a compact PasswordFolderSummary (description, allowed_groups, created_at, \u2026 dropped); expand: true returns the full PasswordFolder. Bounded: limit defaults to 25 and is hard-capped at 100; a larger value throws CONFIG_ERROR and is never silently clamped. Do not use it when you already have an id, slug or domain: call hudu_get_password_folder instead. Sensitive: returns credential-shaped fields; the SDK redacts them from logs by default.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -3223,7 +3223,7 @@
   {
     "tool": "hudu_get_procedure_task",
     "field": "description",
-    "newValue": "Resolve a procedure task from an id or an exact name inside a procedure. Use when the identifier is a task name inside a known procedure; procedure_tasks.get is cheaper for a known id. Returns one record: a compact ProcedureTaskSummary (description, completion_notes, formatted_due_date, \u2026 dropped); expand: true returns the full ProcedureTask. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_procedure_tasks (or hudu_search_across_resources when the resource type is unknown).",
+    "newValue": "Resolve a procedure task from an id or an exact name inside a procedure. Use when the identifier is a task name inside a known procedure; procedure_tasks.get is cheaper for a known id. Returns one record: a compact ProcedureTaskSummary (description, completion_notes, formatted_due_date, \u2026 dropped); expand: true returns the full ProcedureTask. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Not for text discovery: call hudu_search.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -3463,7 +3463,7 @@
   {
     "tool": "hudu_get_procedure",
     "field": "description",
-    "newValue": "Resolve a procedure/process from an id, slug or exact name. Use when the identifier is a name or slug; procedures.get is cheaper for a known id. Returns one record: a compact ProcedureSummary (description, object_type, created_at, \u2026 dropped); expand: true returns the full Procedure. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_procedures (or hudu_search_across_resources when the resource type is unknown).",
+    "newValue": "Resolve a procedure/process from an id, slug or exact name. Use when the identifier is a name or slug; procedures.get is cheaper for a known id. Returns one record: a compact ProcedureSummary (description, object_type, created_at, \u2026 dropped); expand: true returns the full Procedure. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Not for text discovery: call hudu_search.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -3592,7 +3592,7 @@
   {
     "tool": "hudu_get_rack_storage_item",
     "field": "description",
-    "newValue": "Resolve a rack storage item from an id. Use when the item id is known; rack_storage_items.listAll is the enumeration path. Returns one record: a compact RackStorageItemSummary (max_wattage, power_draw, reserved_message, \u2026 dropped); expand: true returns the full RackStorageItem. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_rack_storage_items (or hudu_search_across_resources when the resource type is unknown).",
+    "newValue": "Resolve a rack storage item from an id. Use when the item id is known; rack_storage_items.listAll is the enumeration path. Returns one record: a compact RackStorageItemSummary (max_wattage, power_draw, reserved_message, \u2026 dropped); expand: true returns the full RackStorageItem. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Not for text discovery: call hudu_search.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -3721,7 +3721,7 @@
   {
     "tool": "hudu_get_rack_storage",
     "field": "description",
-    "newValue": "Resolve a rack storage from an id or name. Use when the identifier is a rack name; rack_storages.get is cheaper for a known id. Returns one record: a compact RackStorageSummary (description, created_at, discarded_at, \u2026 dropped); expand: true returns the full RackStorage. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_rack_storages (or hudu_search_across_resources when the resource type is unknown).",
+    "newValue": "Resolve a rack storage from an id or name. Use when the identifier is a rack name; rack_storages.get is cheaper for a known id. Returns one record: a compact RackStorageSummary (description, created_at, discarded_at, \u2026 dropped); expand: true returns the full RackStorage. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Not for text discovery: call hudu_search.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -3838,7 +3838,7 @@
   {
     "tool": "hudu_find_relations_by_endpoints",
     "field": "description",
-    "newValue": "List the relations that connect two records. Preferred over relations.listAll for the 'what is this record related to' question. Returns one record: a compact RelationSummary (created_at, updated_at, \u2026 dropped); expand: true returns the full Relation. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_relations or hudu_get_relation for that).",
+    "newValue": "List the relations that connect two records. Preferred over relations.listAll for the 'what is this record related to' question. Returns one record: a compact RelationSummary (created_at, updated_at, \u2026 dropped); expand: true returns the full Relation. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search or hudu_get_relation for that).",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -3868,7 +3868,7 @@
   {
     "tool": "hudu_get_relation",
     "field": "description",
-    "newValue": "Resolve a relation by its id. Prefer relations.findByEndpoints whenever the endpoints are known; resolve is only for a known relation id. Returns one record: a compact RelationSummary (created_at, updated_at, \u2026 dropped); expand: true returns the full Relation. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_relations (or hudu_search_across_resources when the resource type is unknown).",
+    "newValue": "Resolve a relation by its id. Prefer relations.findByEndpoints whenever the endpoints are known; resolve is only for a known relation id. Returns one record: a compact RelationSummary (created_at, updated_at, \u2026 dropped); expand: true returns the full Relation. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Not for text discovery: call hudu_search.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -3892,7 +3892,7 @@
   {
     "tool": "hudu_find_users_by_email",
     "field": "description",
-    "newValue": "Find one user by their exact email address. Preferred over users.listAll for any email lookup. Returns one record: a compact UserSummary (otp_required_for_login, phone_number, time_zone, \u2026 dropped); expand: true returns the full User. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_users or hudu_get_user for that).",
+    "newValue": "Find one user by their exact email address. Preferred over users.listAll for any email lookup. Returns one record: a compact UserSummary (otp_required_for_login, phone_number, time_zone, \u2026 dropped); expand: true returns the full User. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search or hudu_get_user for that).",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -3911,7 +3911,7 @@
     "tool": "hudu_users_list",
     "field": "exclude",
     "newValue": true,
-    "reason": "Duplicate outcome: after re-pointing it backs onto users.search, exactly like hudu_search_users (the retained name). hudu_search_users is the search-first name for the same bounded read. A tools/list where two tools do the same job is worse than a slightly shorter list."
+    "reason": "Duplicate outcome: after re-pointing it backs onto users.search, exactly like hudu_search (the retained name). hudu_search performs the same bounded search with body-aware ranking and snippets. A tools/list where two tools do the same job is worse than a slightly shorter list."
   },
   {
     "tool": "hudu_users_resolve",
@@ -3928,7 +3928,7 @@
   {
     "tool": "hudu_get_user",
     "field": "description",
-    "newValue": "Resolve a user from an id, email, slug or exact name. Use when the identifier is an email or a name; users.get is cheaper for a known id. Returns one record: a compact UserSummary (otp_required_for_login, phone_number, time_zone, \u2026 dropped); expand: true returns the full User. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_users (or hudu_search_across_resources when the resource type is unknown).",
+    "newValue": "Resolve a user from an id, email, slug or exact name. Use when the identifier is an email or a name; users.get is cheaper for a known id. Returns one record: a compact UserSummary (otp_required_for_login, phone_number, time_zone, \u2026 dropped); expand: true returns the full User. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Not for text discovery: call hudu_search.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -4046,7 +4046,7 @@
   {
     "tool": "hudu_get_vlan_zone",
     "field": "description",
-    "newValue": "Resolve a VLAN zone from an id, name or slug. Use when the identifier is a name or slug; vlan_zones.get is cheaper for a known id. Returns one record: a compact VlanZoneSummary (description, archived_at, created_at, \u2026 dropped); expand: true returns the full VlanZone. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_vlan_zones (or hudu_search_across_resources when the resource type is unknown).",
+    "newValue": "Resolve a VLAN zone from an id, name or slug. Use when the identifier is a name or slug; vlan_zones.get is cheaper for a known id. Returns one record: a compact VlanZoneSummary (description, archived_at, created_at, \u2026 dropped); expand: true returns the full VlanZone. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Not for text discovery: call hudu_search.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -4163,7 +4163,7 @@
   {
     "tool": "hudu_find_vlans_by_vlan_id",
     "field": "description",
-    "newValue": "Find one VLAN by its vendor VLAN number. Preferred over vlans.list for a VLAN-number lookup. Returns one record: a compact VlanSummary (description, notes, archived_at, \u2026 dropped); expand: true returns the full Vlan. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_vlans or hudu_get_vlan for that).",
+    "newValue": "Find one VLAN by its vendor VLAN number. Preferred over vlans.list for a VLAN-number lookup. Returns one record: a compact VlanSummary (description, notes, archived_at, \u2026 dropped); expand: true returns the full Vlan. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search or hudu_get_vlan for that).",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -4199,7 +4199,7 @@
   {
     "tool": "hudu_get_vlan",
     "field": "description",
-    "newValue": "Resolve a VLAN from an id, name or VLAN number. Use when the identifier is a name or VLAN number; vlans.get is cheaper for a known id. Returns one record: a compact VlanSummary (description, notes, archived_at, \u2026 dropped); expand: true returns the full Vlan. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_vlans (or hudu_search_across_resources when the resource type is unknown).",
+    "newValue": "Resolve a VLAN from an id, name or VLAN number. Use when the identifier is a name or VLAN number; vlans.get is cheaper for a known id. Returns one record: a compact VlanSummary (description, notes, archived_at, \u2026 dropped); expand: true returns the full Vlan. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Not for text discovery: call hudu_search.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -4316,7 +4316,7 @@
   {
     "tool": "hudu_find_websites_by_slug",
     "field": "description",
-    "newValue": "Find one website by its URL slug. Preferred over websites.list for a slug lookup. Returns one record: a compact WebsiteSummary (code, message, keyword, \u2026 dropped); expand: true returns the full Website. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search_websites or hudu_get_website for that).",
+    "newValue": "Find one website by its URL slug. Preferred over websites.list for a slug lookup. Returns one record: a compact WebsiteSummary (code, message, keyword, \u2026 dropped); expand: true returns the full Website. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Do not use it to enumerate or to page: it returns at most one exact match (call hudu_search or hudu_get_website for that).",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -4335,7 +4335,7 @@
     "tool": "hudu_websites_list",
     "field": "exclude",
     "newValue": true,
-    "reason": "Duplicate outcome: after re-pointing it backs onto websites.search, exactly like hudu_search_websites (the retained name). hudu_search_websites is the search-first name for the same bounded read. A tools/list where two tools do the same job is worse than a slightly shorter list."
+    "reason": "Duplicate outcome: after re-pointing it backs onto websites.search, exactly like hudu_search (the retained name). hudu_search performs the same bounded search with body-aware ranking and snippets. A tools/list where two tools do the same job is worse than a slightly shorter list."
   },
   {
     "tool": "hudu_websites_resolve",
@@ -4352,7 +4352,7 @@
   {
     "tool": "hudu_get_website",
     "field": "description",
-    "newValue": "Resolve a website from an id, name or slug. Use when the identifier is a name or slug; websites.get is cheaper for a known id. Returns one record: a compact WebsiteSummary (code, message, keyword, \u2026 dropped); expand: true returns the full Website. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_websites (or hudu_search_across_resources when the resource type is unknown).",
+    "newValue": "Resolve a website from an id, name or slug. Use when the identifier is a name or slug; websites.get is cheaper for a known id. Returns one record: a compact WebsiteSummary (code, message, keyword, \u2026 dropped); expand: true returns the full Website. Bounded: limit default 25, max 100; the client scan stops at 500 records / 4 pages (RESOLUTION_TRUNCATED, never a partial answer). Not for text discovery: call hudu_search.",
     "reason": "Description names what it returns, its bound and when NOT to use it (the registry purpose states none of the three)."
   },
   {
@@ -4423,13 +4423,310 @@
   {
     "tool": "hudu_operations_searchKnowledge",
     "field": "name",
-    "newValue": "hudu_search_knowledge",
-    "reason": "Naming: <prefix>_<verb>_<scope>, verb-first and search-first per the MCP naming standard (a name the example and any consumer can rely on)."
+    "newValue": "hudu_search",
+    "reason": "Naming: one self-describing search tool. It is not a knowledge-base reader in two of its three modes (help, resources), so `hudu_search` is the shortest name true for all three; the backing operation stays operations.searchKnowledge (design: .run/design/search/single-search-tool.md 1.1)."
   },
   {
-    "tool": "hudu_search_knowledge",
+    "tool": "hudu_search",
     "field": "description",
-    "newValue": "Search the knowledge base by content, articles first and assets second, with typo tolerance, ranked hits and verbatim snippets. Preferred over articles.search and assets.search for a phrase inside an article body, a mistyped title, a serial or a custom-field value: Hudu search matches titles only and needs an exact substring. Each hit carries its own fetch call for the full record. Bounded: scope defaults to articles and assets, limit defaults to 8 with a hard maximum of 25, and every bound that bit is named. A cold index is answered from Hudu search alone and says so. Do not use it for an exact id, a slug or a domain.",
-    "reason": "Description names what it returns, its bounds, its degraded mode and when NOT to use it (the registry purpose states none of them)."
+    "newValue": "Search Hudu. One tool, three modes: mode=\"search\" (the default) runs the query; mode=\"help\" returns how to use this tool; mode=\"resources\" returns what is searchable and what each vendor text filter really covers. Only \"search\" needs query.\nmode=\"search\": ranked, fuzzy search over article TITLE and BODY content, asset names, custom-field VALUES and identifiers, plus company/user/group/website names. Each hit carries resource, id, a snippet, a 0-100 score band and the fetch call for the full record. As a TOOL it defaults to tier \"index\" (build or await the body index), so the answer is complete rather than body-blind.\nHonesty: limit default 8 / max 25, snippetChars default 200 / max 400 (0 = none); a bound that bites sets meta.complete false and names itself in meta.reasons. hits=[] is a complete \"nothing matched\" answer ONLY when meta.complete is true and meta.degraded is null - read degraded first: it says when bodies were not searched (\"body-not-indexed\") or the index was cold (\"vendor-only\").\nNot for identity lookup (hudu_find_* / hudu_get_*) or for paging (hudu_list_*). A field the mode cannot honour is a CONFIG_ERROR naming the fields it honours; a missing query is a CONFIG_ERROR naming mode:\"help\", never a silent help fallback.",
+    "reason": "Description names the three modes and the default in its first line, the query requirement and the bounds, the tool-level tier:\"index\" default, the honesty contract for degraded/complete, and when NOT to use it."
+  },
+  {
+    "tool": "hudu_search_articles",
+    "field": "exclude",
+    "newValue": true,
+    "reason": "Redundant outcome: hudu_search({mode:\"search\", resources:[...]}) performs this search (or these eight), with body-aware ranking, snippets, company_id scoping and per-resource error isolation - see the migration table in .run/design/search/single-search-tool.md 4.1. Retiring the tool never removes the capability: the backing operation stays callable in the SDK and reachable through hudu_invoke."
+  },
+  {
+    "tool": "hudu_search_assets",
+    "field": "exclude",
+    "newValue": true,
+    "reason": "Redundant outcome: hudu_search({mode:\"search\", resources:[...]}) performs this search (or these eight), with body-aware ranking, snippets, company_id scoping and per-resource error isolation - see the migration table in .run/design/search/single-search-tool.md 4.1. Retiring the tool never removes the capability: the backing operation stays callable in the SDK and reachable through hudu_invoke."
+  },
+  {
+    "tool": "hudu_search_companies",
+    "field": "exclude",
+    "newValue": true,
+    "reason": "Redundant outcome: hudu_search({mode:\"search\", resources:[...]}) performs this search (or these eight), with body-aware ranking, snippets, company_id scoping and per-resource error isolation - see the migration table in .run/design/search/single-search-tool.md 4.1. Retiring the tool never removes the capability: the backing operation stays callable in the SDK and reachable through hudu_invoke."
+  },
+  {
+    "tool": "hudu_search_users",
+    "field": "exclude",
+    "newValue": true,
+    "reason": "Redundant outcome: hudu_search({mode:\"search\", resources:[...]}) performs this search (or these eight), with body-aware ranking, snippets, company_id scoping and per-resource error isolation - see the migration table in .run/design/search/single-search-tool.md 4.1. Retiring the tool never removes the capability: the backing operation stays callable in the SDK and reachable through hudu_invoke."
+  },
+  {
+    "tool": "hudu_search_groups",
+    "field": "exclude",
+    "newValue": true,
+    "reason": "Redundant outcome: hudu_search({mode:\"search\", resources:[...]}) performs this search (or these eight), with body-aware ranking, snippets, company_id scoping and per-resource error isolation - see the migration table in .run/design/search/single-search-tool.md 4.1. Retiring the tool never removes the capability: the backing operation stays callable in the SDK and reachable through hudu_invoke."
+  },
+  {
+    "tool": "hudu_search_websites",
+    "field": "exclude",
+    "newValue": true,
+    "reason": "Redundant outcome: hudu_search({mode:\"search\", resources:[...]}) performs this search (or these eight), with body-aware ranking, snippets, company_id scoping and per-resource error isolation - see the migration table in .run/design/search/single-search-tool.md 4.1. Retiring the tool never removes the capability: the backing operation stays callable in the SDK and reachable through hudu_invoke."
+  },
+  {
+    "tool": "hudu_search_asset_passwords",
+    "field": "exclude",
+    "newValue": true,
+    "reason": "Redundant outcome: hudu_search({mode:\"search\", resources:[...]}) performs this search (or these eight), with body-aware ranking, snippets, company_id scoping and per-resource error isolation - see the migration table in .run/design/search/single-search-tool.md 4.1. Retiring the tool never removes the capability: the backing operation stays callable in the SDK and reachable through hudu_invoke."
+  },
+  {
+    "tool": "hudu_search_password_folders",
+    "field": "exclude",
+    "newValue": true,
+    "reason": "Redundant outcome: hudu_search({mode:\"search\", resources:[...]}) performs this search (or these eight), with body-aware ranking, snippets, company_id scoping and per-resource error isolation - see the migration table in .run/design/search/single-search-tool.md 4.1. Retiring the tool never removes the capability: the backing operation stays callable in the SDK and reachable through hudu_invoke."
+  },
+  {
+    "tool": "hudu_search_across_resources",
+    "field": "exclude",
+    "newValue": true,
+    "reason": "Redundant outcome: hudu_search({mode:\"search\", resources:[...]}) performs this search (or these eight), with body-aware ranking, snippets, company_id scoping and per-resource error isolation - see the migration table in .run/design/search/single-search-tool.md 4.1. Retiring the tool never removes the capability: the backing operation stays callable in the SDK and reachable through hudu_invoke."
+  },
+  {
+    "tool": "hudu_find_activity_logs_by_resource",
+    "field": "name",
+    "newValue": "hudu_list_activity_logs_for_resource",
+    "reason": "Naming: this is NOT an identity lookup - it lists the records attached to one record, while `find_*` promises exactly one record (identity lookups: hudu_find_articles_by_slug, hudu_find_assets_by_serial, ...). `list_*_for_*` says what it does. The operation name is unchanged in the SDK (.run/design/search/single-search-tool.md 4.1)."
+  },
+  {
+    "tool": "hudu_find_expirations_by_resource",
+    "field": "name",
+    "newValue": "hudu_list_expirations_for_resource",
+    "reason": "Naming: this is NOT an identity lookup - it lists the records attached to one record, while `find_*` promises exactly one record (identity lookups: hudu_find_articles_by_slug, hudu_find_assets_by_serial, ...). `list_*_for_*` says what it does. The operation name is unchanged in the SDK (.run/design/search/single-search-tool.md 4.1)."
+  },
+  {
+    "tool": "hudu_find_flags_by_flagable",
+    "field": "name",
+    "newValue": "hudu_list_flags_for_record",
+    "reason": "Naming: this is NOT an identity lookup - it lists the records attached to one record, while `find_*` promises exactly one record (identity lookups: hudu_find_articles_by_slug, hudu_find_assets_by_serial, ...). `list_*_for_*` says what it does. The operation name is unchanged in the SDK (.run/design/search/single-search-tool.md 4.1)."
+  },
+  {
+    "tool": "hudu_find_labels_by_labelable",
+    "field": "name",
+    "newValue": "hudu_list_labels_for_record",
+    "reason": "Naming: this is NOT an identity lookup - it lists the records attached to one record, while `find_*` promises exactly one record (identity lookups: hudu_find_articles_by_slug, hudu_find_assets_by_serial, ...). `list_*_for_*` says what it does. The operation name is unchanged in the SDK (.run/design/search/single-search-tool.md 4.1)."
+  },
+  {
+    "tool": "hudu_find_magic_dash_by_company",
+    "field": "name",
+    "newValue": "hudu_list_magic_dash_for_company",
+    "reason": "Naming: this is NOT an identity lookup - it lists the records attached to one record, while `find_*` promises exactly one record (identity lookups: hudu_find_articles_by_slug, hudu_find_assets_by_serial, ...). `list_*_for_*` says what it does. The operation name is unchanged in the SDK (.run/design/search/single-search-tool.md 4.1)."
+  },
+  {
+    "tool": "hudu_find_relations_by_endpoints",
+    "field": "name",
+    "newValue": "hudu_list_relations_for_endpoints",
+    "reason": "Naming: this is NOT an identity lookup - it lists the records attached to one record, while `find_*` promises exactly one record (identity lookups: hudu_find_articles_by_slug, hudu_find_assets_by_serial, ...). `list_*_for_*` says what it does. The operation name is unchanged in the SDK (.run/design/search/single-search-tool.md 4.1)."
+  },
+  {
+    "tool": "hudu_search",
+    "field": "inputSchema",
+    "newValue": {
+      "mode": {
+        "name": "mode",
+        "type": "string",
+        "required": false,
+        "description": "Default \"search\" runs the query; \"help\" explains this tool; \"resources\" lists what is searchable. A field the mode cannot honour is a CONFIG_ERROR naming the fields it honours.",
+        "enum": [
+          "search",
+          "help",
+          "resources"
+        ]
+      },
+      "query": {
+        "name": "query",
+        "type": "string",
+        "required": false,
+        "description": "search mode only, and REQUIRED there (an empty call is CONFIG_ERROR, never a help fallback)."
+      },
+      "resources": {
+        "name": "resources",
+        "type": "array",
+        "required": false,
+        "description": "search mode only; default [\"articles\",\"assets\"].",
+        "items": {
+          "type": "string",
+          "enum": [
+            "articles",
+            "assets",
+            "companies",
+            "users",
+            "groups",
+            "websites",
+            "asset_passwords",
+            "password_folders"
+          ]
+        }
+      },
+      "topic": {
+        "name": "topic",
+        "type": "string",
+        "required": false,
+        "description": "help mode only; default \"core\".",
+        "enum": [
+          "core",
+          "all",
+          "query",
+          "limits",
+          "scoring",
+          "degradation",
+          "results",
+          "followup"
+        ]
+      },
+      "limit": {
+        "name": "limit",
+        "type": "number",
+        "required": false,
+        "description": "search mode only; 1-25, default 8."
+      },
+      "snippetChars": {
+        "name": "snippetChars",
+        "type": "number",
+        "required": false,
+        "description": "search mode only; 0-400, default 200."
+      },
+      "company_id": {
+        "name": "company_id",
+        "type": "number",
+        "required": false,
+        "description": "search mode only; one-company scope."
+      },
+      "updated_since": {
+        "name": "updated_since",
+        "type": "string",
+        "required": false,
+        "description": "search mode only; ISO 8601 lower bound."
+      },
+      "min_score": {
+        "name": "min_score",
+        "type": "number",
+        "required": false,
+        "description": "search mode only; 0-100 band floor."
+      },
+      "exact_only": {
+        "name": "exact_only",
+        "type": "boolean",
+        "required": false,
+        "description": "search mode only; true = no fuzzy matching."
+      },
+      "tier": {
+        "name": "tier",
+        "type": "string",
+        "required": false,
+        "description": "search mode only; tool default \"index\" (complete answer); \"auto\" = the SDK default.",
+        "enum": [
+          "auto",
+          "vendor",
+          "index"
+        ]
+      },
+      "refresh": {
+        "name": "refresh",
+        "type": "boolean",
+        "required": false,
+        "description": "search mode only; true forces an index rebuild."
+      }
+    },
+    "reason": "The tool's contract, flat and self-describing: one optional mode enum (search|help|resources, default search) plus the fields each mode honours, each field stating its mode, its bound and its refusal. Queried by the mode-honours-fields gate."
+  },
+  {
+    "tool": "hudu_search",
+    "field": "outputSchema",
+    "newValue": {
+      "type": "KnowledgeSearchResult (mode-tagged union)",
+      "drops": [],
+      "dropsUnresolved": false,
+      "fields": [
+        {
+          "name": "mode",
+          "type": "string",
+          "enum": [
+            "search",
+            "help",
+            "resources"
+          ],
+          "required": true
+        },
+        {
+          "name": "hits",
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "required": false
+        },
+        {
+          "name": "meta",
+          "type": "object",
+          "typeName": "KnowledgeSearchMeta",
+          "required": false
+        },
+        {
+          "name": "help",
+          "type": "object",
+          "typeName": "SearchHelp",
+          "required": false
+        },
+        {
+          "name": "resources",
+          "type": "object",
+          "typeName": "SearchableResources",
+          "required": false
+        }
+      ],
+      "fullType": "SearchKnowledgeResult | SearchHelpResult | SearchableResourcesResult (exactly one variant per mode)"
+    },
+    "reason": "Each mode returns a distinct top-level shape keyed by mode, so a response cannot be misread as another mode's."
+  },
+  {
+    "tool": "hudu_search",
+    "field": "annotations.bounded",
+    "newValue": "mode=\"search\": limit default 8 / max 25, snippet default 200 / max 400, client scan capped; mode=\"help\"/\"resources\" are static reads with no vendor request",
+    "reason": "The bound belongs in the tool's own annotations, not only in its prose."
+  },
+  {
+    "tool": "hudu_get_article_context",
+    "field": "outputSchema",
+    "newValue": {
+      "type": "ArticleContext",
+      "drops": [],
+      "dropsUnresolved": false,
+      "fields": [
+        {
+          "name": "context",
+          "type": "object",
+          "typeName": "ArticleContext",
+          "required": true
+        }
+      ],
+      "fullType": "ArticleContext",
+      "expand": "expand: true returns the full ArticleContext"
+    },
+    "reason": "Output-schema trim (CORE token budget): the generated field list for this compact shape is replaced by a typed reference. The always-on CORE payload must stay under its 32,000-byte budget, and this record's field-by-field expansion alone was 2.4 KB of the tools/list a client re-reads every turn. Nothing is hidden: the description still states the shape and `expand`, and the full schema stays in the registry (`hudu_describe({operation:\"articles.getContext\"})`) and in capabilities.json."
+  },
+  {
+    "tool": "hudu_find_asset_passwords_by_slug",
+    "field": "outputSchema",
+    "newValue": {
+      "type": "AssetPasswordSummary",
+      "drops": [],
+      "dropsUnresolved": false,
+      "fields": [
+        {
+          "name": "record",
+          "type": "object",
+          "typeName": "AssetPasswordSummary",
+          "required": true
+        }
+      ],
+      "fullType": "AssetPasswordSummary",
+      "expand": "expand: true returns the full AssetPassword"
+    },
+    "reason": "Output-schema trim (CORE token budget): the generated field list for this compact shape is replaced by a typed reference. The always-on CORE payload must stay under its 32,000-byte budget, and this record's field-by-field expansion alone was 2.4 KB of the tools/list a client re-reads every turn. Nothing is hidden: the description still states the shape and `expand`, and the full schema stays in the registry (`hudu_describe({operation:\"articles.getContext\"})`) and in capabilities.json."
   }
 ]

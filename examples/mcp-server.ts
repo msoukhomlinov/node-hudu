@@ -19,7 +19,7 @@
  *
  * PROGRESSIVE DISCLOSURE (`.run/design/search/progressive-disclosure.md`): this is a REFERENCE
  * CONSUMER, and the tool list it registers is the generated CORE profile — the curated manifest
- * projects 148 tools, of which a client must carry all 148 on every turn. The CORE set (rule in
+ * projects 139 tools, of which a client must carry all 139 on every turn. The CORE set (rule in
  * `scripts/project-mcp-tools.mjs`, generated into `examples/tool-catalog.generated.ts`) is the
  * small always-present surface: R1 discover (`hudu_catalog` / `hudu_describe` / `hudu_invoke`),
  * R2 identify the tenant, R3 find a record the caller cannot name, R4 one read entry per group-A
@@ -49,6 +49,10 @@ import { getCapability } from 'node-hudu/capabilities';
 // stays MCP-independent and this server passes the registry record in.
 import {
   META_TOOLS,
+  SEARCH_HELP,
+  SEARCH_MODES,
+  SEARCH_RESOURCES,
+  TOOL_DESCRIPTIONS,
   catalogPage,
   configError,
   describeOperation,
@@ -69,7 +73,7 @@ if (!baseUrl || !apiKey) {
  * The profile this example registers, read by `npm run mcp:project -- --check-example` (which then
  * requires exactly the generated CORE set + the three META tools, with their descriptions verbatim).
  * `core` is the token-budget profile; see the header. The extended profile is the curated manifest
- * (147 tools) and is not demonstrated here on purpose — a reference server that shipped 147 tools
+ * (139 tools) and is not demonstrated here on purpose — a reference server that shipped 139 tools
  * would be the problem this design removes.
  */
 const MCP_PROFILE = 'core';
@@ -180,8 +184,15 @@ const HITS_OUTPUT = z.object({
   scanned: z.number(),
 });
 
-/** A knowledge search result: ranked hits (each carrying its own fetch call) plus the response metadata. */
-const KNOWLEDGE_OUTPUT = z.object({ hits: z.array(z.unknown()), meta: z.unknown() });
+/**
+ * `hudu_search` returns ONE shape per mode, each echoing the mode that ran, so a response can never
+ * be misread as another mode's (design `.run/design/search/single-search-tool.md` 1.4 R4).
+ */
+const SEARCH_OUTPUT = z.union([
+  z.object({ mode: z.literal('search'), query: z.string(), hits: z.array(z.unknown()), meta: z.unknown() }),
+  z.object({ mode: z.literal('help'), topic: z.string(), help: z.unknown() }),
+  z.object({ mode: z.literal('resources'), resources: z.unknown(), modes: z.array(z.string()) }),
+]);
 
 /** A bundled context read (`getContext`, `getWithTasks`). */
 const CONTEXT_OUTPUT = z.object({ context: z.unknown() });
@@ -395,71 +406,134 @@ const handle = serveStdio(() => {
   // =========================================================================================
   // CORE READ TOOLS (R2 / R3 / R4) - helper tier only (search / resolve / getContext).
   // =========================================================================================
-  server.registerTool(
-    'hudu_search_across_resources',
-    {
-      title: 'Search Across Resources',
-      description: 'Search several Hudu resources for one query in a single bounded call. Preferred over calling several resources\' search methods yourself whenever the caller does not know which resource holds the record. Returns one SearchHit row per match as { resource, id, label, item }, in resource order (expand: true returns the full typed records). Bounded: limit defaults to 25 and is hard-capped at 100; a larger value throws CONFIG_ERROR and is never silently clamped. Do not use it when the resource type is known: that resource\'s own hudu_search_<resource> issues one request instead of eight.',
-      inputSchema: z.object({
-        query: z.string().min(1).describe('Text to search every requested resource for.'),
-        opts: z.object({ resources: SEARCHABLE_RESOURCES.describe('Resources to search; default all eight, in fan-out order.'), limit: LIMIT, expand: EXPAND }).optional(),
-      }),
-      outputSchema: HITS_OUTPUT,
-      // Derived from the curated manifest annotations (readOnlyHint / destructiveHint /
-      // idempotentHint / openWorldHint); the SDK's ToolAnnotations type has exactly those keys.
-      annotations: { readOnlyHint: true, openWorldHint: true },
-      // Not part of ToolAnnotations: the gateway-side flags the manifest also states in the
-      // description. Keep them on the tool so a gateway can gate approval without reading prose.
-      _meta: { backingOperation: 'operations.searchAcrossResources', sensitive: false, requiresApproval: false },
-    },
-    async (args) => {
-      const { query, opts } = args;
-      try {
-        const resources = opts?.resources;
-      const limit = opts?.limit ?? DEFAULT_LIMIT;
-      const hits = opts?.expand
-        ? await ops.searchAcrossResources(query, { ...(resources ? { resources } : {}), limit, expand: true })
-        : await ops.searchAcrossResources(query, { ...(resources ? { resources } : {}), limit });
-      return ok(`Found ${hits.length} matching record(s) across resources.`, { hits, total: hits.length, truncated: [], scanned: hits.length });
-      } catch (err) {
-        return errorContent(err);
-      }
-    },
-  );
 
   // ---------------------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------------------
+  // hudu_search — ONE self-describing search tool with three modes (search | help | resources).
+  //
+  // Mode discipline by construction, not by hope (`.run/design/search/single-search-tool.md` 1.4):
+  //   - `mode` is optional and defaults to "search": the hot path is unchanged and no field is
+  //     conditionally required;
+  //   - a missing `query` in search mode is a CONFIG_ERROR that NAMES mode:"help" - it never
+  //     silently becomes help, and help is never returned implicitly;
+  //   - a field the selected mode cannot honour is a CONFIG_ERROR naming the fields that mode
+  //     DOES honour - no field is ever quietly ignored;
+  //   - every mode returns a DISTINCT top-level shape with the mode echoed back, so a response
+  //     cannot be misread as another mode's.
+  //
+  // SEARCH MODE DEFAULTS TO tier: "index" - the tool builds or awaits the body index instead of
+  // answering body-blind from the vendor tier. The SDK default stays lazy (tier "auto") for
+  // programmatic callers; a TOOL must not hand an agent a degraded answer by default. A cold
+  // answer is still possible and always says so in `meta.degraded`.
   server.registerTool(
-    'hudu_search_knowledge',
+    'hudu_search',
     {
-      title: 'Search Knowledge',
-      description: 'Search the knowledge base by content, articles first and assets second, with typo tolerance, ranked hits and verbatim snippets. Preferred over articles.search and assets.search for a phrase inside an article body, a mistyped title, a serial or a custom-field value: Hudu search matches titles only and needs an exact substring. Each hit carries its own fetch call for the full record. Bounded: scope defaults to articles and assets, limit defaults to 8 with a hard maximum of 25, and every bound that bit is named. A cold index is answered from Hudu search alone and says so. Do not use it for an exact id, a slug or a domain.',
+      title: 'Search Hudu (search | help | resources)',
+      description: TOOL_DESCRIPTIONS['hudu_search'],
       inputSchema: z.object({
-        query: z.string().min(1).describe('Text to search the knowledge base for; word order and typos are tolerated.'),
-        opts: z
-          .object({
-            scope: z.array(z.enum(['articles', 'assets', 'companies', 'users', 'groups', 'websites', 'asset_passwords', 'password_folders'])).optional(),
-            limit: z.number().int().min(1).max(25).optional(),
-            snippetChars: z.number().int().min(1).max(400).optional(),
-            company_id: z.number().int().optional(),
-            updated_since: z.string().optional(),
-            min_score: z.number().optional(),
-            exact_only: z.boolean().optional(),
-            tier: z.enum(['auto', 'vendor', 'index']).optional(),
-            refresh: z.boolean().optional(),
-          })
-          .optional(),
+        mode: z
+          .enum(['search', 'help', 'resources'])
+          .default('search')
+          .describe('Which mode to run. Default "search" (the query runs; nothing else is needed). "help" returns how to use this tool. "resources" returns what is searchable. A field the selected mode cannot honour is a CONFIG_ERROR naming the fields it does honour - never silently ignored.'),
+        query: z
+          .string()
+          .min(1)
+          .optional()
+          .describe('mode="search" only, and REQUIRED there: omitting it is a CONFIG_ERROR naming mode:"help" (it never falls back to help). Typos, partial words and reordered words are tolerated; article BODY content is searched.'),
+        resources: z
+          .array(z.enum(['articles', 'assets', 'companies', 'users', 'groups', 'websites', 'asset_passwords', 'password_folders']))
+          .optional()
+          .describe('mode="search" only. Which resources to search; default ["articles","assets"]. Exactly the resources whose list endpoint declares a search vendor filter.'),
+        topic: z
+          .enum(['core', 'all', 'query', 'limits', 'scoring', 'degradation', 'results', 'followup'])
+          .optional()
+          .describe('mode="help" only. Which help section to return (default "core"; "all" adds query syntax and scoring). Rejected in the other modes.'),
+        limit: z.number().int().min(1).max(25).optional().describe('mode="search" only. Ranked hits: 1-25, default 8. A larger value is a CONFIG_ERROR, never clamped.'),
+        snippetChars: z.number().int().min(0).max(400).optional().describe('mode="search" only. Snippet characters per hit: 0-400, default 200, 0 = no snippet.'),
+        company_id: z.number().int().optional().describe('mode="search" only. Scope the scan to one company.'),
+        updated_since: z.string().optional().describe('mode="search" only. ISO 8601; only records updated at or after it.'),
+        min_score: z.number().optional().describe('mode="search" only. 0-100 band floor; dropped hits are counted so a threshold never looks like absence.'),
+        exact_only: z.boolean().optional().describe('mode="search" only. true disables fuzzy matching, still ranked and snippeted. Default false.'),
+        tier: z
+          .enum(['auto', 'vendor', 'index'])
+          .optional()
+          .describe('mode="search" only. THIS TOOL DEFAULTS TO "index" (build or await the body index, so the answer is complete rather than body-blind). "auto" is the SDK default for programmatic callers; "vendor" answers from Hudu search alone.'),
+        refresh: z.boolean().optional().describe('mode="search" only. true forces a body-index rebuild before answering.'),
       }),
-      outputSchema: KNOWLEDGE_OUTPUT,
+      outputSchema: SEARCH_OUTPUT,
       annotations: { readOnlyHint: true, openWorldHint: true },
       _meta: { backingOperation: 'operations.searchKnowledge', sensitive: false, requiresApproval: false },
     },
     async (args) => {
-      const { query, opts } = args;
-      try {
-        const result = await ops.searchKnowledge(query, opts ?? {});
+      const mode = args.mode ?? 'search';
+      const spec = SEARCH_MODES.find((m) => m.mode === mode);
+      if (!spec) {
+        return errorContent(
+          configError(
+            `hudu_search: mode must be one of ${SEARCH_MODES.map((m) => m.mode).join(' | ')} (got ${JSON.stringify(args.mode)}). The mode names in the response are exactly these strings.`,
+          ),
+        );
+      }
+      // R3: a field the mode cannot honour is a CONFIG_ERROR naming the fields it does honour.
+      const provided = Object.keys(args).filter((k) => k !== 'mode' && args[k] !== undefined);
+      const unhonoured = provided.filter((k) => spec.rejects.includes(k));
+      if (unhonoured.length) {
+        return errorContent(
+          configError(
+            `hudu_search: mode="${mode}" cannot honour ${unhonoured.join(', ')}. It honours: ${spec.fields.join(', ')}. ` +
+              (mode === 'search' ? 'mode="help" honours topic if you wanted the help text.' : 'Drop the field, or use the mode that honours it.') +
+              ' A field a mode cannot honour is never silently ignored.',
+          ),
+        );
+      }
+      if (mode === 'help') {
+        const topic = args.topic ?? SEARCH_HELP.default;
+        if (!SEARCH_HELP.sections.includes(topic)) {
+          return errorContent(
+            configError(`hudu_search: topic must be one of ${SEARCH_HELP.sections.join(' | ')} (got ${JSON.stringify(topic)}).`),
+          );
+        }
+        const chosen = topic === 'core' ? SEARCH_HELP.core : topic === 'all' ? SEARCH_HELP.all : [topic];
+        const text = chosen.map((s) => SEARCH_HELP.text[s]).join('\n\n');
+        return ok(`hudu_search help (${chosen.join(', ')}).`, {
+          mode: 'help',
+          topic,
+          help: {
+            text,
+            sections: chosen,
+            bytes: Buffer.byteLength(text, 'utf8'),
+            defaults: { mode: 'search', tier: 'index', limit: 8, snippetChars: 200, resources: ['articles', 'assets'] },
+            modes: SEARCH_MODES,
+            resourcesDerivedFrom: SEARCH_RESOURCES.derivedFrom,
+          },
+        });
+      }
+      if (mode === 'resources') {
         return ok(
-          `Found ${result.hits.length} matching record(s)${result.meta.complete ? '' : ' (bounded: ' + result.meta.reasons.join(', ') + ')'}.`,
-          result as unknown as Record<string, unknown>,
+          `${SEARCH_RESOURCES.count} searchable resource(s); ${SEARCH_RESOURCES.notSearchable.length} resource(s) ignore ?search= silently.`,
+          { mode: 'resources', resources: SEARCH_RESOURCES, modes: SEARCH_MODES.map((m) => m.mode) },
+        );
+      }
+      // mode === 'search'
+      if (typeof args.query !== 'string' || args.query.length === 0) {
+        return errorContent(
+          configError(
+            'hudu_search: mode="search" (the default) requires a non-empty query. It did NOT fall back to help. Call hudu_search({mode:"help"}) for how to use this tool, or hudu_search({mode:"resources"}) for what is searchable.',
+          ),
+        );
+      }
+      try {
+        const { resources, ...rest } = args;
+        const result = await ops.searchKnowledge(args.query, {
+          ...rest,
+          ...(resources === undefined ? {} : { scope: resources }),
+          tier: args.tier ?? 'index', // the TOOL's default: a complete answer, not a body-blind one
+        } as Parameters<Operations['searchKnowledge']>[1]);
+        const incomplete = result.meta.complete ? '' : ` (partial: ${(result.meta.reasons ?? []).join(', ')})`;
+        const bodyBlind = result.meta.degraded ? ` DEGRADED (${result.meta.degraded.kind}): ${result.meta.degraded.advice}` : '';
+        return ok(
+          `Found ${result.hits.length} ranked match(es)${incomplete}.${bodyBlind}`,
+          { mode: 'search', query: args.query, hits: result.hits as unknown[], meta: { ...result.meta, mode: 'search' } },
         );
       } catch (err) {
         return errorContent(err);
@@ -472,7 +546,7 @@ const handle = serveStdio(() => {
     'hudu_resolve_any',
     {
       title: 'Resolve Any',
-      description: 'Resolve an identifier against several resources and return the candidates that match. Preferred when the caller has an identifier but not the resource type; use the resource\'s own resolve when the type is known. Returns ResolutionCandidateHit rows for each resource that matched, with scanned/truncated counts; it does not throw RESOLUTION_AMBIGUOUS across resources. Bounded: limit defaults to 25 and is hard-capped at 100; a larger value throws CONFIG_ERROR and is never silently clamped. Do not use it when the resource type is known: call that resource\'s hudu_get_<singular>.',
+      description: TOOL_DESCRIPTIONS['hudu_resolve_any'],
       inputSchema: z.object({
         identifier: IDENTIFIER.describe('Id, exact name/slug, or an identifier object; resolved against every requested resource.'),
         opts: z.object({ resources: SEARCHABLE_RESOURCES.describe('Resources to try; default all eight, in fan-out order.'), limit: LIMIT }).optional(),
@@ -509,7 +583,7 @@ const handle = serveStdio(() => {
     'hudu_get_api_info',
     {
       title: 'Get Api Info',
-      description: 'Return the API information document. Prefer api_info.get; this exists so every resource satisfies the same floor. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_api_info (or hudu_search_across_resources when the resource type is unknown).',
+      description: TOOL_DESCRIPTIONS['hudu_get_api_info'],
       inputSchema: z.object({
         identifier: IDENTIFIER.optional().describe('Optional identifier; omit it for the tenant-wide api info.'),
         opts: z.object({ expand: EXPAND }).optional(),
@@ -533,7 +607,7 @@ const handle = serveStdio(() => {
     'hudu_get_company_context',
     {
       title: 'Get Company Context',
-      description: 'Fetch a company together with the bounded context an agent needs about it. Preferred over four separate list calls when an agent starts work on a company. Returns CompanyContext. Bounded: every sub-list is fetched with limit, default 25, hard maximum 100 — no sub-fetch walks the account. Do not use it to page a resource: call hudu_search_companies. It issues several bounded reads per call.',
+      description: TOOL_DESCRIPTIONS['hudu_get_company_context'],
       inputSchema: z.object({
         id: z.number().int().describe('Numeric company id.'),
         opts: z.object({ limit: LIMIT, expand: EXPAND }).optional(),
@@ -566,7 +640,7 @@ const handle = serveStdio(() => {
     'hudu_get_article_context',
     {
       title: 'Get Article Context',
-      description: 'Fetch an article with its company and folder context. Preferred over three separate calls when an agent starts from an article. Returns ArticleContext. Bounded: every sub-list is fetched with limit, default 25, hard maximum 100 — no sub-fetch walks the account. Do not use it to page a resource: call hudu_search_articles. It issues several bounded reads per call.',
+      description: TOOL_DESCRIPTIONS['hudu_get_article_context'],
       inputSchema: z.object({
         id: z.number().int().describe('Numeric article id (hudu_get_article_context takes the id; use hudu_search_across_resources or hudu_invoke with articles.resolve to find it).'),
         opts: z.object({ expand: EXPAND }).optional(),
@@ -590,7 +664,7 @@ const handle = serveStdio(() => {
     'hudu_get_asset_context',
     {
       title: 'Get Asset Context',
-      description: 'Fetch an asset with the context an agent needs about it. Preferred over four separate calls when an agent starts from an asset. Returns AssetContext. Bounded: every sub-list is fetched with limit, default 25, hard maximum 100 — no sub-fetch walks the account. Do not use it to page a resource: call hudu_search_assets. It issues several bounded reads per call.',
+      description: TOOL_DESCRIPTIONS['hudu_get_asset_context'],
       inputSchema: z.object({
         identifier: ASSET_IDENTIFIER.describe('Id, name, slug, primary serial or { id, companyId }.'),
         opts: z.object({ limit: LIMIT, expand: EXPAND }).optional(),
@@ -623,7 +697,7 @@ const handle = serveStdio(() => {
     'hudu_get_asset_layout',
     {
       title: 'Get Asset Layout',
-      description: 'Resolve an asset layout from an id, name or slug. Use when the identifier is a layout name or slug; asset_layouts.get is cheaper for a known id. Returns one record: a compact AssetLayoutSummary (icon_color, sidebar_folder_id, include_passwords, … dropped); expand: true returns the full AssetLayout. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_asset_layouts (or hudu_search_across_resources when the resource type is unknown).',
+      description: TOOL_DESCRIPTIONS['hudu_get_asset_layout'],
       inputSchema: z.object({
         identifier: IDENTIFIER.describe('Id, exact name/slug, or an identifier object.'),
         opts: z.object({ expand: EXPAND }).optional(),
@@ -643,69 +717,13 @@ const handle = serveStdio(() => {
       }
     },
   );
-  server.registerTool(
-    'hudu_search_asset_passwords',
-    {
-      title: 'Search Asset Passwords',
-      description: 'Search password records by a free-text query. Preferred over asset_passwords.list for any text search. Returns rows: a compact AssetPasswordSummary (passwordable_id, passwordable_type, description, … dropped); expand: true returns the full AssetPassword. Bounded: limit defaults to 25 and is hard-capped at 100; a larger value throws CONFIG_ERROR and is never silently clamped. Do not use it when you already have an id, slug or domain: call hudu_get_asset_password instead. Sensitive: it returns credential-shaped fields; the SDK redacts them from logs and audit payloads by default.',
-      inputSchema: z.object({
-        query: z.string().min(1).describe('Partial password entry name or username.'),
-        opts: z.object({ limit: LIMIT, expand: EXPAND.describe('Return the full records, including secrets. Off by default: the summaries omit credential fields.') }).optional(),
-      }),
-      outputSchema: LIST_OUTPUT,
-      // Derived from the curated manifest annotations (readOnlyHint / destructiveHint /
-      // idempotentHint / openWorldHint); the SDK's ToolAnnotations type has exactly those keys.
-      annotations: { readOnlyHint: true, openWorldHint: true },
-      // Not part of ToolAnnotations: the gateway-side flags the manifest also states in the
-      // description. Keep them on the tool so a gateway can gate approval without reading prose.
-      _meta: { backingOperation: 'asset_passwords.search', sensitive: true, requiresApproval: false },
-    },
-    async (args) => {
-      const { query, opts } = args;
-      try {
-        const limit = opts?.limit ?? DEFAULT_LIMIT;
-      const items = opts?.expand
-        ? await hudu.assetPasswords.search(query, { limit, expand: true })
-        : await hudu.assetPasswords.search(query, { limit });
-      return listResult('asset_passwords', items, limit);
-      } catch (err) {
-        return errorContent(err);
-      }
-    },
-  );
 
-  // ---------------------------------------------------------------------------------------
-  // ---------------------------------------------------------------------------------------
-  server.registerTool(
-    'hudu_search_websites',
-    {
-      title: 'Search Websites',
-      description: 'Search monitored websites by a free-text query. Preferred over websites.list for any text search. Returns rows: a compact WebsiteSummary (code, message, keyword, … dropped); expand: true returns the full Website. Bounded: limit defaults to 25 and is hard-capped at 100; a larger value throws CONFIG_ERROR and is never silently clamped. Do not use it when you already have an id, slug or domain: call hudu_get_website instead.',
-      inputSchema: z.object({
-        query: z.string().min(1).describe('Text to search websites for.'),
-        opts: z.object({ limit: LIMIT, expand: EXPAND }).optional(),
-      }),
-      outputSchema: LIST_OUTPUT,
-      annotations: { readOnlyHint: true, openWorldHint: true },
-      _meta: { backingOperation: 'websites.search', sensitive: false, requiresApproval: false },
-    },
-    async (args) => {
-      try {
-        const limit = args.opts?.limit ?? DEFAULT_LIMIT;
-        const result = await hudu.websites.search(args.query, args.opts);
-        const rows = Array.isArray(result) ? result : [];
-        return listResult('website', rows, limit);
-      } catch (err) {
-        return errorContent(err);
-      }
-    },
-  );
   // ---------------------------------------------------------------------------------------
   server.registerTool(
     'hudu_get_folder',
     {
       title: 'Get Folder',
-      description: 'Resolve a folder from an id or name, optionally scoped to a company. Use when the identifier is a folder name; folders.get is cheaper for a known id. Returns one record: a compact FolderSummary (description, created_at, … dropped); expand: true returns the full Folder. Bounded: limit defaults to 25 with a hard maximum of 100, and the client scan stops at 500 records / 4 pages (it throws RESOLUTION_TRUNCATED rather than returning a partial answer). Do not use it for free-text discovery across many records: call hudu_search_folders (or hudu_search_across_resources when the resource type is unknown).',
+      description: TOOL_DESCRIPTIONS['hudu_get_folder'],
       inputSchema: z.object({
         identifier: IDENTIFIER.describe('Id, exact name/slug, or an identifier object.'),
         opts: z.object({ expand: EXPAND }).optional(),
@@ -725,51 +743,88 @@ const handle = serveStdio(() => {
       }
     },
   );
-  // ---------------------------------------------------------------------------------------
   server.registerTool(
-    'hudu_search_password_folders',
+    'hudu_find_asset_passwords_by_slug',
     {
-      title: 'Search Password Folders',
-      description: 'Search password folders by a free-text query. Preferred over password_folders.list for any text search. Returns rows: a compact PasswordFolderSummary (description, allowed_groups, created_at, … dropped); expand: true returns the full PasswordFolder. Bounded: limit defaults to 25 and is hard-capped at 100; a larger value throws CONFIG_ERROR and is never silently clamped. Do not use it when you already have an id, slug or domain: call hudu_get_password_folder instead. Sensitive: it returns credential-shaped fields; the SDK redacts them from logs and audit payloads by default.',
+      title: 'Find Asset Passwords By Slug',
+      description: TOOL_DESCRIPTIONS['hudu_find_asset_passwords_by_slug'],
       inputSchema: z.object({
-        query: z.string().min(1).describe('Text to search password folders for.'),
-        opts: z.object({ limit: LIMIT, expand: EXPAND }).optional(),
+        identifier: IDENTIFIER.describe('Id, exact name/slug, or an identifier object.'),
+        opts: z.object({ expand: EXPAND }).optional(),
       }),
-      outputSchema: LIST_OUTPUT,
+      outputSchema: ONE_OUTPUT,
       annotations: { readOnlyHint: true, openWorldHint: true },
-      _meta: { backingOperation: 'password_folders.search', sensitive: false, requiresApproval: false },
+      _meta: { backingOperation: 'asset_passwords.findBySlug', sensitive: true, requiresApproval: false },
     },
     async (args) => {
       try {
-        const limit = args.opts?.limit ?? DEFAULT_LIMIT;
-        const result = await hudu.passwordFolders.search(args.query, args.opts);
-        const rows = Array.isArray(result) ? result : [];
-        return listResult('password folder', rows, limit);
+        return oneResult('asset password', await hudu.assetPasswords.findBySlug(args.identifier, args.opts));
       } catch (err) {
         return errorContent(err);
       }
     },
   );
-  // ---------------------------------------------------------------------------------------
+
   server.registerTool(
-    'hudu_search_groups',
+    'hudu_find_websites_by_slug',
     {
-      title: 'Search Groups',
-      description: 'Search groups by name. Preferred over groups.list for any group-name search. Returns rows: a compact GroupSummary (url, created_at, members, … dropped); expand: true returns the full Group. Bounded: limit defaults to 25 and is hard-capped at 100; a larger value throws CONFIG_ERROR and is never silently clamped. Do not use it when you already have an id, slug or domain: call hudu_get_group instead.',
+      title: 'Find Websites By Slug',
+      description: TOOL_DESCRIPTIONS['hudu_find_websites_by_slug'],
       inputSchema: z.object({
-        query: z.string().min(1).describe('Text to search groups for.'),
-        opts: z.object({ limit: LIMIT, expand: EXPAND }).optional(),
+        identifier: IDENTIFIER.describe('Id, exact name/slug, or an identifier object.'),
+        opts: z.object({ expand: EXPAND }).optional(),
       }),
-      outputSchema: LIST_OUTPUT,
+      outputSchema: ONE_OUTPUT,
       annotations: { readOnlyHint: true, openWorldHint: true },
-      _meta: { backingOperation: 'groups.search', sensitive: false, requiresApproval: false },
+      _meta: { backingOperation: 'websites.findBySlug', sensitive: false, requiresApproval: false },
     },
     async (args) => {
       try {
-        const limit = args.opts?.limit ?? DEFAULT_LIMIT;
-        const result = await hudu.groups.search(args.query, args.opts);
-        const rows = Array.isArray(result) ? result : [];
-        return listResult('group', rows, limit);
+        return oneResult('website', await hudu.websites.findBySlug(args.identifier, args.opts));
+      } catch (err) {
+        return errorContent(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    'hudu_get_password_folder',
+    {
+      title: 'Get Password Folder',
+      description: TOOL_DESCRIPTIONS['hudu_get_password_folder'],
+      inputSchema: z.object({
+        identifier: IDENTIFIER.describe('Id, exact name/slug, or an identifier object.'),
+        opts: z.object({ expand: EXPAND }).optional(),
+      }),
+      outputSchema: ONE_OUTPUT,
+      annotations: { readOnlyHint: true, openWorldHint: true },
+      _meta: { backingOperation: 'password_folders.resolve', sensitive: true, requiresApproval: false },
+    },
+    async (args) => {
+      try {
+        return oneResult('password folder', await hudu.passwordFolders.resolve(args.identifier, args.opts));
+      } catch (err) {
+        return errorContent(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    'hudu_get_group',
+    {
+      title: 'Get Group',
+      description: TOOL_DESCRIPTIONS['hudu_get_group'],
+      inputSchema: z.object({
+        identifier: IDENTIFIER.describe('Id, exact name/slug, or an identifier object.'),
+        opts: z.object({ expand: EXPAND }).optional(),
+      }),
+      outputSchema: ONE_OUTPUT,
+      annotations: { readOnlyHint: true, openWorldHint: true },
+      _meta: { backingOperation: 'groups.resolve', sensitive: false, requiresApproval: false },
+    },
+    async (args) => {
+      try {
+        return oneResult('group', await hudu.groups.resolve(args.identifier, args.opts));
       } catch (err) {
         return errorContent(err);
       }

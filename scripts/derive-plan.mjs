@@ -333,6 +333,17 @@ else {
 }
 operations = sortRows(operations);
 
+const SEARCH_COVERS = {
+  "articles": "name (the TITLE) only \u2014 never the body, never the slug",
+  "assets": "name and custom-field VALUES only \u2014 never field labels, never primary_serial / primary_model / primary_mail",
+  "companies": "name only",
+  "users": "first / last name only \u2014 never the email",
+  "groups": "name only",
+  "websites": "name only",
+  "asset_passwords": "name only, and the snippet is suppressed (credentials redaction)",
+  "password_folders": "name only, and the snippet is suppressed (credentials redaction)"
+};
+
 const resources = {};
 for (const r of RES_ORDER) {
   const prev = prior?.resources?.[r];
@@ -341,6 +352,11 @@ for (const r of RES_ORDER) {
     compact: prev?.compact ?? null,
     workflowResource: prev?.workflowResource ?? false,
     group: GROUP_OF[r],
+    // What the vendor's `?search=` filter ACTUALLY covers on this resource's list endpoint (probed
+    // live, `.run/design/search/mcp-surface.md`). null = the resource declares no search vendor
+    // filter, so `?search=` is ignored by the vendor and page 1 comes back unfiltered. Declared
+    // here so the generated `mode:"resources"` table can never drift from the plan.
+    searchCovers: prev?.searchCovers ?? SEARCH_COVERS[r] ?? null,
   };
 }
 

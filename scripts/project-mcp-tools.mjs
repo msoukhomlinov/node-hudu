@@ -241,7 +241,11 @@ const WORKFLOW_RESOURCES = ['companies', 'articles', 'assets', 'asset_layouts', 
 const CORE_TENANT_OPS = ['api_info.resolve'];
 
 /** R3: find a record the caller cannot name (cross-resource helpers). */
-const CORE_DISCOVERY_OPS = ['operations.searchAcrossResources', 'operations.resolveAny', 'operations.searchKnowledge'];
+// R3 = "find a record the caller cannot name". `operations.searchAcrossResources` is NOT here:
+// `hudu_search` supersedes it as the cross-resource entry point, and the projection retires that
+// tool (`MCP_TOOL_OVERRIDES.json`), while the SDK operation stays callable and `hudu_invoke`-reachable
+// (design `.run/design/search/single-search-tool.md` 4.1).
+const CORE_DISCOVERY_OPS = ['operations.resolveAny', 'operations.searchKnowledge'];
 
 /**
  * R1: the three META tools. Their names, titles and descriptions are owned HERE (the projection is
@@ -293,7 +297,7 @@ const META_TOOL_NAMES = META_TOOLS.map((m) => m.name);
 // R4: the read entry for a workflow resource is the projected HELPER-tier read tool for that
 // resource, chosen deterministically by the documented preference order (the helper that answers
 // "read one record" first, then the bounded search, then the identity lookup), then by name.
-const CORE_READ_PREFERENCE = ['getContext', 'getWithTasks', 'search', 'findByName', 'findByDomain', 'findBySerial', 'resolve'];
+const CORE_READ_PREFERENCE = ['getContext', 'getWithTasks', 'search', 'findBySlug', 'findByName', 'findByDomain', 'findBySerial', 'resolve'];
 const coreReadFor = (resource) => {
   const candidates = tools
     .filter((t) => t.effect === 'read' && t.annotations.tier === 'helper' && resourceOf(t.backingOperation) === resource)
@@ -659,7 +663,21 @@ if (IS_MAIN) {
         continue;
       }
       const describedMatch = /description:\s*'((?:[^'\\]|\\.)*)'/.exec(body);
-      const described = describedMatch ? describedMatch[1].replace(/\\(['\\])/g, '$1') : null;
+      // A description may also be a reference to the GENERATED map, `description: TOOL_DESCRIPTIONS['name']`,
+      // which is stronger than re-typing 2 KB of curated prose: the text compared here is still the
+      // curated one, and the reference must name the tool it is registering. A reference to an
+      // unknown tool, or to another tool's description, is a failure (it would ship the wrong prose).
+      const describedRef = /description:\s*TOOL_DESCRIPTIONS\[\s*'((?:[^'\\]|\\.)*)'\s*\]/.exec(body);
+      if (describedRef && describedRef[1] !== name) {
+        failures.push(`${name}: description references TOOL_DESCRIPTIONS['${describedRef[1]}'] — a tool must carry its OWN curated description`);
+        continue;
+      }
+      const referenced = describedRef ? (byName.get(describedRef[1]) ?? metaByName.get(describedRef[1]) ?? null) : null;
+      if (describedRef && referenced === null) {
+        failures.push(`${name}: description references TOOL_DESCRIPTIONS['${describedRef[1]}'], which is not a curated (or META) tool name`);
+        continue;
+      }
+      const described = describedMatch ? describedMatch[1].replace(/\\(['\\])/g, '$1') : referenced ? referenced.description : null;
       if (metaByName.has(name)) {
         metaTools += 1;
         const spec = metaByName.get(name);

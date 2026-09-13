@@ -99,10 +99,14 @@ describe('catalog reachability (the defect this closes)', () => {
     expect(counts.exposed + counts.invokeOnly + counts.refused).toBe(CATALOG.length);
     // The measured split: 148 exposed as their own tool (147 before the knowledge search landed),
     // 56 reachable only through hudu_invoke, 22 refused (10 unbounded reads + 12 binary/download).
-    // The 78 with no tool are the point.
+    // The 86 with no tool are the point.
     expect(counts.exposed).toBe(Object.keys(EXPOSED).length);
-    expect(counts.exposed).toBe(148);
-    expect(counts.invokeOnly + counts.refused).toBe(78);
+    // 139, not 148: the 9 redundant search tools are retired by curation (one self-describing
+    // `hudu_search` replaces them) and every one of their operations stays reachable through
+    // `hudu_invoke` — the count here is the curated surface, and it is asserted exactly.
+    expect(counts.exposed).toBe(139);
+    // 87 = 78 + the 9 retired search tools: an operation that loses its tool keeps its capability.
+    expect(counts.invokeOnly + counts.refused).toBe(87);
     expect(counts.refused).toBe(Object.keys(REFUSALS).length);
   });
 
@@ -189,13 +193,14 @@ describe('hudu_catalog + hudu_describe', () => {
     const page = catalogPage({});
     expect(page.rows.length).toBe(DEFAULT_CATALOG_LIMIT);
     expect(page.total_operations).toBe(records.length);
-    expect(page.unexposed_operations).toBe(56);
+    // 65 = 56 duplicate-outcome operations + the 9 retired search tools, all reachable through hudu_invoke.
+    expect(page.unexposed_operations).toBe(65);
     expect(page.unreachable_operations).toBe(22);
     const second = catalogPage({ offset: DEFAULT_CATALOG_LIMIT });
     expect(second.rows[0]!.op).not.toBe(page.rows[0]!.op);
     const unexposed = catalogPage({ unexposed_only: true, limit: MAX_CATALOG_LIMIT });
     expect(unexposed.rows.every((r) => r.tool === null && r.reachable === true)).toBe(true);
-    expect(unexposed.matched).toBe(56);
+    expect(unexposed.matched).toBe(65);
     const destructive = catalogPage({ effect: 'destructive', limit: MAX_CATALOG_LIMIT });
     expect(destructive.rows.every((r) => r.effect === 'destructive')).toBe(true);
     const websites = catalogPage({ resource: 'websites', limit: MAX_CATALOG_LIMIT });
@@ -385,5 +390,26 @@ describe('configError', () => {
     const err = configError('nope');
     expect(err.message).toBe('nope');
     expect(err.name).toBe('ConfigError');
+  });
+});
+
+describe('validateInvokeInput — a UNION that carries an enum must enforce it', () => {
+  // The hole this test exists to prevent: the union branch checked the `anyOf` types and returned,
+  // so a value of a matching type was accepted and forwarded to the vendor. Registry ground truth:
+  // procedures.create's `process_type` is {"type":"union","anyOf":["string","string","null"],
+  // "enum":["global","company","null"]}.
+  const record = getCapability('procedures.create')!;
+
+  it('refuses a value outside the union enum, naming the field path', () => {
+    const refused = validateInvokeInput(record, { data: { process_type: 'anything' } });
+    expect(refused.ok, 'an out-of-enum union value was accepted — it would have reached the vendor').toBe(false);
+    expect(JSON.stringify(refused.problems)).toMatch(/process_type/);
+    expect(refused.message).toMatch(/global/);
+    expect(refused.message).toMatch(/process_type/);
+  });
+
+  it('does not refuse a value inside the union enum for that field', () => {
+    const accepted = validateInvokeInput(record, { data: { process_type: 'global' } });
+    expect(accepted.problems.some((p) => /process_type/.test(p.path))).toBe(false);
   });
 });
