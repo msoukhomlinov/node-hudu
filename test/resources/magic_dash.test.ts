@@ -545,3 +545,36 @@ describe('MagicDashResource — bounded candidate collection', () => {
     expect(dry).toBeInstanceOf(HuduConfigError);
   });
 });
+
+describe('MagicDashResource — company_id is a GET-only filter', () => {
+  afterEach(() => clearFetch());
+
+  it('refuses company_id on create with CONFIG_ERROR before any request', async () => {
+    // Live-verified on Hudu 2.45.1 (2026-09-12): POST /magic_dash with `company_id` answers
+    // HTTP 500 "Internal Server Error", while `company_name` succeeds. The write path refuses the
+    // field by name instead of forwarding it, so the caller never meets the opaque 500.
+    const spy = stubFetch(() => { throw new Error('no request expected: company_id must be refused before the wire'); });
+    const err = await rejection(makeClient().magicDash.create({ title: 'ZZ probe', message: 'x', company_id: 3 }));
+    expect(err).toBeInstanceOf(HuduConfigError);
+    expect(err.code).toBe('CONFIG_ERROR');
+    expect(err.message).toContain('magic_dash.create');
+    expect(err.message).toContain('company_id');
+    expect(err.message).toContain('company_name');
+    expect(spy.calls).toHaveLength(0);
+  });
+
+  it('still accepts company_name, the field the vendor documents on the write body', async () => {
+    const spy = routed({ '/api/v1/magic_dash': () => json(item({ id: 7, company_name: 'Acme' })) });
+    const created = await makeClient().magicDash.create({ title: 'ZZ probe', message: 'x', company_name: 'Acme' });
+    expect(created.id).toBe(7);
+    expect(JSON.parse(String(spy.calls[0]?.init.body))).toMatchObject({ company_name: 'Acme' });
+    expect(String(spy.calls[0]?.init.body)).not.toContain('company_id');
+  });
+
+  it('does not refuse company_id on the read path, where it is a legitimate filter', async () => {
+    const spy = routed({ '/api/v1/magic_dash': itemPages([item()]) });
+    const rows = await makeClient().magicDash.listAll({ company_id: 3 });
+    expect(rows).toHaveLength(1);
+    expect(spy.calls[0]?.url).toContain('company_id=3');
+  });
+});

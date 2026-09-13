@@ -17,7 +17,7 @@ import type { MagicDash, MagicDashCreate } from '../types/index.js';
 import type { MagicDashIdentifier, MagicDashSummary } from '../types/magic_dash.js';
 import {
   MAX_HELPER_LIMIT, decideResolution, helperLimit, identifierError, numericIds,
-  refuseExpectedUpdatedAtOutsideUpdate, requirePositiveId,
+  refuseExpectedUpdatedAtOutsideUpdate, refuseQueryOnlyWriteField, requirePositiveId,
 } from './agent-layer-helpers.js';
 
 export interface MagicDashListParams extends ListParams {
@@ -85,6 +85,10 @@ export class MagicDashResource extends BaseResource<MagicDash> {
   async create(data: MagicDashCreate, opts?: MutationOptions): Promise<MagicDash | DryRunResult<MagicDash>> {
     // staleCheck is "unavailable" for a create: `expectedUpdatedAt` is refused, not ignored.
     refuseExpectedUpdatedAtOutsideUpdate('magic_dash.create', opts);
+    // This POST is the only write path that takes a magic_dash payload (there is no
+    // `magic_dash.update`; the same endpoint creates or updates), so `company_id` is refused here:
+    // it is a GET-only filter and the vendor answers HTTP 500 for it on a write (live-verified).
+    refuseQueryOnlyWriteField('magic_dash.create', data, 'company_id', 'company_name');
     return this.createOne<MagicDash>(data, undefined, opts);
   }
 

@@ -269,7 +269,11 @@ derived.sort((a, b) => {
  * ------------------------------------------------------------------ */
 const STATUS_RANK = { planned: 0, implemented: 1, tested: 2 };
 const isEmpty = (v) => v === null || v === undefined || v === '' || (Array.isArray(v) && v.length === 0);
-const JUDGEMENT = ['helper', 'helperBasis', 'helperRationale', 'flags', 'compact', 'resolution', 'staleCheck', 'redaction'];
+const JUDGEMENT = ['helper', 'helperBasis', 'helperRationale', 'flags', 'compact', 'resolution', 'staleCheck', 'redaction', 'inputSchemaOmit'];
+// `inputSchemaOmit` is an AUTHORED column, not a derived one: it names the fields an operation cannot
+// honour (magic_dash's `company_id` is a GET-only filter the vendor answers with HTTP 500 on a write),
+// and the generator projects it by dropping the field from that row's inputSchema. It is listed here
+// so a re-derive preserves it verbatim instead of silently regressing the agent-facing schema.
 
 function preserve(row) {
   const before = row._before;

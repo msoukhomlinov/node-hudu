@@ -389,6 +389,14 @@ function isUpdateShaped(row) {
 }
 function fieldAllowed(row, fieldName) {
   if (fieldName === 'expectedUpdatedAt') return isUpdateShaped(row);
+  // A plan row may also declare `inputSchemaOmit`: fields the operation cannot honour, e.g.
+  // magic_dash's `company_id`, a GET-only filter the vendor answers with HTTP 500 on a write
+  // (live-verified on Hudu 2.45.1). The list lives on the PLAN row — the registry's source of
+  // truth — so the derived schema never advertises a field the SDK refuses at runtime; the same
+  // list is re-verified against the emitted record by check-capabilities.mjs
+  // (rule `inputSchema-conditional-field`).
+  const omitted = Array.isArray(row.inputSchemaOmit) ? row.inputSchemaOmit : [];
+  if (omitted.includes(fieldName)) return false;
   return true;
 }
 

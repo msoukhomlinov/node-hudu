@@ -467,6 +467,20 @@ if (registry) {
         fail('related-dangling', `CAPABILITY_REGISTRY['${name}'].related[${i}]`, `${name}: the emitted record points at "${target}", which has no registry record`);
       }
     });
+    // The same rule, driven by the PLAN's `inputSchemaOmit`: a field the operation cannot honour
+    // must not survive into the emitted record (magic_dash.create's `company_id`, a GET-only filter
+    // the vendor answers with HTTP 500 on a write). Checking the EMITTED schema too means a
+    // hand-edited generated file cannot smuggle the field back in.
+    const omitFields = Array.isArray(planRow?.inputSchemaOmit) ? planRow.inputSchemaOmit : [];
+    for (const omitted of omitFields) {
+      if (typeof omitted !== 'string' || omitted.length === 0) {
+        fail('inputSchema-conditional-field', `operations[...] ${name}`, `${name}: inputSchemaOmit entries must be non-empty field names, got ${JSON.stringify(omitted)}`);
+        continue;
+      }
+      if (JSON.stringify(rec.inputSchema ?? {}).includes(`"name":"${omitted}"`)) {
+        fail('inputSchema-conditional-field', `CAPABILITY_REGISTRY['${name}'].inputSchema`, `${name}: still advertises \`${omitted}\`, which the plan row marks as not honourable by this operation (inputSchemaOmit)`);
+      }
+    }
     // an operation-conditional field must not be advertised by an operation that rejects it.
     if (JSON.stringify(rec.inputSchema ?? {}).includes('expectedUpdatedAt')) {
       const method = name.split('.').slice(1).join('.');

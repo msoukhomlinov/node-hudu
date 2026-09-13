@@ -142,6 +142,31 @@ export function decideResolution<T>(opts: DecideResolutionOptions<T>): Resolutio
   };
 }
 
+/**
+ * Refuse a GET-only filter placed in a WRITE payload (policy \u00a75: a path that cannot honour an
+ * input refuses it by name instead of forwarding it and letting the caller meet a vendor failure).
+ *
+ * Live-verified on Hudu 2.45.1 (2026-09-12): `magic_dash.create({ title, message, company_id })`
+ * makes the vendor answer HTTP 500 "Internal Server Error", while `company_name` succeeds.
+ * `api-docs.json` documents the POST/PUT body with `company_name` only — `company_id` exists
+ * solely as a query parameter on `GET /magic_dash`, where it is a legitimate filter. The field stays
+ * on the record/read types (it is a real response field and a valid filter), so only the write path
+ * refuses it, BEFORE any request, with the accepted field named.
+ */
+export function refuseQueryOnlyWriteField(
+  operation: string,
+  payload: unknown,
+  field: string,
+  acceptedField: string,
+): void {
+  if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) return;
+  if ((payload as Record<string, unknown>)[field] === undefined) return;
+  throw new HuduConfigError(
+    `${operation}: \`${field}\` is a GET-only filter, so this operation cannot honour it \u2014 sent in a write ` +
+    `payload the vendor fails with HTTP 500. Pass \`${acceptedField}\` instead.`,
+  );
+}
+
 /** Numeric ids carried by an identifier, for structured errors. */
 export function numericIds(identifier: Identifier | undefined): number[] | undefined {
   if (identifier === undefined) return undefined;

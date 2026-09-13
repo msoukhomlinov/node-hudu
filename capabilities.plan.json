@@ -10058,7 +10058,10 @@
         }
       ],
       "group": "C",
-      "status": "tested"
+      "status": "tested",
+      "inputSchemaOmit": [
+        "company_id"
+      ]
     },
     {
       "endpoint": "PUT /magic_dash/update_positions",
