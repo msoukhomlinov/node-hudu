@@ -128,6 +128,48 @@ The envelope lens reported "the vendor IGNORES `page_size`" as a MEDIUM truncati
 is honoured; no fix was needed. The stale-dist CRITICAL was also a harness artefact, not a source bug - which
 is why the harness now refuses stale builds.
 
+
+## 9b. Live testing, round two: seeded coverage, vendor adjudication, and what it changed
+
+### Completeness: measured, not assumed
+`scripts/live-coverage.mjs` invokes every registry operation against the live tenant (reads for real, every
+mutating primitive dry-run only) and buckets the result, and `mcp:project --list-tools` exposes the 147
+projected tools with their backing operations so MCP coverage is measurable too. First measurement: 61
+live-exercised, 51 dry-run verified, **97 skipped because the tenant had no data**, MCP 67/147.
+
+Three seeding agents then CREATED the missing data (assets, cards, flags, labels, vlans, rack storages,
+procedures, photos, uploads, ...), exercised every operation of those resources live - reads for real, writes
+dry-run first then real where they could clean up - and deleted everything, proving the tenant returned to
+baseline. That closed the coverage gap: what remains untested is blocked by the vendor (HTTP 500 on
+`POST /rack_storage_items` and `POST /asset_layouts`), by the tenant (no integration exists, so every
+`matchers` and `cards` path is unreachable), or by the API being write-only (`exports`, `s3_exports`).
+
+### The vendor list was audited before anything was reported upstream
+Sixteen findings had been blamed on the vendor. An audit agent read `api-docs.json` FIRST for each, then made
+the live call, and classified the result. **Six of the sixteen were OUR mistakes**, including a confound the
+coordinator had passed on as fact (`listAll({ slug })` appeared to find a record; `?slug=` is an undocumented
+key the API silently ignores, so a bogus slug returns the same rows).
+
+Ten issues were then filed with the evidence attached: **#8 rack_storage_items 500, #9 missing id returns
+200 + null instead of 404, #10 ip_addresses requires network_id, #11 no POST /expirations, #12 asset_layouts
+500 instead of 422, #13 GET /matchers 500 without integration_id, #14 PUT/DELETE /matchers 500 instead of 404,
+#15 networks silently discard notes, #16 label_types has no request schema, #17 uploads whitelist
+undocumented**. Five are vendor bugs, four are documentation gaps, one is a 500-instead-of-422.
+
+### Fixed after the live runs found them
+| Commit | Defect |
+|---|---|
+| `0c12009` | `assets.update` silently ignored `expectedUpdatedAt` and the stale write LANDED (all six hand-rolled assets write paths now refuse it, zero requests); create/update/moveLayout now unwrap the response envelope |
+| `1d27833` | `groups`/`users` `resolve` returned false nulls (a vendor filter that matches neither a slug nor a full name); `ip_addresses.update` now actually honours the stale guard; `rack_storages`/`procedure_tasks` no longer advertise an unreachable STALE_OBJECT |
+| `1080acc` | `magic_dash.create` advertised `company_id` (a GET-only filter) and the vendor answered 500 |
+| `a7ae3cb` | 51 registry prose references told agents to call operations that do not exist, plus a new `prose-dangling` checker rule, injection-proved |
+| `8fb2f2c`, `30dabd4`, `e1b17cd` | HTTP-date `Retry-After`; field-level validation errors; strict stubs that fail on an impossible request |
+
+### Tenant residue that the API cannot remove
+Three rows exist that no API route can delete, all created by the tests (each dry-run had honestly reported
+`reversible: false` BEFORE the write): an asset layout, a `public_photo`, and an export job. Remove them in the
+Hudu UI if the tenant should be pristine.
+
 ## 8. Resume and next actions
 
 ```bash

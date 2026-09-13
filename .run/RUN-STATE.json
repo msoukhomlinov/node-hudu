@@ -305,7 +305,7 @@
       "mutation-safety-2": "done: core promise holds live (94 mutating primitives, zero dry-run writes); payload-slot dryRun footgun fixed (b0c29dd)",
       "helpers-resolution-2": "done: 1 CRITICAL (truncated scan returned a confident match with scanTruncated:false), 1 HIGH (200+null id miss), 2 MEDIUM; fixes delegated to impl-resolution-truncation + impl-id-miss-contract"
     },
-    "status": "complete",
+    "status": "complete-with-followups",
     "finalGates": {
       "tsc": 0,
       "lint": 0,
@@ -316,6 +316,34 @@
       "mcp": "--check-example PASS",
       "verifyPack": "33 checks SHIPPABLE",
       "liveSmoke": "40/40 PASS"
+    },
+    "final": {
+      "operations": "225 rows; live-exercised across 3 seed rounds; residual blocked by vendor 500s / no integration / write-only endpoints",
+      "mcpTools": "147 projected; coverage measured by scripts/live-coverage.mjs",
+      "defectsFoundLive": 20,
+      "fixed": 19,
+      "acceptedOrVendor": "6 vendor-side in 10 filed issues; 3 rows the API cannot delete",
+      "vendorIssuesFiled": [
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17
+      ],
+      "gates": {
+        "tsc": 0,
+        "lint": 0,
+        "tests": "1684 passed / 51 files",
+        "capabilities": "PASS",
+        "ship": "PASS",
+        "mcp": "PASS",
+        "liveSmoke": "40/40"
+      }
     }
   }
 }
