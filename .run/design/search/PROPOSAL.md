@@ -158,3 +158,31 @@ changes the memory maths (the `maxIndexTextBytes` cap then covers extracted text
 guidance on demand. Rationale: the 27 search tools are ~59 KB (~15k tokens) of MCP context that every client
 pays for on every turn, while a help payload is fetched only when needed (progressive disclosure). The SDK
 keeps its full helper tier (28 operations) - only the MCP projection consolidates.
+
+
+---
+
+## 12. Amendment: progressive disclosure across the whole surface (measured)
+
+A dedicated design (`progressive-disclosure.md`) measured the status quo and proposed the mechanism:
+
+- **Correction to section 3 above:** the 980 KB / ~245k-token figure is the MARKDOWN manifest. The
+  client-visible `tools/list` payload is **147 tools = 324,688 bytes = 74,949 tokens**, and that is what a
+  client pays on EVERY turn. Any policy justified by the number must use the payload figure.
+- **The mechanism:** a **16-tool always-present CORE (~6,294 tokens, -91.6%)** plus **3 meta tools**
+  (`hudu_catalog`, `hudu_describe`, `hudu_invoke`) that make **all 225 registry operations reachable on
+  demand**. A 20-turn session drops from ~1.50M tokens to ~126k. A catalog of all 225 operations is 10,161
+  tokens (1,772 per 40-row page; 46/row); a `describe` call is ~180 tokens median. Tier/profiles are an
+  optional host knob; a dispatcher is the escape hatch, never the only tool.
+- **Reachability is the strongest argument:** with today's flat surface **78 of 225 operations are unreachable
+  from any MCP client** (22 by projection rule, 56 by curation), and no core/extended tier annotation is
+  actually populated (0 tier overrides) - so the "tier" language is aspirational. Progressive disclosure is
+  what makes that latent capability reachable at all.
+- **The unsound corner, flagged rather than hidden:** `hudu_invoke` needs a validator that knows the
+  generator's schema language - a SECOND implementation of it. Without a gate that enumerates and tests every
+  shape (their G4), validation can silently no-op. Safety must come from the SDK's existing guards (dry-run,
+  approval, bounds, redaction), never from the shorter tool list.
+- **Most likely break:** `mcp:project --check-example` fails as soon as the meta tools register, because they
+  are not curated manifest tools. Fix: META override records, or a `--profile core` projection mode.
+- UNVERIFIED by that design: any host's `tools/list` filtering or list-changed behaviour (a projection cannot
+  control the server).
