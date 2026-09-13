@@ -1,0 +1,59 @@
+# Gate battery for node-hudu, mirroring the checks a human runs locally:
+#   npx tsc --noEmit && npm run lint && npm test
+#   node scripts/check-capabilities.mjs && node scripts/check-capabilities.mjs --ship
+#   MCP_PROFILE=core node scripts/project-mcp-tools.mjs --check-example
+#   node scripts/build-tool-catalog.mjs --check
+#   npm run verify:pack
+#
+# ORDERING NOTE: the "Capability manifest checks" step and everything below it need
+# scripts/ and capabilities*.json, which are added by PR #18 (feat/agent-execution-layer).
+# Land this workflow with or after #18. On pre-#18 main those steps fail with MODULE_NOT_FOUND.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: typecheck, lint, tests, generated-artifact checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install (clean, lockfile-exact)
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Capability manifest checks
+        run: |
+          node scripts/check-capabilities.mjs
+          node scripts/check-capabilities.mjs --ship
+
+      - name: MCP tool projection check
+        env:
+          MCP_PROFILE: core
+        run: node scripts/project-mcp-tools.mjs --check-example
+
+      - name: Tool catalog check
+        run: node scripts/build-tool-catalog.mjs --check
+
+      - name: Package verification
+        run: npm run verify:pack
