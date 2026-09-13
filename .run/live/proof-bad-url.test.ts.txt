@@ -1,0 +1,22 @@
+/** TEMPORARY proof file: the loose-stub test that used to ship green. Deleted after capture. */
+import { describe, it, expect, afterEach } from 'vitest';
+import { HuduClient } from '../src/client.js';
+import { stubFetchAny, clearFetch } from './helpers.js';
+
+afterEach(() => clearFetch());
+
+describe('loose stub, wrong URL', () => {
+  it('BEFORE-equivalent: shape validation off - the wrong URL still ships green', async () => {
+    stubFetchAny({ validateShape: false });
+    const r = new HuduClient({ baseUrl: 'https://hudu.example.com', apiKey: 'k' }).companies;
+    const res = await (r.get as unknown as (id: unknown) => Promise<unknown>)(undefined);
+    expect(res).toEqual({});
+  });
+
+  it('AFTER: the same test with shape validation on fails on the URL it sent', async () => {
+    stubFetchAny();
+    const r = new HuduClient({ baseUrl: 'https://hudu.example.com', apiKey: 'k' }).companies;
+    const res = await (r.get as unknown as (id: unknown) => Promise<unknown>)(undefined);
+    expect(res).toEqual({});
+  });
+});

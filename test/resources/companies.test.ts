@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { HuduClient } from '../../src/client.js';
-import { stubFetch, json, empty, clearFetch } from '../helpers.js';
+import { stubFetch, json, empty, clearFetch, expectRequests } from '../helpers.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const company = JSON.parse(readFileSync(join(__dirname, '../__fixtures__/company.json'), 'utf8'));
@@ -21,6 +21,7 @@ describe('CompaniesResource', () => {
 
   it('get returns the unwrapped company', async () => {
     const spy = stubFetch(() => json({ company }));
+    expectRequests(spy, [{ method: 'GET', url: 'https://hudu.example.com/api/v1/companies/1' }]);
     const r = makeClient().companies;
     const res = await r.get(1);
     expect(res).toEqual(company);
@@ -28,7 +29,8 @@ describe('CompaniesResource', () => {
   });
 
   it('get propagates 404', async () => {
-    stubFetch(() => json({ error: 'no' }, 404));
+    const spy = stubFetch(() => json({ error: 'no' }, 404));
+    expectRequests(spy, [{ method: 'GET', url: 'https://hudu.example.com/api/v1/companies/999' }]);
     const r = makeClient().companies;
     await expect(r.get(999)).rejects.toMatchObject({ name: 'NotFoundError' });
   });
@@ -83,6 +85,7 @@ describe('CompaniesResource', () => {
 
   it('create (raw) posts JSON and returns the raw company', async () => {
     const spy = stubFetch(() => json(company, 201));
+    expectRequests(spy, [{ method: 'POST', url: 'https://hudu.example.com/api/v1/companies' }]);
     const r = makeClient().companies;
     const res = await r.create({ name: 'Acme Corp' });
     expect(res).toEqual(company);
@@ -93,6 +96,7 @@ describe('CompaniesResource', () => {
 
   it('update unwraps the { company } envelope', async () => {
     const spy = stubFetch(() => json({ company }));
+    expectRequests(spy, [{ method: 'PUT', url: 'https://hudu.example.com/api/v1/companies/1' }]);
     const r = makeClient().companies;
     const res = await r.update(1, { name: 'New Name' });
     expect(res).toEqual(company);
@@ -102,6 +106,7 @@ describe('CompaniesResource', () => {
 
   it('delete returns void on 204', async () => {
     const spy = stubFetch(() => empty(204));
+    expectRequests(spy, [{ method: 'DELETE', url: 'https://hudu.example.com/api/v1/companies/1' }]);
     const r = makeClient().companies;
     await expect(r.delete(1)).resolves.toBeUndefined();
     expect(spy.calls[0].url).toBe('https://hudu.example.com/api/v1/companies/1');
