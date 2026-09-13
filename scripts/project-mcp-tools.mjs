@@ -280,7 +280,7 @@ const META_TOOLS = [
     name: 'hudu_invoke',
     title: 'Invoke Any Operation (Escape Hatch)',
     description:
-      'Execute an operation by its canonical registry key, including the ones with no tool of their own. The input is validated against the registry record BEFORE any HTTP request: unknown fields, missing required fields, wrong types and out-of-enum values are refused with CONFIG_ERROR and the field path, and no request is issued. Reads run directly. Writes are dry-run-first: call with dry_run: true to get the SDK\'s dry-run result (simulated: true, the impact and the diff) with no request issued — a write without dry_run: true is refused, and a destructive or approval-gated operation also requires confirm to equal the operation key exactly. Operations the projection never exposes (unbounded listAll/listPages reads, binary/download resources) are refused with a reason and the bounded alternative where one exists. This is the escape hatch for the long tail, not the common path: prefer a typed tool when one fits, and read the schema with hudu_describe first when the arguments are not obvious.',
+      'Execute an operation by its canonical registry key, including the ones with no tool of their own. Every call goes through the SDK dispatcher `operations.invoke`: the input is validated against the registry record BEFORE any HTTP request — unknown fields, missing required fields, wrong types and out-of-enum values are refused with CONFIG_ERROR and the field path, and no request is issued. Reads run directly. Writes are dry-run-first: omit dry_run (or pass dry_run: true) and nothing is written — the SDK dry-run path runs and returns simulated: true with the impact and the diff; pass dry_run: false to execute. A destructive or approval-gated operation also requires confirm to equal the operation key exactly, and a confirmed destructive call is still only a dry run unless dry_run: false is also passed. Operations the projection never exposes (unbounded listAll/listPages reads, binary/download resources) are refused with a reason and the bounded alternative where one exists. This is the escape hatch for the long tail, not the common path: prefer a typed tool when one fits, and read the schema with hudu_describe first when the arguments are not obvious.',
     inputSchema: {
       type: 'object',
       fields: {
@@ -609,7 +609,9 @@ if (IS_MAIN) {
   //      calls the SDK's `{ dryRun: true }` path;
   //   4. a description that is not the curated (or, for a META tool, the projected) one, verbatim;
   //   5. a `core` profile that does not register the whole generated CORE set;
-  //   6. a `hudu_invoke` whose handler does not use the generated validator and the write governor.
+  //   6. a `hudu_invoke` whose handler does not call the SDK dispatcher `operations.invoke` — the
+  //      ONE place that decides whether a call is allowed (the generated catalog carries no second
+  //      validator and no second write governor: it carries data and a schema reader only).
   // The example declares its profile with `const MCP_PROFILE = 'core';`; `--profile <p>` overrides it.
   // Comments and string literals are stripped before the call scan and the config scan, because the
   // curated descriptions legitimately mention `listAll` and `dry_run` without calling anything.
@@ -686,8 +688,8 @@ if (IS_MAIN) {
         const handlerAt = body.search(/async\s*\(\s*args\s*\)\s*=>/);
         const handlerCode = handlerAt === -1 ? '' : stripLiterals(body.slice(handlerAt));
         if (name === 'hudu_invoke') {
-          if (!/validateInvokeInput\s*\(/.test(handlerCode)) failures.push('hudu_invoke: the handler never calls the generated validateInvokeInput — registry validation must not be decorative');
-          if (!/governInvoke\s*\(/.test(handlerCode)) failures.push('hudu_invoke: the handler never calls the generated write governor (dry-run required on writes, confirm required on destructive ones)');
+          if (!/operations\.invoke\s*\(/.test(handlerCode)) failures.push('hudu_invoke: the handler never calls the SDK dispatcher operations.invoke — registry validation and the write governor must live in exactly ONE implementation');
+          if (/validateInvokeInput\s*\(|governInvoke\s*\(/.test(handlerCode)) failures.push('hudu_invoke: the handler calls a SECOND validator/governor — the SDK dispatcher is the only place that decides whether a call is allowed');
         }
         if (name === 'hudu_catalog' && (described === null || !/SUBSET/.test(described) || !/hudu_invoke/.test(described))) {
           failures.push('hudu_catalog: the catalog description must state that the tool list is a SUBSET and name hudu_invoke as the way to reach the rest');
@@ -727,7 +729,7 @@ if (IS_MAIN) {
       for (const f of failures) console.error(`  ✗ ${f}`);
       process.exit(1);
     }
-    console.log('mcp:project --check-example — OK: every tool name is in the declared profile, no unbounded read is used, every mutating tool declares dry_run and calls the SDK dry-run path, the META tools match the projected descriptions, and hudu_invoke uses the generated validator and governor.');
+    console.log('mcp:project --check-example — OK: every tool name is in the declared profile, no unbounded read is used, every mutating tool declares dry_run and calls the SDK dry-run path, the META tools match the projected descriptions, and hudu_invoke dispatches through the SDK operations.invoke — the single validator and governor.');
   }
   runCheckExample();
 }

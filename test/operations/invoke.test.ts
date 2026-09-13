@@ -560,3 +560,22 @@ describe('operations.invoke — refusal parity with the generated catalog', () =
     }
   });
 });
+
+describe('the authored example on the operations.invoke row', () => {
+  // The row's `examples[0]` is the one thing an agent copies, so it is not prose: it is EXECUTED
+  // here through the same dispatcher the G4 test covers. An example that would throw (or name an
+  // operation that does not exist) is worse than no example, and this is the guard for that.
+  it('is a real registry key whose bag the SDK accepts, and it reaches the wire', async () => {
+    const example = getCapability('operations.invoke')!.examples[0]!;
+    const parsed = /operations\.invoke\('([^']+)', (\{[^}]*\})\)/.exec(example);
+    expect(parsed, `unrecognised example shape: ${example}`).not.toBeNull();
+    const operation = parsed![1]!;
+    expect(getCapability(operation), `${operation} is not a registry key`).toBeDefined();
+    // The example is a JS call, not JSON: quote its bare keys before parsing the bag.
+    const bag = JSON.parse(parsed![2]!.replace(/([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*:/g, '$1"$2":')) as Record<string, unknown>;
+    const spy = stubFetch(() => json({ id: 42, name: 'Rack 1' }));
+    const result = (await makeOps().invoke(operation, bag)) as Record<string, unknown>;
+    expect(spy.calls).toHaveLength(1);
+    expect(result.id).toBe(42);
+  });
+});

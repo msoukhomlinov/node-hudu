@@ -695,7 +695,11 @@ for (const [idx, row] of operations.entries()) {
     purpose: row.metadata && typeof row.metadata.purpose === 'string' ? row.metadata.purpose : null,
     inputSchema: inputSchema(method, row),
     outputSchema: outputSchema(row, method),
-    examples: [exampleFor(row, method, resource)],
+    // A row may AUTHOR its example (`metadata.example`) when the synthesised one would be a call the
+    // SDK does not accept — the composite dispatcher `operations.invoke` takes a registry KEY as its
+    // first argument, so a sampled `'example'` would be refused at resolve time. An authored example
+    // is emitted verbatim and must be a call the SDK accepts (same path the G4 test covers).
+    examples: [typeof row.metadata?.example === 'string' ? row.metadata.example : exampleFor(row, method, resource)],
     effect: effects ?? null,
     flags,
     dryRun: isMutation,

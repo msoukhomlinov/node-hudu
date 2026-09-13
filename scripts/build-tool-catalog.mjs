@@ -13,10 +13,14 @@
 //     from an operation that does not exist.
 //   - the CORE profile (rule implemented in `scripts/project-mcp-tools.mjs`, never listed by hand)
 //     and the three META tools whose descriptions the projection owns.
-//   - the runtime helpers a host needs (catalog paging, describe, input validation against the
-//     registry record, the write governor). They import NOTHING: the SDK stays MCP-independent,
-//     and the host passes the registry record (`getCapability(op)`), so the validator cannot drift
-//     from the registry it validates against.
+//   - the runtime DATA helpers a host needs (catalog paging, catalog lookup, describe, and the
+//     schema reader the describe needs). They import NOTHING: the SDK stays MCP-independent, and
+//     the host passes the registry record (`getCapability(op)`).
+//     This module deliberately carries NO validator and NO write governor. Validation and
+//     governance live in exactly ONE place — the SDK's `operations.invoke` / `planInvoke`
+//     (`src/operations/invoke.ts`), which the reference server calls, and which
+//     `test/operations/invoke.test.ts` walks over every registry record (the G4 shape test). A
+//     second implementation here is a second chance to be wrong, and it would not be covered.
 //
 // The projection is imported from `scripts/project-mcp-tools.mjs` — one implementation of the
 // curation rules, never a second copy. The registry is `capabilities.json` (the same emission the
@@ -250,15 +254,12 @@ export function describeOperation(record) {
   };
 }
 
-// ---- the registry schema vocabulary ---------------------------------------------------------
-// \`inputSchema\` is NOT JSON Schema: it is the generator's own vocabulary. Every type and key the
-// registry actually uses is listed here, and \`test/mcp-tool-catalog.test.ts\` enumerates the
-// registry and exercises each one (the G4 shape test). An unknown shape is a HARD FAILURE, never
-// an accept: a validator that silently no-ops is worse than no validator.
-const KNOWN_FIELD_KEYS = ['name', 'type', 'required', 'fields', 'items', 'enum', 'anyOf', 'variants', 'typeName', 'additionalProperties', 'keyType', 'description', 'id', 'resourceType', 'resourceId'];
-const KNOWN_TYPES = ['string', 'number', 'boolean', 'object', 'array', 'union', 'null', 'unknown'];
+// ---- the registry schema reader --------------------------------------------------------------
+// \`inputSchema\` is NOT JSON Schema: it is the generator's own vocabulary. This module reads it
+// (top-level fields, for \`describeOperation\`'s \`requires\`); it does NOT validate a call against
+// it. Validation is the SDK's (\`src/operations/invoke.ts\`), one implementation, G4-tested over
+// every registry record — see the header.
 
-/** The top-level fields of an inputSchema, whether the generator emitted a map or a field list. */
 export function inputFields(inputSchema) {
   if (inputSchema === null || inputSchema === undefined) return [];
   if (Array.isArray(inputSchema)) return inputSchema;
@@ -273,172 +274,6 @@ export function inputFields(inputSchema) {
     if (v !== null && typeof v === 'object') out.push(v);
   }
   return out;
-}
-
-/** Shape audit: every key/type the registry uses must be handled below. Returns the gaps. */
-export function auditSchemaVocabulary(inputSchema) {
-  const gaps = [];
-  const visit = (field) => {
-    if (field === null || typeof field !== 'object') return;
-    const keys = Object.keys(field);
-    for (let i = 0; i < keys.length; i += 1) {
-      if (KNOWN_FIELD_KEYS.indexOf(keys[i]) === -1) gaps.push('unknown field key "' + keys[i] + '"');
-    }
-    const t = field.type;
-    if (typeof t === 'string' && KNOWN_TYPES.indexOf(t) === -1) gaps.push('unknown field type "' + t + '"');
-    if (Array.isArray(field.fields)) for (let i = 0; i < field.fields.length; i += 1) visit(field.fields[i]);
-    if (field.items !== null && typeof field.items === 'object') visit(field.items);
-    if (Array.isArray(field.variants)) for (let i = 0; i < field.variants.length; i += 1) visit(field.variants[i]);
-  };
-  const top = inputFields(inputSchema);
-  for (let i = 0; i < top.length; i += 1) visit(top[i]);
-  return gaps;
-}
-
-function typeNameOf(value) {
-  if (value === null) return 'null';
-  if (Array.isArray(value)) return 'array';
-  return typeof value;
-}
-
-function matchesType(expected, value) {
-  const actual = typeNameOf(value);
-  if (expected === 'unknown') return true;
-  if (expected === 'null') return actual === 'null';
-  if (expected === 'object') return actual === 'object';
-  if (expected === 'array') return actual === 'array';
-  if (expected === 'number') return actual === 'number';
-  if (expected === 'string') return actual === 'string';
-  if (expected === 'boolean') return actual === 'boolean';
-  return true;
-}
-
-function checkValue(field, value, path, problems) {
-  const expected = field.type;
-  if (expected === 'union') {
-    const variants = Array.isArray(field.variants) ? field.variants : [];
-    const anyOf = Array.isArray(field.anyOf) ? field.anyOf : (variants.length ? variants.map((v) => v.type) : ['unknown']);
-    let okType = false;
-    for (let i = 0; i < anyOf.length; i += 1) if (matchesType(anyOf[i], value)) okType = true;
-    if (!okType) {
-      problems.push({ path, message: 'expected one of ' + anyOf.join(' | ') + ', got ' + typeNameOf(value) });
-      return;
-    }
-    // An ENUM carried on the union itself is enforced here too. Without this the branch accepted
-    // any value of a matching type and returned, so the registry row for procedures.create (process_type)
-    // (string|string|null WITH enum ["global","company","null"]) accepted "anything" and would have
-    // forwarded it to the vendor: a validator that looks like it checked is worse than none.
-    if (Array.isArray(field.enum) && field.enum.indexOf(value) === -1) {
-      problems.push({ path, message: 'expected one of ' + JSON.stringify(field.enum) + ', got ' + JSON.stringify(value) });
-      return;
-    }
-    // ...and a VARIANT's own enum, when the union declares one per variant: a value must satisfy at
-    // least one variant (its enum when present, its type otherwise).
-    if (variants.length) {
-      for (let i = 0; i < variants.length; i += 1) {
-        const variant = variants[i];
-        if (variant === null || typeof variant !== 'object') continue;
-        if (Array.isArray(variant.enum)) {
-          if (variant.enum.indexOf(value) !== -1) return;
-          continue;
-        }
-        if (matchesType(variant.type, value)) return;
-      }
-      problems.push({
-        path,
-        message: 'expected one of ' + variants.map((v) => (v && Array.isArray(v.enum) ? JSON.stringify(v.enum) : (v && v.type) || 'unknown')).join(' | ') + ', got ' + JSON.stringify(value),
-      });
-    }
-    return;
-  }
-  if (!matchesType(expected, value)) {
-    problems.push({ path, message: 'expected ' + expected + ', got ' + typeNameOf(value) });
-    return;
-  }
-  if (Array.isArray(field.enum) && field.enum.indexOf(value) === -1) {
-    problems.push({ path, message: 'expected one of ' + JSON.stringify(field.enum) + ', got ' + JSON.stringify(value) });
-    return;
-  }
-  if (expected === 'array' && field.items !== null && typeof field.items === 'object') {
-    for (let i = 0; i < value.length; i += 1) checkValue(field.items, value[i], path + '[' + i + ']', problems);
-    return;
-  }
-  if (expected === 'object' && Array.isArray(field.fields)) {
-    for (let i = 0; i < field.fields.length; i += 1) {
-      const nested = field.fields[i];
-      if (value[nested.name] === undefined) {
-        if (nested.required === true) problems.push({ path: path + '.' + nested.name, message: 'required' });
-        continue;
-      }
-      checkValue(nested, value[nested.name], path + '.' + nested.name, problems);
-    }
-  }
-}
-
-/**
- * Validate a call against the registry record, BEFORE any HTTP request. A refusal is a
- * CONFIG_ERROR naming the field path. Returns { ok, code, message, problems }.
- *
- * Scope, stated rather than implied: unknown keys are refused at the TOP level only (the
- * generator's nested object fields are open record shapes the vendor accepts extra keys in, and
- * refusing them would be stricter than the typed path this must mirror); declared nested fields
- * are still type- and enum-checked.
- */
-export function validateInvokeInput(record, input) {
-  const gaps = auditSchemaVocabulary(record.inputSchema);
-  if (gaps.length) {
-    return { ok: false, code: 'CONFIG_ERROR', problems: [], message: 'hudu_invoke: the registry record for ' + record.name + ' uses a schema shape this validator does not know (' + gaps.join('; ') + '). Refusing rather than validating nothing.' };
-  }
-  const fields = inputFields(record.inputSchema);
-  const known = {};
-  for (let i = 0; i < fields.length; i += 1) known[fields[i].name] = fields[i];
-  const value = input === undefined || input === null ? {} : input;
-  if (typeof value !== 'object' || Array.isArray(value)) {
-    return { ok: false, code: 'CONFIG_ERROR', problems: [], message: 'hudu_invoke: input must be an object of the operation\\'s arguments (got ' + typeNameOf(value) + ').' };
-  }
-  const problems = [];
-  const keys = Object.keys(value);
-  for (let i = 0; i < keys.length; i += 1) {
-    const k = keys[i];
-    if (k === 'dry_run') continue;
-    if (known[k] === undefined) problems.push({ path: k, message: 'unknown field (valid fields: ' + (fields.map((f) => f.name).join(', ') || 'none') + ')' });
-  }
-  for (let i = 0; i < fields.length; i += 1) {
-    const f = fields[i];
-    if (value[f.name] === undefined) {
-      if (f.required === true) problems.push({ path: f.name, message: 'required' });
-      continue;
-    }
-    checkValue(f, value[f.name], f.name, problems);
-  }
-  if (problems.length) {
-    const parts = problems.map((p) => p.path + ': ' + p.message);
-    return { ok: false, code: 'CONFIG_ERROR', problems, message: 'hudu_invoke: invalid input for ' + record.name + ' — ' + parts.join('; ') + '. No request was issued.' };
-  }
-  return { ok: true, code: null, problems: [], message: 'ok' };
-}
-
-/**
- * The write governor. Not a security boundary (a determined caller can pass dry_run): it stops an
- * accidental write. Writes are dry-run-first and destructive/approval-gated operations need
- * \`confirm\` to equal the operation key exactly.
- */
-export function governInvoke(record, options) {
-  const o = options || {};
-  const row = catalogRow(record.name);
-  if (row !== null && row.reachable !== true) {
-    return { ok: false, code: 'CONFIG_ERROR', message: 'hudu_invoke: ' + record.name + ' is deliberately not callable here — ' + row.reason + (row.alternative ? ' Bounded alternative: ' + row.alternative + '.' : '') };
-  }
-  if (record.effect === 'read') return { ok: true, dry_run: false, message: 'read — runs directly' };
-  if (o.dry_run !== true) {
-    return { ok: false, code: 'CONFIG_ERROR', message: 'hudu_invoke: ' + record.name + ' is a ' + record.effect + ' operation; writes are dry-run-first. Call it again with dry_run: true to see the impact and the diff with no request issued, then repeat with the same dry_run: true to run it (the SDK dry-run path is the same call path).' };
-  }
-  if (record.effect === 'destructive' || (record.flags || []).indexOf('requiresApproval') !== -1) {
-    if (o.confirm !== record.name) {
-      return { ok: false, code: 'CONFIG_ERROR', message: 'hudu_invoke: ' + record.name + ' is destructive or approval-gated; pass confirm: "' + record.name + '" to acknowledge it. Refusing without it.' };
-    }
-  }
-  return { ok: true, dry_run: true, message: 'dry-run only — nothing is written' };
 }
 
 `;

@@ -4728,5 +4728,11 @@
       "expand": "expand: true returns the full AssetPassword"
     },
     "reason": "Output-schema trim (CORE token budget): the generated field list for this compact shape is replaced by a typed reference. The always-on CORE payload must stay under its 32,000-byte budget, and this record's field-by-field expansion alone was 2.4 KB of the tools/list a client re-reads every turn. Nothing is hidden: the description still states the shape and `expand`, and the full schema stays in the registry (`hudu_describe({operation:\"articles.getContext\"})`) and in capabilities.json."
+  },
+  {
+    "tool": "hudu_operations_invoke",
+    "field": "exclude",
+    "newValue": true,
+    "reason": "Duplicate outcome: the META tool `hudu_invoke` is the designed entry point for exactly this capability (it is what the catalog row and every META-tool description tell an agent to use), and both tools would run the same SDK dispatcher `operations.invoke`. Registering the plan row for `operations.invoke` is what makes the capability validated and checkable; shipping a second tool for it is not. A tools/list where two tools do the same job is worse than a slightly shorter list."
   }
 ]

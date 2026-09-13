@@ -1,17 +1,17 @@
 # MCP_TOOL_MANIFEST.md
 
 > **Machine-generated** by `scripts/project-mcp-tools.mjs` (`npm run mcp:project`) from
-> `capabilities.json` (planHash `f12f6b59ecb23858a1b4ff2d1fe078f5e943ad31f4e6d4157d0e22a2f7d0ae71`, generatedAt `2026-09-13T06:52:34.676Z`).
+> `capabilities.json` (planHash `7382173694654f4f6f58fc2db68c968edb03a0a43de81f93e668f67d087fbd1a`, generatedAt `2026-09-13T07:27:29.807Z`).
 > Do not hand-edit. Curation is recorded in `MCP_TOOL_OVERRIDES.json` and re-applied by the script.
 
 ## Projection summary
 
-- registry records: 226
+- registry records: 227
 - tools projected: 139 (helper-tier 54, read primitives 0, mutations 85)
 - excluded by rule: 22
-- excluded by curation: 65 (dropped through `MCP_TOOL_OVERRIDES.json` — one tool kept per distinct outcome)
-- overrides applied: 666
-- projection timestamp: 2026-09-13T06:58:37.375Z
+- excluded by curation: 66 (dropped through `MCP_TOOL_OVERRIDES.json` — one tool kept per distinct outcome)
+- overrides applied: 667
+- projection timestamp: 2026-09-13T07:27:30.078Z
 
 > 139 projected tools is a projection, not a shipped tool list. MCP servers are
 > token-budgeted: tiering (core / extended) and trimming are curation, recorded in
@@ -718,6 +718,7 @@ Phase-2 curation worklist. `listAll`/`listPages` are never projected at all.
 | hudu_search | annotations.bounded | "mode=\"search\": limit default 8 / max 25, snippet default 200 / max 400, client scan capped; mode=\"help\"/\"resources\" are static reads with no vendor request" | The bound belongs in the tool's own annotations, not only in its prose. |
 | hudu_get_article_context | outputSchema | {"type":"ArticleContext","drops":[],"dropsUnresolved":false,"fields":[{"name":"context","type":"object","typeName":"ArticleContext","required":true}],"fullType":"ArticleContext","expand":"expand: true returns the full ArticleContext"} | Output-schema trim (CORE token budget): the generated field list for this compact shape is replaced by a typed reference. The always-on CORE payload must stay under its 32,000-byte budget, and this record's field-by-field expansion alone was 2.4 KB of the tools/list a client re-reads every turn. Nothing is hidden: the description still states the shape and `expand`, and the full schema stays in the registry (`hudu_describe({operation:"articles.getContext"})`) and in capabilities.json. |
 | hudu_find_asset_passwords_by_slug | outputSchema | {"type":"AssetPasswordSummary","drops":[],"dropsUnresolved":false,"fields":[{"name":"record","type":"object","typeName":"AssetPasswordSummary","required":true}],"fullType":"AssetPasswordSummary","expand":"expand: true returns the full AssetPassword"} | Output-schema trim (CORE token budget): the generated field list for this compact shape is replaced by a typed reference. The always-on CORE payload must stay under its 32,000-byte budget, and this record's field-by-field expansion alone was 2.4 KB of the tools/list a client re-reads every turn. Nothing is hidden: the description still states the shape and `expand`, and the full schema stays in the registry (`hudu_describe({operation:"articles.getContext"})`) and in capabilities.json. |
+| hudu_operations_invoke | exclude | true | Duplicate outcome: the META tool `hudu_invoke` is the designed entry point for exactly this capability (it is what the catalog row and every META-tool description tell an agent to use), and both tools would run the same SDK dispatcher `operations.invoke`. Registering the plan row for `operations.invoke` is what makes the capability validated and checkable; shipping a second tool for it is not. A tools/list where two tools do the same job is worse than a slightly shorter list. |
 
 ## Excluded operations
 
@@ -819,6 +820,7 @@ redundant. The reason column is the override's `reason`.
 | hudu_search_asset_passwords | asset_passwords.search | read | helper | Redundant outcome: hudu_search({mode:"search", resources:[...]}) performs this search (or these eight), with body-aware ranking, snippets, company_id scoping and per-resource error isolation - see the migration table in .run/design/search/single-search-tool.md 4.1. Retiring the tool never removes the capability: the backing operation stays callable in the SDK and reachable through hudu_invoke. |
 | hudu_search_password_folders | password_folders.search | read | helper | Redundant outcome: hudu_search({mode:"search", resources:[...]}) performs this search (or these eight), with body-aware ranking, snippets, company_id scoping and per-resource error isolation - see the migration table in .run/design/search/single-search-tool.md 4.1. Retiring the tool never removes the capability: the backing operation stays callable in the SDK and reachable through hudu_invoke. |
 | hudu_search_across_resources | operations.searchAcrossResources | read | helper | Redundant outcome: hudu_search({mode:"search", resources:[...]}) performs this search (or these eight), with body-aware ranking, snippets, company_id scoping and per-resource error isolation - see the migration table in .run/design/search/single-search-tool.md 4.1. Retiring the tool never removes the capability: the backing operation stays callable in the SDK and reachable through hudu_invoke. |
+| hudu_operations_invoke | operations.invoke | write | helper | Duplicate outcome: the META tool `hudu_invoke` is the designed entry point for exactly this capability (it is what the catalog row and every META-tool description tell an agent to use), and both tools would run the same SDK dispatcher `operations.invoke`. Registering the plan row for `operations.invoke` is what makes the capability validated and checkable; shipping a second tool for it is not. A tools/list where two tools do the same job is worse than a slightly shorter list. |
 
 Restore one by deleting its `exclude` override record and re-running `npm run mcp:project`.
 

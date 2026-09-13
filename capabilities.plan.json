@@ -3,7 +3,7 @@
     "source": "api-docs.json",
     "version": "2.45.1"
   },
-  "generatedAt": "2026-09-13T03:06:52.955Z",
+  "generatedAt": "2026-09-13T07:14:59.105Z",
   "resources": {
     "companies": {
       "helperCap": 4,
@@ -17,20 +17,21 @@
       "compact": "ArticleSummary",
       "workflowResource": true,
       "group": "A",
-      "searchCovers": "name (the TITLE) only \u2014 never the body, never the slug"
+      "searchCovers": "name (the TITLE) only — never the body, never the slug"
     },
     "assets": {
       "helperCap": 4,
       "compact": "AssetSummary",
       "workflowResource": true,
       "group": "A",
-      "searchCovers": "name and custom-field VALUES only \u2014 never field labels, never primary_serial / primary_model / primary_mail"
+      "searchCovers": "name and custom-field VALUES only — never field labels, never primary_serial / primary_model / primary_mail"
     },
     "asset_layouts": {
       "helperCap": 4,
       "compact": "AssetLayoutSummary",
       "workflowResource": false,
-      "group": "A"
+      "group": "A",
+      "searchCovers": null
     },
     "asset_passwords": {
       "helperCap": 4,
@@ -50,7 +51,8 @@
       "helperCap": 4,
       "compact": "FolderSummary",
       "workflowResource": false,
-      "group": "A"
+      "group": "A",
+      "searchCovers": null
     },
     "password_folders": {
       "helperCap": 4,
@@ -70,158 +72,183 @@
       "helperCap": 4,
       "compact": "NetworkSummary",
       "workflowResource": false,
-      "group": "B"
+      "group": "B",
+      "searchCovers": null
     },
     "vlans": {
       "helperCap": 4,
       "compact": "VlanSummary",
       "workflowResource": false,
-      "group": "B"
+      "group": "B",
+      "searchCovers": null
     },
     "vlan_zones": {
       "helperCap": 4,
       "compact": "VlanZoneSummary",
       "workflowResource": false,
-      "group": "B"
+      "group": "B",
+      "searchCovers": null
     },
     "ip_addresses": {
       "helperCap": 4,
       "compact": "IpAddressSummary",
       "workflowResource": false,
-      "group": "B"
+      "group": "B",
+      "searchCovers": null
     },
     "rack_storages": {
       "helperCap": 4,
       "compact": "RackStorageSummary",
       "workflowResource": false,
-      "group": "B"
+      "group": "B",
+      "searchCovers": null
     },
     "rack_storage_items": {
       "helperCap": 4,
       "compact": "RackStorageItemSummary",
       "workflowResource": false,
-      "group": "B"
+      "group": "B",
+      "searchCovers": null
     },
     "relations": {
       "helperCap": 4,
       "compact": "RelationSummary",
       "workflowResource": false,
-      "group": "B"
+      "group": "B",
+      "searchCovers": null
     },
     "flags": {
       "helperCap": 4,
       "compact": "FlagSummary",
       "workflowResource": false,
-      "group": "B"
+      "group": "B",
+      "searchCovers": null
     },
     "flag_types": {
       "helperCap": 4,
       "compact": "FlagTypeSummary",
       "workflowResource": false,
-      "group": "B"
+      "group": "B",
+      "searchCovers": null
     },
     "procedures": {
       "helperCap": 4,
       "compact": "ProcedureSummary",
       "workflowResource": false,
-      "group": "C"
+      "group": "C",
+      "searchCovers": null
     },
     "procedure_tasks": {
       "helperCap": 4,
       "compact": "ProcedureTaskSummary",
       "workflowResource": false,
-      "group": "C"
+      "group": "C",
+      "searchCovers": null
     },
     "cards": {
       "helperCap": 4,
       "compact": "IntegratorCardSummary",
       "workflowResource": false,
-      "group": "C"
+      "group": "C",
+      "searchCovers": null
     },
     "activity_logs": {
       "helperCap": 4,
       "compact": "ActivityLogSummary",
       "workflowResource": false,
-      "group": "C"
+      "group": "C",
+      "searchCovers": null
     },
     "expirations": {
       "helperCap": 4,
       "compact": "ExpirationSummary",
       "workflowResource": false,
-      "group": "C"
+      "group": "C",
+      "searchCovers": null
     },
     "matchers": {
       "helperCap": 4,
       "compact": null,
       "workflowResource": false,
-      "group": "C"
+      "group": "C",
+      "searchCovers": null
     },
     "magic_dash": {
       "helperCap": 4,
       "compact": "MagicDashSummary",
       "workflowResource": false,
-      "group": "C"
+      "group": "C",
+      "searchCovers": null
     },
     "api_info": {
       "helperCap": 4,
       "compact": null,
       "workflowResource": false,
-      "group": "C"
+      "group": "C",
+      "searchCovers": null
     },
     "uploads": {
       "helperCap": 4,
       "compact": "UploadSummary",
       "workflowResource": false,
-      "group": "D"
+      "group": "D",
+      "searchCovers": null
     },
     "photos": {
       "helperCap": 4,
       "compact": "PhotoSummary",
       "workflowResource": false,
-      "group": "D"
+      "group": "D",
+      "searchCovers": null
     },
     "public_photos": {
       "helperCap": 4,
       "compact": null,
       "workflowResource": false,
-      "group": "D"
+      "group": "D",
+      "searchCovers": null
     },
     "exports": {
       "helperCap": 4,
       "compact": "ExportSummary",
       "workflowResource": false,
-      "group": "D"
+      "group": "D",
+      "searchCovers": null
     },
     "s3_exports": {
       "helperCap": 4,
       "compact": null,
       "workflowResource": false,
-      "group": "D"
+      "group": "D",
+      "searchCovers": null
     },
     "lists": {
       "helperCap": 4,
       "compact": null,
       "workflowResource": false,
-      "group": "D"
+      "group": "D",
+      "searchCovers": null
     },
     "label_types": {
       "helperCap": 4,
       "compact": "LabelTypeSummary",
       "workflowResource": false,
-      "group": "D"
+      "group": "D",
+      "searchCovers": null
     },
     "labels": {
       "helperCap": 4,
       "compact": "LabelSummary",
       "workflowResource": false,
-      "group": "D"
+      "group": "D",
+      "searchCovers": null
     },
     "users": {
       "helperCap": 4,
       "compact": "UserSummary",
       "workflowResource": false,
       "group": "D",
-      "searchCovers": "first / last name only \u2014 never the email"
+      "searchCovers": "first / last name only — never the email"
     }
   },
   "operations": [
@@ -13114,7 +13141,7 @@
       "dryRun": false,
       "metadata": {
         "purpose": "Search the knowledge base by meaning-bearing text, articles first and assets second, with typo tolerance, ranked hits and verbatim snippets.",
-        "usage": "Mode-selecting helper with ONE entry point. mode:\"search\" (the default) needs query and returns ranked hits with plain-text snippets, scores and the follow-up call; it defaults to tier \"index\" when called as the MCP tool (the SDK default stays lazy). mode:\"help\" returns how to use the tool. mode:\"resources\" returns the searchable-resource table derived from the plan rows that declare a search vendor filter. A field the selected mode cannot honour throws CONFIG_ERROR naming the fields it does honour, and a missing query in search mode is CONFIG_ERROR \u2014 never a silent help fallback. Runs an in-memory body index (articles and account-wide assets) unioned with Hudu's own text search, so a record written a second ago still surfaces. The index is built from list pages: no per-record fetch is issued. With a cold index this answers from Hudu's search alone and reports degraded body-not-indexed, because Hudu never matches article body content. limit defaults to 8 and is hard-capped at 25 (a larger value throws CONFIG_ERROR, never a silent clamp); scope defaults to articles and assets. Each hit carries a snippet (a verbatim slice of the stripped text) and a fetch call for the full record. Every bound that bites is named in the response reasons list with complete false, and one resource failing becomes a failure entry instead of losing the call. The scoreScope field says whether the scores are comparable across resources.",
+        "usage": "Mode-selecting helper with ONE entry point. mode:\"search\" (the default) needs query and returns ranked hits with plain-text snippets, scores and the follow-up call; it defaults to tier \"index\" when called as the MCP tool (the SDK default stays lazy). mode:\"help\" returns how to use the tool. mode:\"resources\" returns the searchable-resource table derived from the plan rows that declare a search vendor filter. A field the selected mode cannot honour throws CONFIG_ERROR naming the fields it does honour, and a missing query in search mode is CONFIG_ERROR — never a silent help fallback. Runs an in-memory body index (articles and account-wide assets) unioned with Hudu's own text search, so a record written a second ago still surfaces. The index is built from list pages: no per-record fetch is issued. With a cold index this answers from Hudu's search alone and reports degraded body-not-indexed, because Hudu never matches article body content. limit defaults to 8 and is hard-capped at 25 (a larger value throws CONFIG_ERROR, never a silent clamp); scope defaults to articles and assets. Each hit carries a snippet (a verbatim slice of the stripped text) and a fetch call for the full record. Every bound that bites is named in the response reasons list with complete false, and one resource failing becomes a failure entry instead of losing the call. The scoreScope field says whether the scores are comparable across resources.",
         "preferredWhen": "Preferred over articles.search, assets.search or any resource list whenever the caller is looking for CONTENT rather than an exact field: a phrase in an article body, a mistyped title, a serial or a custom-field value. Use the exact-match helper tier instead when the caller already holds an id, a slug or a domain.",
         "related": [
           "articles.search",
@@ -13262,6 +13289,104 @@
           "id": "operations.searchKnowledge.perf",
           "file": "test/search/engine-perf.test.ts",
           "title": "keeps query latency postings-driven over 5,000 documents"
+        }
+      ],
+      "group": "operations",
+      "status": "tested"
+    },
+    {
+      "endpoint": null,
+      "primitive": null,
+      "specialOp": null,
+      "vendorFilters": [],
+      "search": null,
+      "helper": "operations.invoke",
+      "helperBasis": "composite",
+      "helperRationale": "Makes every operation the SDK implements genuinely callable by its registry key, which is what the progressive-disclosure catalog promises: without it the curated-out operations are catalogued but unreachable. It adds schema validation against the registry record and a dry-run-first write governor, and it re-implements no transport, so the typed method's guards, retries and error vocabulary are the ones that run.",
+      "effect": "write",
+      "flags": [],
+      "dryRun": true,
+      "metadata": {
+        "purpose": "Invoke any operation in the capability registry by its exact key, validated against that record before any request.",
+        "usage": "Exact registry-key lookup (never a tool name, never fuzzy). The input bag is validated against the record's inputSchema first: unknown fields, missing required fields, wrong types and out-of-enum values refuse with the field path, and no request is issued. Writes are DRY-RUN-FIRST: omit dryRun (or pass true) and the SDK dry-run path runs with no request, returning a DryRunResult with simulated: true; only an explicit { dryRun: false } executes. A destructive or approval-gated operation also needs { confirm: '<operation>' }. The binary/download resources the projection refuses are refused here too, so the escape hatch cannot bypass the projection rule. The dry-run flag belongs to the call options, not the payload. The result is the typed method's own result, never an invoke-specific envelope.",
+        "preferredWhen": "Preferred whenever an agent needs an operation the core tool set does not expose; check the catalog row's `requires` first, and describe the record when the schema matters.",
+        "related": [
+          "operations.resolveAny",
+          "operations.searchAcrossResources",
+          "operations.searchKnowledge"
+        ],
+        "example": "await hudu.operations.invoke('rack_storages.get', { id: 42 })"
+      },
+      "compact": null,
+      "resolution": null,
+      "staleCheck": "unavailable",
+      "redaction": "none",
+      "errors": [
+        "CONFIG_ERROR",
+        "NETWORK_ERROR",
+        "NOT_FOUND",
+        "POLICY_DENIED",
+        "RATE_LIMIT",
+        "RESOLUTION_TRUNCATED",
+        "STALE_OBJECT",
+        "UNAUTHORIZED",
+        "UNPROCESSABLE_ENTITY"
+      ],
+      "tests": [
+        {
+          "id": "operations.invoke.shape-coverage",
+          "file": "test/operations/invoke.test.ts",
+          "title": "every record is dispatched by a validator that understands every key and type it uses"
+        },
+        {
+          "id": "operations.invoke.shape-enumeration",
+          "file": "test/operations/invoke.test.ts",
+          "title": "refuses a wrong-typed or out-of-enum value at EVERY declared field path"
+        },
+        {
+          "id": "operations.invoke.shape-distinct",
+          "file": "test/operations/invoke.test.ts",
+          "title": "refuses every DISTINCT top-level shape, and accepts a valid bag for it"
+        },
+        {
+          "id": "operations.invoke.unknown-shape",
+          "file": "test/operations/invoke.test.ts",
+          "title": "treats a shape it does not know as a REFUSAL, never an accept"
+        },
+        {
+          "id": "operations.invoke.dispatch-reachability",
+          "file": "test/operations/invoke.test.ts",
+          "title": "resolves a callable typed method for every registry operation"
+        },
+        {
+          "id": "operations.invoke.unknown-operation",
+          "file": "test/operations/invoke.test.ts",
+          "title": "refuses an unknown operation, naming the nearest real keys"
+        },
+        {
+          "id": "operations.invoke.destructive-without-confirm",
+          "file": "test/operations/invoke.test.ts",
+          "title": "refuses a destructive operation without the confirmation flag"
+        },
+        {
+          "id": "operations.invoke.argument-not-honoured",
+          "file": "test/operations/invoke.test.ts",
+          "title": "refuses an argument the operation cannot honour"
+        },
+        {
+          "id": "operations.invoke.dry-run-default",
+          "file": "test/operations/invoke.test.ts",
+          "title": "write: dry-run FIRST by default — no request, and a DryRunResult says so"
+        },
+        {
+          "id": "operations.invoke.client-scan",
+          "file": "test/operations/invoke.test.ts",
+          "title": "client-scan: a resolve with no vendor id endpoint goes through the bounded scan"
+        },
+        {
+          "id": "operations.invoke.refusal-parity",
+          "file": "test/operations/invoke.test.ts",
+          "title": "refuses exactly the resources the projection refuses (no drift, no bypass)"
         }
       ],
       "group": "operations",

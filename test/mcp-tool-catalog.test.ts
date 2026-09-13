@@ -10,9 +10,13 @@
  *   1. REACHABILITY — every registry operation has a catalog row, and a row with no tool says why
  *      it is reachable (`hudu_invoke`) or why it is refused. 78 of 225 operations have no tool; an
  *      operation that is indistinguishable from a missing one is the defect this closes.
- *   2. VALIDATION IS NOT A NO-OP — the validator is a SECOND implementation of the generator's
- *      schema language, so every shape the registry actually uses is enumerated here and exercised
- *      (accept and refuse). A shape the validator does not know is refused, never accepted.
+ *   2. THE GENERATED ARTIFACT CARRIES NO SECOND VALIDATOR. The catalog module used to carry its
+ *      own copy of the registry schema language plus a write governor; the reference server now
+ *      dispatches through the SDK (`hudu.operations.invoke`), so the copy was retired rather than
+ *      left as a second, uncovered place that decides whether a call is allowed. The equivalent —
+ *      and stronger — assertions live in `test/operations/invoke.test.ts`, which enumerates the
+ *      same registry and exercises every shape (accept, refuse at every field path, unknown shape
+ *      is a refusal) against the ONE implementation, plus the governance and refusal-parity rules.
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -29,57 +33,15 @@ import {
   META_TOOLS,
   REFUSALS,
   WORKFLOW_RESOURCES,
-  auditSchemaVocabulary,
   catalogPage,
   configError,
   describeOperation,
-  governInvoke,
-  inputFields,
   requireCatalogRow,
-  validateInvokeInput,
 } from '../examples/tool-catalog.generated.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..');
 const records = Object.values(CAPABILITY_REGISTRY);
-
-/** A synthesized value for a registry field spec, used to exercise every type the registry uses. */
-function sampleValue(field: Record<string, unknown>, depth = 0): unknown {
-  const type = field.type as string;
-  if (Array.isArray(field.enum) && (field.enum as unknown[]).length) return (field.enum as unknown[])[0];
-  switch (type) {
-    case 'string': return 'example';
-    case 'number': return 1;
-    case 'boolean': return true;
-    case 'null': return null;
-    case 'unknown': return { any: true };
-    case 'array': {
-      const items = field.items as Record<string, unknown> | undefined;
-      return items ? [sampleValue(items, depth + 1)] : [1];
-    }
-    case 'object': {
-      const nested = Array.isArray(field.fields) ? (field.fields as Record<string, unknown>[]) : [];
-      const out: Record<string, unknown> = {};
-      for (const f of nested) out[f.name as string] = sampleValue(f, depth + 1);
-      return out;
-    }
-    case 'union': {
-      const variants = Array.isArray(field.variants) ? (field.variants as Record<string, unknown>[]) : [];
-      if (variants.length) return sampleValue(variants[0] as Record<string, unknown>, depth + 1);
-      const anyOf = Array.isArray(field.anyOf) ? (field.anyOf as string[]) : ['unknown'];
-      return sampleValue({ type: anyOf[0] }, depth + 1);
-    }
-    default: return { any: true };
-  }
-}
-
-function validInputFor(record: (typeof records)[number]): Record<string, unknown> {
-  const input: Record<string, unknown> = {};
-  for (const field of inputFields(record.inputSchema) as Record<string, unknown>[]) {
-    if (field.required === true) input[field.name as string] = sampleValue(field);
-  }
-  return input;
-}
 
 describe('catalog reachability (the defect this closes)', () => {
   it('has one row for every registry operation', () => {
@@ -104,9 +66,14 @@ describe('catalog reachability (the defect this closes)', () => {
     // 139, not 148: the 9 redundant search tools are retired by curation (one self-describing
     // `hudu_search` replaces them) and every one of their operations stays reachable through
     // `hudu_invoke` — the count here is the curated surface, and it is asserted exactly.
+    // 140 is unreachable: when the `operations.invoke` plan row landed, its generated tool
+    // (`hudu_operations_invoke`) was curated OUT — the META `hudu_invoke` is the designed entry
+    // point for that capability, and a second tool for one job is the same defect as a second
+    // validator. The ROW stays, so the capability is validated and checkable.
     expect(counts.exposed).toBe(139);
-    // 87 = 78 + the 9 retired search tools: an operation that loses its tool keeps its capability.
-    expect(counts.invokeOnly + counts.refused).toBe(87);
+    // 88 = 78 + the 9 retired search tools + `operations.invoke` (curated out): an operation that
+    // loses its tool keeps its capability.
+    expect(counts.invokeOnly + counts.refused).toBe(88);
     expect(counts.refused).toBe(Object.keys(REFUSALS).length);
   });
 
@@ -193,14 +160,15 @@ describe('hudu_catalog + hudu_describe', () => {
     const page = catalogPage({});
     expect(page.rows.length).toBe(DEFAULT_CATALOG_LIMIT);
     expect(page.total_operations).toBe(records.length);
-    // 65 = 56 duplicate-outcome operations + the 9 retired search tools, all reachable through hudu_invoke.
-    expect(page.unexposed_operations).toBe(65);
+    // 66 = 56 duplicate-outcome operations + the 9 retired search tools + `operations.invoke`, all
+    // reachable through hudu_invoke.
+    expect(page.unexposed_operations).toBe(66);
     expect(page.unreachable_operations).toBe(22);
     const second = catalogPage({ offset: DEFAULT_CATALOG_LIMIT });
     expect(second.rows[0]!.op).not.toBe(page.rows[0]!.op);
     const unexposed = catalogPage({ unexposed_only: true, limit: MAX_CATALOG_LIMIT });
     expect(unexposed.rows.every((r) => r.tool === null && r.reachable === true)).toBe(true);
-    expect(unexposed.matched).toBe(65);
+    expect(unexposed.matched).toBe(66);
     const destructive = catalogPage({ effect: 'destructive', limit: MAX_CATALOG_LIMIT });
     expect(destructive.rows.every((r) => r.effect === 'destructive')).toBe(true);
     const websites = catalogPage({ resource: 'websites', limit: MAX_CATALOG_LIMIT });
@@ -228,162 +196,6 @@ describe('hudu_catalog + hudu_describe', () => {
   });
 });
 
-describe('hudu_invoke validation is not a no-op (G4)', () => {
-  it('handles every type and key the registry actually uses', () => {
-    const exercisedTypes = new Set<string>();
-    const exercisedKeys = new Set<string>();
-    const collect = (field: unknown, depth = 0): void => {
-      if (depth > 12) return;
-      if (Array.isArray(field)) { for (const n of field) collect(n, depth + 1); return; }
-      if (field === null || typeof field !== 'object') return;
-      const f = field as Record<string, unknown>;
-      for (const k of Object.keys(f)) exercisedKeys.add(k);
-      if (typeof f.type === 'string') exercisedTypes.add(f.type);
-      for (const v of Object.values(f)) collect(v, depth + 1);
-    };
-    // 1. every record's schema is a shape the validator knows (no silent no-op material)
-    for (const record of records) {
-      expect(auditSchemaVocabulary(record.inputSchema), record.name).toEqual([]);
-      for (const field of inputFields(record.inputSchema) as unknown[]) collect(field);
-    }
-    // 2. an INDEPENDENT deep walk of every schema in the registry, so a type or key shape the
-    //    walker above cannot reach still has to be accounted for: anything the registry uses must
-    //    be a type the validator knows and a type this enumeration exercised.
-    const registryTypes = new Set<string>();
-    const registryKeys = new Set<string>();
-    const deep = (node: unknown): void => {
-      if (Array.isArray(node)) { for (const n of node) deep(n); return; }
-      if (node === null || typeof node !== 'object') return;
-      for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
-        registryKeys.add(k);
-        if (k === 'type' && typeof v === 'string') registryTypes.add(v);
-        deep(v);
-      }
-    };
-    for (const record of records) deep(record.inputSchema);
-    expect([...registryTypes].sort()).toEqual(['array', 'boolean', 'null', 'number', 'object', 'string', 'union', 'unknown']);
-    for (const type of registryTypes) expect([...exercisedTypes], `type ${type} was never reached by the field walker`).toContain(type);
-    for (const key of ['fields', 'items', 'variants', 'anyOf', 'enum', 'typeName', 'required']) {
-      expect(registryKeys, `the registry does not use ${key} any more — this test is now vacuous for it`).toContain(key);
-      expect(exercisedKeys).toContain(key);
-    }
-    expect(exercisedKeys.has('fields')).toBe(true);
-    expect(exercisedKeys.has('items')).toBe(true);
-    expect(exercisedKeys.has('variants')).toBe(true);
-    expect(exercisedKeys.has('anyOf')).toBe(true);
-    expect(exercisedKeys.has('enum')).toBe(true);
-    expect(exercisedKeys.has('typeName')).toBe(true);
-  });
-
-  it('exercises every distinct registry input shape: the synthesized valid input is accepted', () => {
-    const shapes = new Set<string>();
-    let checked = 0;
-    for (const record of records) {
-      shapes.add(JSON.stringify(record.inputSchema));
-      const result = validateInvokeInput(record, validInputFor(record));
-      expect(result.ok, `${record.name}: ${result.message}`).toBe(true);
-      checked += 1;
-    }
-    expect(checked).toBe(records.length);
-    expect(shapes.size).toBeGreaterThan(100);
-  });
-
-  it('refuses an unknown field, a missing required field, a wrong type and an out-of-enum value', () => {
-    const update = getCapability('companies.update')!;
-    const unknown = validateInvokeInput(update, { id: 1, data: {}, nope: true });
-    expect(unknown.ok).toBe(false);
-    expect(unknown.code).toBe('CONFIG_ERROR');
-    expect(unknown.message).toMatch(/unknown field/);
-    const missing = validateInvokeInput(update, { id: 1 });
-    expect(missing.ok).toBe(false);
-    expect(missing.message).toMatch(/data: required/);
-    const wrongType = validateInvokeInput(update, { id: 'one', data: {} });
-    expect(wrongType.ok).toBe(false);
-    expect(wrongType.message).toMatch(/id: expected number, got string/);
-    // a real enum in the registry: magic_dash create has an enum field
-    const enumRecord = records.find((r) => JSON.stringify(r.inputSchema).includes('"enum"'))!;
-    const enumField = (inputFields(enumRecord.inputSchema) as Record<string, unknown>[])
-      .find((f) => Array.isArray(f.enum) || (Array.isArray(f.fields) && (f.fields as Record<string, unknown>[]).some((n) => Array.isArray(n.enum))));
-    expect(enumField).toBeDefined();
-    const top = enumField!.enum as unknown[] | undefined;
-    const target = top ? enumField! : (enumField!.fields as Record<string, unknown>[]).find((n) => Array.isArray(n.enum))!;
-    const enumValues = target.enum as unknown[];
-    const input: Record<string, unknown> = validInputFor(enumRecord);
-    const holder = top ? input : (input[enumField!.name as string] as Record<string, unknown>);
-    holder[target.name as string] = '__not_in_enum__';
-    const refused = validateInvokeInput(enumRecord, input);
-    expect(refused.ok, `${enumRecord.name} accepted ${JSON.stringify(holder)} against enum ${JSON.stringify(enumValues)}`).toBe(false);
-    expect(refused.message).toMatch(/expected one of/);
-  });
-
-  it('refuses rather than accepts an unknown schema shape (the silent no-op)', () => {
-    const gaps = auditSchemaVocabulary({ thing: { name: 'thing', type: 'string', madeUpKey: 1 } });
-    expect(gaps).toEqual(['unknown field key "madeUpKey"']);
-    const fake = {
-      name: 'fake.op', kind: 'primitive', resource: 'fake', purpose: null, outputSchema: {},
-      examples: [], effect: 'read', flags: [], dryRun: false, permissions: 'read', pagination: {},
-      resolution: null, retry: {}, errors: [], related: [], preferredWhen: null, usage: null, compact: null,
-      inputSchema: { thing: { name: 'thing', type: 'string', madeUpKey: 1 } },
-    } as unknown as Parameters<typeof validateInvokeInput>[0];
-    const result = validateInvokeInput(fake, { thing: 'x' });
-    expect(result.ok).toBe(false);
-    expect(result.message).toMatch(/schema shape this validator does not know/);
-    expect(auditSchemaVocabulary({ a: { name: 'a', type: 'not-a-type' } })).toEqual(['unknown field type "not-a-type"']);
-  });
-
-  it('refuses a non-object input and a null input for a required-argument operation', () => {
-    const update = getCapability('companies.update')!;
-    expect(validateInvokeInput(update, 'nope').ok).toBe(false);
-    expect(validateInvokeInput(update, [1, 2]).ok).toBe(false);
-    const nulled = validateInvokeInput(update, null);
-    expect(nulled.ok).toBe(false);
-    expect(nulled.message).toMatch(/required/);
-  });
-});
-
-describe('the write governor', () => {
-  it('runs a read directly', () => {
-    const governed = governInvoke(getCapability('companies.resolve')!, {});
-    expect(governed.ok).toBe(true);
-    expect(governed.dry_run).toBe(false);
-  });
-
-  it('REFUSES every write without a dry run (the negative fixture that must fail)', () => {
-    for (const record of records) {
-      if (record.effect === 'read') continue;
-      if (REFUSALS[record.name] !== undefined) continue; // refused outright, asserted separately below
-      const refused = governInvoke(record, { dry_run: false });
-      expect(refused.ok, `${record.name} was allowed to write without a dry run`).toBe(false);
-      expect(refused.message).toMatch(/dry-run-first/);
-      const dry = governInvoke(record, { dry_run: true });
-      if (record.effect === 'destructive' || record.flags.includes('requiresApproval')) {
-        expect(dry.ok).toBe(false);
-        expect(dry.message).toMatch(/confirm/);
-        const confirmed = governInvoke(record, { dry_run: true, confirm: record.name });
-        expect(confirmed.ok, `${record.name} refused with its own confirm value`).toBe(true);
-        expect(governInvoke(record, { dry_run: true, confirm: 'yes' }).ok).toBe(false);
-      } else {
-        expect(dry.ok).toBe(true);
-        expect(dry.dry_run).toBe(true);
-      }
-    }
-  });
-
-  it('refuses an operation the projection deliberately never exposes', () => {
-    for (const op of Object.keys(REFUSALS)) {
-      const refused = governInvoke(getCapability(op)!, { dry_run: true, confirm: op });
-      expect(refused.ok, `${op} was allowed through the escape hatch`).toBe(false);
-      expect(refused.message).toMatch(/deliberately not callable/);
-    }
-  });
-
-  it('gives a write a message a caller can act on (the SDK dry-run path)', () => {
-    const refused = governInvoke(getCapability('companies.create')!, {});
-    expect(refused.ok).toBe(false);
-    expect(refused.message).toMatch(/dry_run: true/);
-    expect(refused.message).toMatch(/no request issued/);
-  });
-});
 
 describe('configError', () => {
   it('carries a message and the CONFIG_ERROR name', () => {
@@ -393,23 +205,3 @@ describe('configError', () => {
   });
 });
 
-describe('validateInvokeInput — a UNION that carries an enum must enforce it', () => {
-  // The hole this test exists to prevent: the union branch checked the `anyOf` types and returned,
-  // so a value of a matching type was accepted and forwarded to the vendor. Registry ground truth:
-  // procedures.create's `process_type` is {"type":"union","anyOf":["string","string","null"],
-  // "enum":["global","company","null"]}.
-  const record = getCapability('procedures.create')!;
-
-  it('refuses a value outside the union enum, naming the field path', () => {
-    const refused = validateInvokeInput(record, { data: { process_type: 'anything' } });
-    expect(refused.ok, 'an out-of-enum union value was accepted — it would have reached the vendor').toBe(false);
-    expect(JSON.stringify(refused.problems)).toMatch(/process_type/);
-    expect(refused.message).toMatch(/global/);
-    expect(refused.message).toMatch(/process_type/);
-  });
-
-  it('does not refuse a value inside the union enum for that field', () => {
-    const accepted = validateInvokeInput(record, { data: { process_type: 'global' } });
-    expect(accepted.problems.some((p) => /process_type/.test(p.path))).toBe(false);
-  });
-});
