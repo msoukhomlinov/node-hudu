@@ -23,6 +23,26 @@ export type ErrorCategory =
 /** The two resolution codes. */
 export type ResolutionErrorCode = 'RESOLUTION_TRUNCATED' | 'RESOLUTION_AMBIGUOUS';
 
+/**
+ * One vendor field rejection, normalized into a machine-readable pair.
+ *
+ * `field` is the vendor's own field name when the body names one, or the
+ * `UNKNOWN_FIELD` sentinel for a body-level problem that names no field.
+ * `message` is the vendor text verbatim (trimmed).
+ */
+export interface FieldError {
+  field: string;
+  message: string;
+}
+
+/**
+ * Sentinel `field` used for a validation problem the vendor did not attribute to a
+ * named field (e.g. `{"errors": "Network does not belong to the specified company"}`).
+ * A caller that wants field-attributed problems only can drop entries whose
+ * `field` is `UNKNOWN_FIELD`.
+ */
+export const UNKNOWN_FIELD = '*';
+
 export interface HuduErrorOptions {
   status?: number;
   code?: string;
@@ -34,6 +54,8 @@ export interface HuduErrorOptions {
   resourceIds?: number[];
   suggestedAction?: string;
   correlationId?: string;
+  /** Pre-parsed field rejections; when omitted, the validation errors parse the body. */
+  fieldErrors?: FieldError[];
 }
 
 /** Category implied by an HTTP status when the caller does not set one. */
@@ -86,6 +108,86 @@ function suggestedActionForStatus(status: number | undefined, category: ErrorCat
   return undefined;
 }
 
+/** Longest token still treated as a field name rather than prose. */
+const MAX_FIELD_NAME = 64;
+/** A plausible field name: identifier-ish, optionally with dotted/bracketed nesting. */
+const FIELD_NAME = /^[A-Za-z_][A-Za-z0-9_.\-[\]]*$/;
+
+/** Trim a vendor string into a usable message, or undefined when it carries nothing. */
+function cleanMessage(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+/** The field a prose clause names, when its trailing token after the last ': ' looks like a field. */
+function fieldFromProse(text: string): string | undefined {
+  const at = text.lastIndexOf(': ');
+  if (at === -1) return undefined;
+  const token = text.slice(at + 2).trim();
+  if (token.length === 0 || token.length > MAX_FIELD_NAME) return undefined;
+  return FIELD_NAME.test(token) ? token : undefined;
+}
+
+/** Flatten a Rails-style field -> string | string[] map into one entry per message. */
+function entriesFromMap(map: Record<string, unknown>): FieldError[] {
+  const out: FieldError[] = [];
+  for (const [field, value] of Object.entries(map)) {
+    for (const item of Array.isArray(value) ? value : [value]) {
+      const message = cleanMessage(item);
+      if (message !== undefined) out.push({ field, message });
+    }
+  }
+  return out;
+}
+
+/**
+ * Normalize the field-level detail a vendor error body carries, so an agent can tell
+ * WHICH field was rejected without parsing the raw payload itself.
+ *
+ * Recognized shapes, in priority order:
+ * - a map of field -> string | string[] (Rails style), e.g.
+ *   `{"errors": {"name": ["can't be blank"], "address": "is invalid"}}`
+ * - a top-level `errors` string or array of strings, e.g.
+ *   `{"errors": "Network does not belong to the specified company"}`; the vendor names
+ *   no field, so those entries carry the documented `UNKNOWN_FIELD` sentinel
+ * - a `details` prose string whose trailing clause names a field, e.g.
+ *   `{"error": "Parameter missing", "details": "param is missing or the value is empty: company"}`
+ *   -> field `company`; a prose tail that does not look like a field yields `UNKNOWN_FIELD`
+ *
+ * Any other body (a string, null, an array at the root, a map without usable messages)
+ * yields `undefined`. This function never throws and never serializes the body, so a
+ * malformed or circular body cannot mask the original error.
+ *
+ * Pure: exported for direct unit testing.
+ */
+export function parseFieldErrors(body: unknown): FieldError[] | undefined {
+  try {
+    if (!isRecord(body)) return undefined;
+    const { errors, details } = body;
+    if (isRecord(errors)) {
+      const mapped = entriesFromMap(errors);
+      if (mapped.length > 0) return mapped;
+    } else if (Array.isArray(errors)) {
+      const listed: FieldError[] = [];
+      for (const item of errors) {
+        const message = cleanMessage(item);
+        if (message !== undefined) listed.push({ field: UNKNOWN_FIELD, message });
+      }
+      if (listed.length > 0) return listed;
+    } else {
+      const single = cleanMessage(errors);
+      if (single !== undefined) return [{ field: UNKNOWN_FIELD, message: single }];
+    }
+    const prose = cleanMessage(details);
+    if (prose !== undefined) return [{ field: fieldFromProse(prose) ?? UNKNOWN_FIELD, message: prose }];
+    return undefined;
+  } catch {
+    // A malformed body must never mask the original error.
+    return undefined;
+  }
+}
+
 export class HuduError extends Error {
   readonly code: string;
   readonly url?: string;
@@ -102,6 +204,17 @@ export class HuduError extends Error {
   correlationId?: string;
   /** Registry operation that failed; attached by the transport/resource layer. */
   operation?: string;
+  /**
+   * Normalized field-level rejections when the vendor body carried them.
+   *
+   * Populated on the validation-shaped errors (`BadRequestError` 400,
+   * `UnprocessableEntityError` 422, `ValidationFailedError`) from the raw body via
+   * `parseFieldErrors`; `undefined` for every other error class and for a body with no
+   * recognizable field detail. Additive: `message`, `code`, `status`, `body` and
+   * `vendorError` are unaffected. Entries whose `field` is `UNKNOWN_FIELD` (`'*'`)
+   * describe a body-level problem that names no field.
+   */
+  readonly fieldErrors?: FieldError[];
   private readonly _status?: number;
 
   constructor(message: string, options?: HuduErrorOptions) {
@@ -117,6 +230,7 @@ export class HuduError extends Error {
     this.suggestedAction = options?.suggestedAction ?? suggestedActionForStatus(this._status, this.category);
     this.correlationId = options?.correlationId;
     this.operation = options?.operation;
+    this.fieldErrors = options?.fieldErrors;
     Object.setPrototypeOf(this, new.target.prototype);
   }
 
@@ -158,7 +272,10 @@ export class HuduNetworkError extends HuduError {
 
 export class BadRequestError extends HuduError {
   constructor(message: string, url?: string, body?: unknown, options?: HuduErrorOptions) {
-    super(message, { ...options, status: 400, code: 'BAD_REQUEST', url, body });
+    super(message, {
+      ...options, status: 400, code: 'BAD_REQUEST', url, body,
+      fieldErrors: options?.fieldErrors ?? parseFieldErrors(body),
+    });
   }
 }
 export class UnauthorizedError extends HuduError {
@@ -188,7 +305,10 @@ export class NotAcceptableError extends HuduError {
 }
 export class UnprocessableEntityError extends HuduError {
   constructor(message: string, url?: string, body?: unknown, options?: HuduErrorOptions) {
-    super(message, { ...options, status: 422, code: 'UNPROCESSABLE_ENTITY', url, body });
+    super(message, {
+      ...options, status: 422, code: 'UNPROCESSABLE_ENTITY', url, body,
+      fieldErrors: options?.fieldErrors ?? parseFieldErrors(body),
+    });
   }
 }
 export class RateLimitError extends HuduError {
@@ -221,7 +341,10 @@ export class StaleObjectError extends HuduError {
 /** 400 — the payload is structurally valid but semantically rejected. */
 export class ValidationFailedError extends HuduError {
   constructor(message: string, url?: string, body?: unknown, options?: HuduErrorOptions) {
-    super(message, { ...options, status: 400, code: 'VALIDATION_FAILED', category: 'validation', retryable: false, url, body });
+    super(message, {
+      ...options, status: 400, code: 'VALIDATION_FAILED', category: 'validation', retryable: false, url, body,
+      fieldErrors: options?.fieldErrors ?? parseFieldErrors(body),
+    });
   }
 }
 
