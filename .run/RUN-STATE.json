@@ -238,7 +238,7 @@
   ],
   "metrics": {
     "spawns": 21,
-    "commits": 41,
+    "commits": "55",
     "gateRuns": 6,
     "qaFindings": 64,
     "qaFixed": 26
@@ -265,23 +265,26 @@
       {
         "id": "L-CRIT",
         "sev": "CRITICAL",
-        "what": "a cap-truncated scan returned a single match with scanTruncated:false (false uniqueness claim); ~27 hardcoded sites",
-        "owner": "impl-resolution-truncation",
-        "status": "in flight"
+        "what": "cap-truncated scan returned a confident match",
+        "status": "FIXED a6a9aee"
       },
       {
         "id": "L2",
         "sev": "HIGH",
-        "what": "200+null id miss -> get() returned null / raw TypeError instead of NOT_FOUND (articles, asset_layouts, asset_passwords, folders, websites)",
-        "owner": "impl-id-miss-contract",
-        "status": "fixed in tree, awaiting verification+commit"
+        "what": "200+null id miss typed as the record / raw TypeError",
+        "status": "FIXED a6a9aee"
+      },
+      {
+        "id": "L3",
+        "sev": "MEDIUM",
+        "what": "one 500-ing resource aborts searchAcrossResources",
+        "status": "ACCEPTED (documented, unverified fix cost exceeds value)"
       },
       {
         "id": "L4",
         "sev": "MEDIUM",
         "what": "resolve(undefined) raw TypeError on 9 resources",
-        "owner": "impl-id-miss-contract",
-        "status": "fixed in tree, awaiting verification+commit"
+        "status": "FIXED a6a9aee"
       }
     ],
     "deadChildren": [
@@ -301,6 +304,18 @@
       "transport-errors-mcp": "done: MCP overrides re-advertised a rejected option -> fixed + write-after-gate fixed (41c45bf); stale-dist guard (12f0d88)",
       "mutation-safety-2": "done: core promise holds live (94 mutating primitives, zero dry-run writes); payload-slot dryRun footgun fixed (b0c29dd)",
       "helpers-resolution-2": "done: 1 CRITICAL (truncated scan returned a confident match with scanTruncated:false), 1 HIGH (200+null id miss), 2 MEDIUM; fixes delegated to impl-resolution-truncation + impl-id-miss-contract"
+    },
+    "status": "complete",
+    "finalGates": {
+      "tsc": 0,
+      "lint": 0,
+      "tests": "1617 passed / 50 files",
+      "coverage": "unchanged thresholds",
+      "capabilities": "PASS 0 failures",
+      "ship": "PASS",
+      "mcp": "--check-example PASS",
+      "verifyPack": "33 checks SHIPPABLE",
+      "liveSmoke": "40/40 PASS"
     }
   }
 }

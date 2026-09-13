@@ -82,6 +82,52 @@ the tarball; the maintainer-only `scripts/*.mjs` are not shipped.
 - wall clock 23:07 to 02:26 (3 h 19 min), well inside the 06:30 stopBy
 - artifacts: `.run/RUN-STATE.json`, `.run/PROGRESS.log`, `.run/qa/*.md` (five final verdicts plus the first pass), `.run/reports/*.md` (seven implementer reports), `.run/design/A.md`, `.run/design/B.md`, `.run/design/C.md`, `.run/design/D.md`
 
+## 9. Live sandbox testing (added after the user supplied a throwaway sandbox key)
+
+Tenant: **Hudu 2.45.1** (`hudu-sandbox.example.com`). Credentials stayed in the process environment; no
+credential file was opened by the harness and no key was written into the repo.
+
+Harness: **`scripts/live-smoke.mjs`, 40 checks**, committed. It reads `HUDU_BASE_URL` + `HUDU_API_KEY` from the
+environment, never prints the key, spies on `globalThis.fetch` to count requests, deletes every record it
+creates, and **refuses to run against a `dist/` older than the sources** (a stale dist once made a live run
+"reproduce" an already-fixed bug). Final result: **40/40 PASS**.
+
+Five independent lenses ran against the live tenant (four models; two agents had to be re-dispatched after
+their models failed to load with HTTP 507).
+
+### What the mocked suite could not see - and the live runs found
+
+| Sev | Defect | Fix |
+|---|---|---|
+| CRITICAL | `groups`/`users`/`websites` were built `listKey: undefined` while the vendor wraps them. `groups.listAll()`, `groups.list()`, `groups.get(1)`, `users.listAll()`, `websites.search()` all crashed live; `operations.searchAcrossResources()` **killed the process** with an unhandled rejection. Pre-existing in 0.2.1. | `5c79bf9` |
+| CRITICAL | A cap-truncated scan returned a confident single match with `scanTruncated: false` - a false uniqueness claim, returned *before* the scan's truncation flag was ever consulted (9 decision helpers, hardcoded literal). | `a6a9aee` |
+| HIGH | `companies`/`articles`/`procedures` declared `createType: 'raw'`, so `create()` returned the vendor envelope `{company:{...}}` typed as `Company` and `created.id` was `undefined`. The vendor wraps POST even though its own `api-docs.json` documents the bare record. | `f4c48c6` |
+| HIGH | `articles`/`asset_layouts`/`asset_passwords`/`folders`/`websites` answer **200 + `null`** for an unknown id, so `get(id)` returned `null` typed as the record and `resolve(id)` threw a **raw TypeError**. | `a6a9aee` |
+| MEDIUM | **44 MCP tools advertised `expectedUpdatedAt`** on create/delete operations the SDK rejects with CONFIG_ERROR. The curated overrides re-added it, and `project-mcp-tools.mjs` **wrote the manifest before running its own gate**, so a failing projection still shipped. | `41c45bf` |
+| MEDIUM | `procedures.duplicate(id, {company_id, dryRun: true})` put `dryRun` in the payload slot: the SDK issued a **real POST** the vendor ignored, so **the mutation executed while the caller believed it simulated**. | `b0c29dd` |
+| MEDIUM | `GET /matchers` without `integration_id` returns **500**; the primitives forwarded it instead of naming the precondition. | `da9d273` |
+| MEDIUM | `resolve(undefined)` threw a raw TypeError on 9 resources. | `a6a9aee` |
+| MEDIUM | `assets` requested `/companies/undefined/assets` and got a **vendor 500**. | `d1efc7f` |
+| LOW | `redact()` masked `api_key` but **not camelCase `apiKey`** - the spelling the SDK's own config uses - so a credential could reach an audit event. | `ad7be82` |
+| LOW | `s3_exports.create` discards the returned id (declared `Promise<void>`); three vendor POST 500s; `assertNotStale` no-version branch (no live record type exercises it). | accepted, documented |
+
+### Verified correct live (not just mocked)
+
+Dry-run issues **zero** writes on all 94 mutating primitives; guards refuse before any write; a stale
+`expectedUpdatedAt` produces `STALE_OBJECT` and the write does **not** land; unbounded bulk deletes are
+`POLICY_DENIED` pre-IO; the executed audit impact matches its dry-run; `onAudit` never carries key material;
+id miss -> `NOT_FOUND`; `null` only after a **complete** scan; ambiguity carries candidate ids; `listAll`
+collects past page 1 although the vendor sends no `meta`; non-paginated endpoints never receive
+`page`/`page_size`; compact vs `expand` drops exactly the claimed fields; the 20-tool MCP example server runs
+against the live tenant.
+
+### Falsified claims (checked rather than believed)
+
+The envelope lens reported "the vendor IGNORES `page_size`" as a MEDIUM truncation risk. Direct probe:
+`/companies?page=1&page_size=5` returns 5 rows, `/activity_logs?page=1&page_size=100` returns 100. `page_size`
+is honoured; no fix was needed. The stale-dist CRITICAL was also a harness artefact, not a source bug - which
+is why the harness now refuses stale builds.
+
 ## 8. Resume and next actions
 
 ```bash
