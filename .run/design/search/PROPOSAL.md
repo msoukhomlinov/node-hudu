@@ -186,3 +186,45 @@ A dedicated design (`progressive-disclosure.md`) measured the status quo and pro
   are not curated manifest tools. Fix: META override records, or a `--profile core` projection mode.
 - UNVERIFIED by that design: any host's `tools/list` filtering or list-changed behaviour (a projection cannot
   control the server).
+
+
+---
+
+## 13. Amendment: the single search tool, and a correction to my own token claim
+
+Design: `single-search-tool.md`. The tool is `hudu_search` (backing operation stays
+`operations.searchKnowledge`) with one optional `mode` enum = `search | help | resources`, defaulting to
+`search`. Mode confusion is designed against, not hoped away:
+- a missing `query` in search mode is a `CONFIG_ERROR` - it NEVER silently falls back to help;
+- a field the current mode cannot honour is a `CONFIG_ERROR` naming the honoured fields - never silently ignored;
+- each mode returns a distinct top-level shape with the mode echoed back.
+("Omit the query to get help" was explicitly rejected as ambiguity by omission.)
+
+**CORRECTION - the token saving is far smaller than this proposal implied.** Measured:
+
+| | Bytes |
+|---|---|
+| Today's 27 search tools (section / wire-compact / wire-full) | 59,238 / 31,063 / 52,176 |
+| ONLY the 9 retireable ones (8 `search_<resource>` + `search_across_resources`) | 19,407 / 9,725 / 17,039 |
+| The new `hudu_search` tool (always on) | 3,383 |
+| **Net saving** | **6,342 (~1,586 tokens) compact / 16,107 section** |
+
+So the honest figure is **~1.6k tokens, not the ~15k implied earlier** - reaching 15k would require also folding
+the 18 `hudu_find_*` identity lookups into the search tool, which would LOSE capability (search cannot replace
+an exact email/domain/serial lookup). Break-even is 1.8 help fetches.
+
+**The real justifications are therefore:** (a) one decision point instead of three overlapping ones, and
+(b) the manifest being unshippable whole - not a large per-turn saving. The large per-turn win is the
+progressive-disclosure CORE (-91.6%), not this consolidation.
+
+Migration: 147 -> 139 projected tools - the 9 search tools become 1; the 12 genuine `find_*` lookups keep their
+names; the **6 misnamed `find_*` list-tools are renamed to `hudu_list_*_for_*`** (they list attached records, so
+their old names lied); `get_*`/`create_*` are untouched; the SDK's 28 search/find helper operations are
+unchanged. `examples/mcp-server.ts` loses 6 registrations and gains `hudu_search` (header 20 -> 15).
+
+Gate: one composite plan row (both resolution caps, `redaction: credentials`, 10 tests including one per mode),
++4 overrides, +1 `annotations.bounded`, +9 `exclude`. Four new rules are proposed -
+`searchable-resource-parity`, `help-mode-documents-resources`, `mode-honours-fields`, `prose-dangling-projection`.
+**Warning carried forward:** `prose-dangling-projection` cannot ship as a hard failure - 48 surviving sections
+name the tools this change retires and 59 already name tools absent from the projection, so it must be scoped
+(e.g. only over text this change touches), or the prose must be cleaned first.
