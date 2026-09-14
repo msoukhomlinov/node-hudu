@@ -109,7 +109,10 @@ export interface KnowledgeSearchHit {
 export interface KnowledgeIndexDocStat {
   /** Documents of this resource in the index. */
   indexed: number;
-  /** Documents whose full text (article body) is indexed. */
+  /**
+   * Documents whose body text is indexed — INCLUDING bodies that were cut at `maxDocBytes`, so this
+   * count and `bodiesTruncated` overlap (a cut body is indexed AND truncated).
+   */
   bodiesIndexed: number;
   /** Documents whose raw input was cut at the byte cap (`maxDocBytes`): raise that cap to see more. */
   bodiesTruncated: number;

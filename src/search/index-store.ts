@@ -459,6 +459,9 @@ export class KnowledgeIndex {
    */
   private withoutText(doc: SearchDoc, evict: boolean): SearchDoc {
     const freed = doc.longText === null ? 0 : utf8Bytes(doc.longText);
+    // Only an EVICTABLE document may come through here (the caller's predicate guarantees it), and the
+    // field mapping is what makes the release real: a long text with no field of its own would leave
+    // the string reachable while the account claimed it was freed.
     this.textBytes -= freed;
     if (this.textBytes < 0) this.textBytes = 0;
     const copy: SearchDoc = { ...doc, longText: null, fields: { ...doc.fields } };
@@ -490,13 +493,22 @@ export class KnowledgeIndex {
   readonly evictedDocs = new Set<SearchDoc>();
 
   /**
+   * True when this document's long text is held in a field of its own, so releasing it really frees
+   * memory. A `longSource` outside `LONG_TEXT_FIELD` (the declared `'title'`) holds no separate
+   * string, and evicting it would decrement the account without releasing anything.
+   */
+  private static isEvictable(doc: SearchDoc): boolean {
+    return doc.longText !== null && LONG_TEXT_FIELD[doc.longSource] !== undefined;
+  }
+
+  /**
    * Drop the least-recently-read documents' TEXT until the account is back inside
    * `maxIndexTextBytes`. The text is what the bound measures and what the eviction really frees;
    * the recall that goes with it is recorded in `evictedDocs` and reported by the engine.
    */
   private ensureTextBudget(): void {
     while (this.textBytes > this.bounds.maxIndexTextBytes) {
-      const victim = this.leastRecentlyRead((doc) => doc.longText !== null);
+      const victim = this.leastRecentlyRead((doc) => KnowledgeIndex.isEvictable(doc));
       if (victim < 0) return;
       // The index keeps the TEXT-FREE COPY; the evicted object a reader may be holding keeps its text.
       this.docs[victim] = this.withoutText(this.docs[victim] as SearchDoc, true);
