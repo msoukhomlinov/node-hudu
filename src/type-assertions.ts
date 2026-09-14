@@ -79,6 +79,12 @@ function includeSurface(client: HuduClient, flag: boolean) {
   const searchOptionsValue: { expand?: boolean; include?: string[] } = {};
   const searchOptionsTyped = client.assets.search('x', searchOptionsValue);
   const listAllEmptyInclude = client.assets.listAll(1, { include: [] });
+  // A LITERAL name the compiler can see and that is not a real group is refused at compile time: widening
+  // the overloads to accept a `string[]` must not cost the SDK's typed include contract.
+  // @ts-expect-error 'expiration' is not one of the four groups
+  const rejectedGroupOnList = client.assets.listAll(1, { include: ['expiration'] });
+  // @ts-expect-error one valid and one unknown element is still refused
+  const rejectedMixedOnSearch = client.assets.search('x', { include: ['photos', 'nope'] });
   const searchedEmptyInclude = client.assets.search('x', { include: [] });
 
   return [
@@ -88,7 +94,7 @@ function includeSurface(client: HuduClient, flag: boolean) {
     searchExpandLiteral, searchLiteral, searchExpandWidened, searchWidened, searchExpandOnly,
     searchPlain, searchNoOpts, searchOptionalWidened,
     searchWidenedExpand, searchWidenedExpandLiteral, searchOptionsTyped,
-    listAllEmptyInclude, searchedEmptyInclude,
+    listAllEmptyInclude, searchedEmptyInclude, rejectedGroupOnList, rejectedMixedOnSearch,
   ] as const;
 }
 

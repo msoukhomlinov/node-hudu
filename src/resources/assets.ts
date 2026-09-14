@@ -96,6 +96,25 @@ function requireCompanyId(companyId: number | undefined, method: string): number
 const ASSET_INCLUDE_GROUPS: AssetIncludeGroup[] = ['layout', 'expirations', 'relations', 'photos'];
 
 /**
+ * Static validation for an `include` array, so widening the overloads to accept a `string[]` did not cost
+ * the SDK's typed contract: a value the compiler knows as a TUPLE of string literals must name real
+ * groups, while a genuinely widened `string[]` is accepted (its RETURN type is then the union, and the
+ * runtime validates the names). `UnknownIncludeGroup` exists so the error text says which name failed
+ * and what the accepted ones are, instead of a bare `never`.
+ */
+type UnknownIncludeGroup<U> = {
+  readonly error: 'unknown include group: expected layout | expirations | relations | photos';
+  readonly got: U;
+};
+type ValidIncludeArray<T> = T extends readonly unknown[]
+  ? string extends T[number]
+    ? unknown
+    : T[number] extends AssetIncludeGroup
+      ? unknown
+      : UnknownIncludeGroup<T[number]>
+  : unknown;
+
+/**
  * Validate an `include` array BEFORE any IO (validate-before-IO rule). An unknown group
  * name is a structured `HuduConfigError` naming the operation, the offending group and
  * the valid groups — explicit for agent callers. Returns the de-duplicated groups in
@@ -230,7 +249,7 @@ export class AssetsResource extends BaseResource<Asset> {
    */
   list<const T extends readonly string[] | undefined = undefined>(
     companyId: number,
-    params?: CompanyAssetsListParams & { include?: T },
+    params?: CompanyAssetsListParams & { include?: T & ValidIncludeArray<T> },
   ): [T] extends [readonly []]
     ? AsyncIterable<Asset>
     : [T] extends [readonly AssetIncludeGroup[]]
@@ -259,7 +278,7 @@ export class AssetsResource extends BaseResource<Asset> {
    */
   async listAll<const T extends readonly string[] | undefined = undefined>(
     companyId: number,
-    params?: CompanyAssetsListParams & { include?: T },
+    params?: CompanyAssetsListParams & { include?: T & ValidIncludeArray<T> },
   ): Promise<
     [T] extends [readonly []]
       ? Asset[]
@@ -282,7 +301,7 @@ export class AssetsResource extends BaseResource<Asset> {
    * optional array, the expanded page type for a literal one. */
   listPages<const T extends readonly string[] | undefined = undefined>(
     companyId: number,
-    params?: CompanyAssetsListParams & { include?: T },
+    params?: CompanyAssetsListParams & { include?: T & ValidIncludeArray<T> },
   ): [T] extends [readonly []]
     ? AsyncIterable<Page<Asset>>
     : [T] extends [readonly AssetIncludeGroup[]]
@@ -436,7 +455,7 @@ export class AssetsResource extends BaseResource<Asset> {
 
   /** Same `include` contract as `list` (see there): one generic overload per shape. */
   async listAllAcrossCompanies<const T extends readonly string[] | undefined = undefined>(
-    params?: AccountAssetsListParams & { include?: T },
+    params?: AccountAssetsListParams & { include?: T & ValidIncludeArray<T> },
   ): Promise<
     [T] extends [readonly []]
       ? Asset[]
@@ -461,7 +480,7 @@ export class AssetsResource extends BaseResource<Asset> {
 
   /** Same `include` contract as `list` (see there): one generic overload per shape. */
   listAcrossCompanies<const T extends readonly string[] | undefined = undefined>(
-    params?: AccountAssetsListParams & { include?: T },
+    params?: AccountAssetsListParams & { include?: T & ValidIncludeArray<T> },
   ): [T] extends [readonly []]
     ? AsyncIterable<Asset>
     : [T] extends [readonly AssetIncludeGroup[]]
@@ -479,7 +498,7 @@ export class AssetsResource extends BaseResource<Asset> {
   /** Same `include` contract as `list` (see there): one generic overload, the union for a widened or
    * optional array, the expanded page type for a literal one. */
   listAcrossCompaniesPages<const T extends readonly string[] | undefined = undefined>(
-    params?: AccountAssetsListParams & { include?: T },
+    params?: AccountAssetsListParams & { include?: T & ValidIncludeArray<T> },
   ): [T] extends [readonly []]
     ? AsyncIterable<Page<Asset>>
     : [T] extends [readonly AssetIncludeGroup[]]
@@ -558,7 +577,7 @@ export class AssetsResource extends BaseResource<Asset> {
    */
   async search<const T extends readonly string[] | undefined = undefined, const E extends boolean | undefined = undefined>(
     query: string,
-    opts?: Omit<AssetSearchOptions, 'include' | 'expand'> & { include?: T; expand?: E },
+    opts?: Omit<AssetSearchOptions, 'include' | 'expand'> & { include?: T & ValidIncludeArray<T>; expand?: E },
   ): Promise<
     // `expand` may be a widened boolean (`AssetSearchOptions` carries `expand?: boolean`), in which case
     // BOTH shapes are possible at runtime: the summary/full union is the honest answer, and the
