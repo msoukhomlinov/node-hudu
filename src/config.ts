@@ -1,6 +1,7 @@
 /**
  * Configuration and validation for the Hudu client.
  */
+import { ApiKeyAuth, isAuthStrategy, type AuthStrategy } from './auth.js';
 import { HuduConfigError } from './errors.js';
 import type { Logger } from './logger.js';
 import { NOOP_LOGGER } from './logger.js';
@@ -56,8 +57,22 @@ export interface HuduConfig {
    * Leading/trailing whitespace is TRIMMED (a key copied from a dashboard or a `.env` file often
    * carries some). A key that is only whitespace is refused with `CONFIG_ERROR` rather than sent as
    * an empty header — the failure is closed, never a request without credentials.
+   *
+   * Required unless `auth` is provided. Supply EXACTLY ONE of `apiKey` / `auth`; supplying both is a
+   * `CONFIG_ERROR`. A blank or whitespace-only string counts as absent, so `apiKey: process.env.HUDU_API_KEY`
+   * with an empty environment variable plus an `auth` strategy is accepted (the strategy wins), and a
+   * blank key with no strategy still fails closed.
    */
-  apiKey: string;
+  apiKey?: string;
+  /**
+   * Pluggable credential source (issue #23) — for example the end user's own API key resolved per
+   * request in a multi-tenant server, or a bearer token for a Hudu-fronting proxy.
+   *
+   * When set, `config.apiKey` is `''` and every request is authenticated by this strategy. Supply
+   * EXACTLY ONE of `apiKey` / `auth`. `ApiKeyAuth`, `BearerTokenAuth` and `HeaderAuth` are provided;
+   * any object with `{ name: string; headers(ctx): headers | Promise<headers> }` is accepted.
+   */
+  auth?: AuthStrategy;
   /** Defaults to '/api/v1' — the swagger basePath. */
   basePath?: string;
   /** Whole-call deadline in ms (requests + retries + backoff + rate-limit wait). Default 30_000. */
@@ -80,7 +95,14 @@ export interface HuduConfig {
 
 export interface ResolvedConfig {
   baseUrl: string;
+  /**
+   * The static key when one was configured, TRIMMED; `''` when an `auth` strategy was supplied
+   * instead. Never used to build a request any more — requests use `auth` (see `HttpClient`).
+   * Kept as a required `string` so existing readers keep compiling, and never used as a fallback.
+   */
   apiKey: string;
+  /** Always present after `resolveConfig`. Equals `new ApiKeyAuth(apiKey)` for `apiKey` clients. */
+  auth: AuthStrategy;
   basePath: string;
   timeoutMs: number;
   maxRetries: number;
@@ -135,8 +157,39 @@ export function resolveConfig(config: HuduConfig): ResolvedConfig {
   if (!config || typeof config !== 'object') {
     throw new HuduConfigError('HuduConfig is required');
   }
-  if (!config.apiKey || typeof config.apiKey !== 'string' || config.apiKey.trim().length === 0) {
+  // Exactly one credential source, fail closed. A blank string counts as ABSENT so that
+  // `apiKey: process.env.HUDU_API_KEY` (empty) plus `auth` is a valid migration, while a blank key
+  // with no strategy is still refused. A non-string apiKey is always invalid.
+  const rawApiKey = config.apiKey;
+  if (rawApiKey !== undefined && typeof rawApiKey !== 'string') {
     throw new HuduConfigError('apiKey must be a non-empty string');
+  }
+  const hasApiKey = typeof rawApiKey === 'string' && rawApiKey.trim().length > 0;
+  const hasAuth = config.auth !== undefined;
+  if (hasApiKey && hasAuth) {
+    throw new HuduConfigError('Provide exactly one of "apiKey" or "auth", not both');
+  }
+  if (hasAuth && !isAuthStrategy(config.auth)) {
+    throw new HuduConfigError('auth must be an AuthStrategy: { name: string; headers(ctx) => headers }');
+  }
+  let auth: AuthStrategy;
+  let apiKey: string;
+  if (hasAuth) {
+    auth = config.auth as AuthStrategy;
+    apiKey = '';
+  } else if (hasApiKey) {
+    apiKey = (rawApiKey as string).trim();
+    auth = new ApiKeyAuth(apiKey);
+  } else {
+    // Deliberate deviation from the literal design block: a blank `apiKey` keeps its historical
+    // message because an existing failure must never change its message, and because a blank string
+    // counts as ABSENT only when a strategy is also provided. Only a call with NO credential at all
+    // names the new alternative.
+    throw new HuduConfigError(
+      rawApiKey === undefined
+        ? 'apiKey must be a non-empty string, or provide an "auth" strategy'
+        : 'apiKey must be a non-empty string',
+    );
   }
   if (config.basePath !== undefined && !config.basePath.startsWith('/')) {
     throw new HuduConfigError('basePath must start with "/"');
@@ -211,7 +264,8 @@ export function resolveConfig(config: HuduConfig): ResolvedConfig {
 
   return {
     baseUrl: normalizeBaseUrl(config.baseUrl),
-    apiKey: config.apiKey.trim(),
+    apiKey,
+    auth,
     basePath: config.basePath ?? DEFAULT_BASE_PATH,
     timeoutMs: config.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     maxRetries: config.maxRetries ?? DEFAULT_MAX_RETRIES,

@@ -2,10 +2,11 @@
  * HTTP transport tests (HttpClient.request) using a mocked global fetch.
  */
 import { describe, it, expect } from 'vitest';
-import { HttpClient, unwrapByKey, unwrapList } from '../src/http.js';
+import { HttpClient, TokenBucket, TransportState, newTransportState, unwrapByKey, unwrapList } from '../src/http.js';
+import { ApiKeyAuth, BearerTokenAuth, HeaderAuth, type AuthStrategy } from '../src/auth.js';
 import { HuduClient } from '../src/client.js';
 import { resolveConfig } from '../src/config.js';
-import { HuduNetworkError, RateLimitError, BadRequestError, NotFoundError, HuduError } from '../src/errors.js';
+import { AuthError, HuduNetworkError, RateLimitError, BadRequestError, NotFoundError, HuduError } from '../src/errors.js';
 import { clearFetch, stubFetch, json, text, empty, expectRequests, type FetchSpy } from './helpers.js';
 
 function makeClient(overrides: Record<string, unknown> = {}) {
@@ -823,6 +824,242 @@ describe('SEC-2 — an error surface never echoes the query string', () => {
     }
     expect(caught?.code).toBe('RATE_LIMIT');
     expect(caught?.url).toBe('https://hudu.example.com/api/v1/articles');
+    clearFetch();
+  });
+});
+
+describe('auth strategy resolution in the transport (issue #23)', () => {
+  afterEach(() => clearFetch());
+
+  function strategyClient(auth: AuthStrategy, overrides: Record<string, unknown> = {}) {
+    // `apiKey: undefined` removes the helper's default key: exactly one credential source, as required.
+    return makeClient({ apiKey: undefined, auth, ...overrides });
+  }
+
+  it('precedence: caller headers win over the strategy', async () => {
+    const spy = stubFetch(() => json({}));
+    const client = strategyClient(new ApiKeyAuth('strategy'));
+    await client.request<unknown>({ method: 'GET', path: '/companies', headers: { 'x-api-key': 'caller' } });
+    const headers = spy.calls[0].init.headers as Record<string, string>;
+    expect(headers['x-api-key']).toBe('caller');
+    clearFetch();
+  });
+
+  it('precedence: a case-colliding credential header collapses to the caller value', async () => {
+    const spy = stubFetch(() => json({}));
+    const client = strategyClient(new BearerTokenAuth('strategy-token'));
+    await client.request<unknown>({ method: 'GET', path: '/companies', headers: { Authorization: 'Basic caller' } });
+    const headers = spy.calls[0].init.headers as Record<string, string>;
+    const authorizationKeys = Object.keys(headers).filter((k) => k.toLowerCase() === 'authorization');
+    expect(authorizationKeys).toEqual(['Authorization']);
+    expect(headers['Authorization']).toBe('Basic caller');
+    clearFetch();
+  });
+
+  it('precedence: Accept is set last, so opts.accept wins over a caller header', async () => {
+    const spy = stubFetch(() => json({}));
+    const client = makeClient();
+    await client.request<unknown>({ method: 'GET', path: '/companies', headers: { Accept: 'text/plain' } });
+    await client.request<unknown>({
+      method: 'GET',
+      path: '/companies',
+      accept: 'text/html',
+      headers: { Accept: 'text/plain' },
+    });
+    expect((spy.calls[0].init.headers as Record<string, string>)['Accept']).toBe('application/json');
+    expect((spy.calls[1].init.headers as Record<string, string>)['Accept']).toBe('text/html');
+    clearFetch();
+  });
+
+  it('precedence: Content-Type follows formUrlEncoded / body / FormData, and beats a caller value', async () => {
+    const spy = stubFetch(() => json({}));
+    const client = makeClient();
+    await client.request<unknown>({
+      method: 'POST',
+      path: '/companies',
+      body: { name: 'Acme' },
+      headers: { 'Content-Type': 'text/plain' },
+    });
+    await client.request<unknown>({
+      method: 'POST',
+      path: '/companies',
+      formUrlEncoded: { name: 'Acme' },
+    });
+    const form = new FormData();
+    form.append('file', 'x');
+    await client.request<unknown>({ method: 'POST', path: '/companies', formData: form });
+    expect((spy.calls[0].init.headers as Record<string, string>)['Content-Type']).toBe('application/json');
+    expect((spy.calls[1].init.headers as Record<string, string>)['Content-Type']).toBe('application/x-www-form-urlencoded');
+    expect((spy.calls[2].init.headers as Record<string, string>)['Content-Type']).toBeUndefined();
+    clearFetch();
+  });
+
+  it('a strategy that returns an unusable map fails closed with an AuthError', async () => {
+    const spy = stubFetch(() => json({}));
+    const cases: unknown[] = [
+      {},
+      null,
+      undefined,
+      'not-a-record',
+      { authorization: '   ' },
+      { authorization: 42 },
+      { authorization: null },
+    ];
+    for (const produced of cases) {
+      const client = strategyClient({ name: 'broken', headers: () => produced as Record<string, string> });
+      await expect(client.request<unknown>({ method: 'GET', path: '/companies' })).rejects.toBeInstanceOf(AuthError);
+    }
+    expect(spy.calls).toHaveLength(0);
+    clearFetch();
+  });
+
+  it('an async strategy that resolves in time is used', async () => {
+    const spy = stubFetch(() => json({}));
+    const client = strategyClient({
+      name: 'async',
+      headers: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        return { Authorization: 'Bearer async-token' };
+      },
+    });
+    await client.request<unknown>({ method: 'GET', path: '/companies' });
+    expect((spy.calls[0].init.headers as Record<string, string>)['Authorization']).toBe('Bearer async-token');
+    clearFetch();
+  });
+
+  it('an async strategy that rejects fails closed and never reaches the network', async () => {
+    const spy = stubFetch(() => json({}));
+    const client = strategyClient({
+      name: 'async-reject',
+      headers: () => Promise.reject(new Error('token vault offline: SUPERSECRET')),
+    });
+    const err = await client.request<unknown>({ method: 'GET', path: '/companies' }).then(
+      () => undefined,
+      (e: unknown) => e as AuthError,
+    );
+    expect(err).toBeInstanceOf(AuthError);
+    expect(err.message).not.toContain('SUPERSECRET');
+    expect(spy.calls).toHaveLength(0);
+    clearFetch();
+  });
+
+  it('the deadline race fails closed instead of sending an unauthenticated request', async () => {
+    const spy = stubFetch(() => json({}));
+    const client = strategyClient(
+      {
+        name: 'slow-vault',
+        headers: () => new Promise<Record<string, string>>((resolve) => setTimeout(() => resolve({ 'x-api-key': 'late' }), 200)),
+      },
+      { timeoutMs: 30 },
+    );
+    const err = await client.request<unknown>({ method: 'GET', path: '/companies' }).then(
+      () => undefined,
+      (e: unknown) => e as AuthError,
+    );
+    expect(err).toBeInstanceOf(AuthError);
+    expect(err.code).toBe('AUTH_ERROR');
+    expect(err.category).toBe('auth');
+    expect(err.message).toContain('did not resolve within the remaining request budget');
+    expect(err.suggestedAction).toContain('timeoutMs');
+    expect(spy.calls).toHaveLength(0);
+    // The abandoned promise settles afterwards; the transport absorbed it, so no unhandled rejection.
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    clearFetch();
+  });
+
+  it('a rejecting resolver that loses the deadline race produces no unhandled rejection', async () => {
+    const spy = stubFetch(() => json({}));
+    const client = strategyClient(
+      {
+        name: 'slow-rejecting-vault',
+        headers: () => new Promise<Record<string, string>>((_resolve, reject) => setTimeout(() => reject(new Error('too late')), 100)),
+      },
+      { timeoutMs: 20 },
+    );
+    await expect(client.request<unknown>({ method: 'GET', path: '/companies' })).rejects.toBeInstanceOf(AuthError);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(spy.calls).toHaveLength(0);
+    clearFetch();
+  });
+
+  it('a dry run never calls the resolver, even with a per-request strategy', async () => {
+    const spy = stubFetch(() => json({}));
+    let calls = 0;
+    const http = makeClient();
+    await http.request<unknown>({
+      method: 'POST',
+      path: '/companies',
+      dryRun: true,
+      auth: {
+        name: 'counting',
+        headers: () => {
+          calls += 1;
+          return { 'x-api-key': 'k' };
+        },
+      },
+    });
+    expect(calls).toBe(0);
+    expect(spy.calls).toHaveLength(0);
+    clearFetch();
+  });
+
+  it('a per-request auth override is re-resolved per attempt too', async () => {
+    const spy = stubFetch(() => json({}, 500));
+    const http = makeClient({ maxRetries: 1 });
+    await expect(
+      http.request<unknown>({
+        method: 'GET',
+        path: '/companies',
+        auth: { name: 'per-request', headers: () => ({ 'x-api-key': 'per-request-key' }) },
+      }),
+    ).rejects.toBeInstanceOf(HuduError);
+    expect(spy.calls.length).toBeGreaterThan(1);
+    for (const call of spy.calls) {
+      expect((call.init.headers as Record<string, string>)['x-api-key']).toBe('per-request-key');
+    }
+    clearFetch();
+  });
+
+  it('TransportState is shared when it is passed to another HttpClient', async () => {
+    stubFetch(() => json({}));
+    const cfg = resolveConfig({
+      baseUrl: 'https://hudu.example.com',
+      apiKey: 'k',
+      rateLimit: { perMinute: 60, burst: 5 },
+    });
+    const parent = new HttpClient(cfg);
+    const state: TransportState = newTransportState(cfg);
+    const child = new HttpClient(cfg, state);
+    expect(child.state).toBe(state);
+    await child.request<unknown>({ method: 'GET', path: '/companies' });
+    expect(state.inFlight).toBe(0);
+    expect(child.getRateLimitStatus().availableTokens).toBeLessThan(5);
+    // The parent kept its OWN bucket: an explicitly passed state is not the parent's.
+    expect(parent.getRateLimitStatus().availableTokens).toBe(5);
+    clearFetch();
+  });
+
+  it('a fresh TransportState is created per client when none is passed', () => {
+    const cfg = resolveConfig({ baseUrl: 'https://hudu.example.com', apiKey: 'k' });
+    const a = new HttpClient(cfg);
+    const b = new HttpClient(cfg);
+    expect(a.state).not.toBe(b.state);
+    expect(a.state.bucket).toBeUndefined();
+    const limited = newTransportState(
+      resolveConfig({ baseUrl: 'https://hudu.example.com', apiKey: 'k', rateLimit: { perMinute: 60, burst: 3 } }),
+    );
+    const bucket: TokenBucket | undefined = limited.bucket;
+    expect(bucket?.capacity).toBe(3);
+    expect(bucket?.tokens).toBe(3);
+  });
+
+  it('a HeaderAuth strategy reaches the wire with its own header and no x-api-key', async () => {
+    const spy = stubFetch(() => json({}));
+    const client = strategyClient(new HeaderAuth({ 'x-proxy-token': 'p' }, { name: 'proxy' }));
+    await client.request<unknown>({ method: 'GET', path: '/companies' });
+    const headers = spy.calls[0].init.headers as Record<string, string>;
+    expect(headers['x-proxy-token']).toBe('p');
+    expect(headers['x-api-key']).toBeUndefined();
     clearFetch();
   });
 });

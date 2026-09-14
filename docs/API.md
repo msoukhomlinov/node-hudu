@@ -91,8 +91,10 @@ const companies = new CompaniesResource(http);
 export interface HuduConfig {
   /** Origin only, e.g. 'https://hudu.example.com'. No path, no trailing slash. */
   baseUrl: string;
-  /** Hudu API key. */
-  apiKey: string;
+  /** Hudu API key. Required unless `auth` is set - supply exactly one of the two. */
+  apiKey?: string;
+  /** Pluggable credential source: `ApiKeyAuth`, `BearerTokenAuth`, `HeaderAuth`, or your own. */
+  auth?: AuthStrategy;
   /** Defaults to '/api/v1' — the Swagger base path. */
   basePath?: string;
   /** HTTP timeout in ms. Default 30_000. */
@@ -121,8 +123,12 @@ export const DEFAULT_PAGE_SIZE = 25;
 ```
 
 `ConfigError` conditions: `baseUrl` must be an `http:`/`https:` origin (no path); `apiKey`
-must be a non-empty string; `basePath` must start with `/`; `timeoutMs`/`maxRetries` must
-be non-negative integers; `rateLimit.perMinute` must be a positive integer.
+must be a non-empty string; exactly one of `apiKey`/`auth` must be supplied, so both set, a
+non-strategy `auth`, or neither is also a `ConfigError`; a built-in strategy constructor refuses a
+blank credential, and `withAuth` refuses an empty string or a non-strategy; `basePath` must start
+with `/`; `timeoutMs` must be a **positive** integer (`0` is rejected — a zero timeout would abort
+every request immediately) while `maxRetries` must be a non-negative integer; `rateLimit.perMinute`
+must be a positive integer.
 
 ### Pagination
 
@@ -169,6 +175,7 @@ export class HuduError extends Error {
   readonly body?: unknown;
 }
 export class HuduConfigError extends HuduError { /* code: 'CONFIG_ERROR' */ }
+export class AuthError extends HuduError { /* code: 'AUTH_ERROR', category 'auth', not retryable */ }
 export class HuduNetworkError extends HuduError { /* code: 'NETWORK_ERROR' */ }
 export class BadRequestError extends HuduError { /* status 400, code 'BAD_REQUEST' */ }
 export class UnauthorizedError extends HuduError { /* 401 'UNAUTHORIZED' */ }
@@ -187,30 +194,97 @@ export function isHuduError(err: unknown): err is HuduError;
 ### HTTP transport
 
 ```ts
+// EXCERPT - the full `RequestOptions` in `src/http.ts` also declares `formUrlEncoded`,
+// `responseType`, `manualRedirect`, `operation`, `resourceIds`, `dryRun` and `impact`.
 export interface RequestOptions {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE';
   path: string;                         // after basePath, e.g. '/companies/{id}'
   query?: Record<string, unknown>;
   body?: unknown;
   formData?: FormData;                  // multipart (photos, public_photos, uploads)
-  headers?: Record<string, string>;
+  headers?: Record<string, string>;     // wins over the strategy's credential headers (see Auth below)
   accept?: string;                      // override Accept (e.g. 'text/html' for redirects)
   retries?: boolean;                    // default true; POST is never retried
+  auth?: AuthStrategy;                  // per-request credential override; defaults to config.auth
 }
 export class HttpClient {
-  constructor(config: ResolvedConfig);
+  /** `state` is the shared transport state (rate-limit bucket, queue, in-flight counters). It is
+   *  optional and normally omitted; `withAuth()` passes the parent's state so scopes share one rate
+   *  budget. `TransportState` is exported by `src/http.ts`, not from the package root. */
+  constructor(config: ResolvedConfig, state?: TransportState);
   request<T>(opts: RequestOptions): Promise<T>;
   resolveRedirect(path: string, query?: Record<string, unknown>, headers?: Record<string, string>): Promise<string>;
 }
 ```
 
-Auth is the `x-api-key` header:
+Auth is a header strategy. The default produces the Hudu `x-api-key` header; a deployment that fronts
+Hudu with a bearer-accepting proxy uses `BearerTokenAuth`. Hudu's own API document defines only
+`APIKeyHeader`, so the SDK never performs an OAuth or token exchange - it only produces headers.
 
 ```ts
 export const API_KEY_HEADER = 'x-api-key';
 export function buildAuthHeaders(apiKey: string): Record<string, string>;
 export function withAuth(headers: Record<string,string> | undefined, apiKey: string): Record<string,string>;
+
+export interface AuthContext {
+  readonly method: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  readonly path: string;                // after basePath, e.g. '/companies/42'
+  readonly url: string;                 // absolute, query string stripped
+  readonly correlationId: string;       // one per call, identical on every attempt
+  readonly attempt: number;             // 0 on the first attempt
+}
+export type AuthHeaders = Record<string, string>;
+
+export interface AuthStrategy {
+  readonly name: string;                // short label used in error messages, e.g. 'api-key'
+  headers(ctx: AuthContext): AuthHeaders | Promise<AuthHeaders>;
+  readonly secretHeaders?: readonly string[];   // extra header NAMES to redact in audit events
+}
+
+export class ApiKeyAuth implements AuthStrategy { constructor(apiKey: string); }        // x-api-key
+export class BearerTokenAuth implements AuthStrategy { constructor(token: string); }    // Authorization: Bearer
+export class HeaderAuth implements AuthStrategy {
+  constructor(headers: Record<string, string>, options?: { name?: string; secretHeaders?: readonly string[] });
+}
 ```
+
+`HuduConfig` accepts exactly one of `apiKey` / `auth`; `ResolvedConfig.auth` is always present, and
+`ResolvedConfig.apiKey` is `''` when a strategy is used. A strategy's `headers(ctx)` is called at most
+once per **attempt** (never for `{ dryRun: true }` and never at construction), so a retry after
+backoff can pick up a rotated credential; `ctx.correlationId` lets a strategy cache one lookup per
+call. The SDK caches nothing itself.
+
+**Header precedence (credential vs caller `headers`).** Each attempt builds one header map by merging
+in this fixed order, where a **later writer wins**:
+
+| Order | Source |
+|-------|--------|
+| 1 | the credential headers the strategy produced |
+| 2 | the caller's `RequestOptions.headers` |
+| 3 | `Accept` (`opts.accept`, else the `application/json` default) |
+| 4 | `Content-Type` (derived from `body` / `formUrlEncoded`) |
+
+A caller-supplied `headers` value therefore **overrides** the credential the strategy produced and can
+suppress it entirely - never forward untrusted headers into `headers`. Header names are
+case-insensitive, so duplicate names that differ only in case collapse to ONE value: the later writer's
+value, under its own spelling (the earlier duplicate is dropped, not combined).
+
+```ts
+// On HuduClient - a scoped client: same transport state (rate-limit bucket, queue, logger, audit
+// hook, timeouts), other credential. Throws CONFIG_ERROR for an empty string or a non-strategy.
+class HuduClient {
+  withAuth(strategyOrToken: AuthStrategy | string): HuduClient;
+}
+```
+
+A bare string is an **API key** (`ApiKeyAuth`), never a bearer token. A scoped client is a real
+`HuduClient`: `instanceof` holds, every resource method is available, and `getRateLimitStatus()`
+reports the shared counters.
+
+If a credential cannot be produced for an attempt - `headers(ctx)` throws, returns a blank or
+non-string value, or does not settle inside the call's remaining `timeoutMs` - the call throws
+`AuthError` (`AUTH_ERROR`, category `auth`, not retryable) and no request is sent. A 401 from the
+server is still `UnauthorizedError`; a 403 is still `ForbiddenError`.
 
 ---
 

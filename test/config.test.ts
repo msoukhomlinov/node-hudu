@@ -4,6 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import { resolveConfig, DEFAULT_BASE_PATH, DEFAULT_TIMEOUT_MS, DEFAULT_MAX_RETRIES, DEFAULT_RATE_LIMIT_PER_MINUTE } from '../src/config.js';
 import { HuduConfigError } from '../src/errors.js';
+import { ApiKeyAuth, BearerTokenAuth } from '../src/auth.js';
 
 describe('resolveConfig', () => {
   it('accepts a valid https origin', () => {
@@ -116,5 +117,86 @@ describe('resolveConfig', () => {
 
   it('throws a HuduConfigError for a missing config', () => {
     expect(() => resolveConfig(undefined as never)).toThrow(HuduConfigError);
+  });
+});
+
+describe('resolveConfig — the credential matrix (issue #23)', () => {
+  const BASE_URL = 'https://hudu.example.com';
+
+  function codeOf(run: () => unknown): string | undefined {
+    try {
+      run();
+      return undefined;
+    } catch (err) {
+      expect(err).toBeInstanceOf(HuduConfigError);
+      expect((err as HuduConfigError).category).toBe('validation');
+      return (err as HuduConfigError).code;
+    }
+  }
+
+  it('row 4: refuses both apiKey and auth', () => {
+    expect(codeOf(() => resolveConfig({ baseUrl: BASE_URL, apiKey: 'k', auth: new BearerTokenAuth('t') })))
+      .toBe('CONFIG_ERROR');
+  });
+
+  it('row 5: refuses neither credential and names the alternative', () => {
+    expect(codeOf(() => resolveConfig({ baseUrl: BASE_URL }))).toBe('CONFIG_ERROR');
+    try {
+      resolveConfig({ baseUrl: BASE_URL });
+    } catch (err) {
+      expect((err as HuduConfigError).message).toBe('apiKey must be a non-empty string, or provide an "auth" strategy');
+    }
+    // `apiKey: undefined` is the same "absent" case, not a blank one.
+    expect(codeOf(() => resolveConfig({ baseUrl: BASE_URL, apiKey: undefined }))).toBe('CONFIG_ERROR');
+  });
+
+  it('row 6/7: refuses a blank apiKey, with the unchanged message', () => {
+    for (const apiKey of ['', '   ', '\t']) {
+      try {
+        resolveConfig({ baseUrl: BASE_URL, apiKey });
+        throw new Error('expected a refusal');
+      } catch (err) {
+        expect((err as HuduConfigError).code).toBe('CONFIG_ERROR');
+        expect((err as HuduConfigError).message).toBe('apiKey must be a non-empty string');
+      }
+    }
+  });
+
+  it('row 8: refuses a non-string apiKey', () => {
+    expect(codeOf(() => resolveConfig({ baseUrl: BASE_URL, apiKey: 42 as never }))).toBe('CONFIG_ERROR');
+  });
+
+  it('row 9: a non-string apiKey is invalid, not absent, even with auth', () => {
+    expect(codeOf(() => resolveConfig({ baseUrl: BASE_URL, apiKey: 42 as never, auth: new BearerTokenAuth('t') })))
+      .toBe('CONFIG_ERROR');
+  });
+
+  it('row 10: a blank apiKey plus auth is accepted, and the strategy wins', () => {
+    const auth = new BearerTokenAuth('t');
+    const cfg = resolveConfig({ baseUrl: BASE_URL, apiKey: '', auth });
+    expect(cfg.auth).toBe(auth);
+    expect(cfg.apiKey).toBe('');
+    expect(cfg.baseUrl).toBe(BASE_URL);
+  });
+
+  it('row 11: an invalid auth shape is refused', () => {
+    expect(codeOf(() => resolveConfig({ baseUrl: BASE_URL, auth: {} as never }))).toBe('CONFIG_ERROR');
+    expect(codeOf(() => resolveConfig({ baseUrl: BASE_URL, auth: { name: 'x' } as never }))).toBe('CONFIG_ERROR');
+    expect(codeOf(() => resolveConfig({ baseUrl: BASE_URL, auth: 'nope' as never }))).toBe('CONFIG_ERROR');
+  });
+
+  it('rows 1/2: an apiKey client gets a trimmed key and a derived ApiKeyAuth', () => {
+    const cfg = resolveConfig({ baseUrl: BASE_URL, apiKey: '  abc  ' });
+    expect(cfg.apiKey).toBe('abc');
+    expect(cfg.auth).toBeInstanceOf(ApiKeyAuth);
+    expect(cfg.auth.headers({} as never)).toEqual({ 'x-api-key': 'abc' });
+  });
+
+  it('every other config field keeps its default with a strategy', () => {
+    const cfg = resolveConfig({ baseUrl: BASE_URL, auth: new BearerTokenAuth('t') });
+    expect(cfg.basePath).toBe('/api/v1');
+    expect(cfg.timeoutMs).toBe(DEFAULT_TIMEOUT_MS);
+    expect(cfg.maxRetries).toBe(DEFAULT_MAX_RETRIES);
+    expect(cfg.rateLimit).toBeUndefined();
   });
 });

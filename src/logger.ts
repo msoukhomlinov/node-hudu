@@ -48,6 +48,10 @@ export const REDACTED_KEYS = [
   'x-api-key',
   'client_secret',
   'private_key',
+  // Added for pluggable auth (issue #23): names that normalise to nothing already covered.
+  'bearer',
+  'jwt',
+  'auth_header',
 ] as const;
 
 /**
@@ -61,12 +65,21 @@ function normalizeCredentialKey(key: string): string {
 }
 
 const REDACTED_KEY_SET: ReadonlySet<string> = new Set<string>(REDACTED_KEYS.map(normalizeCredentialKey));
-const REDACTED_SUFFIXES = ['token', 'secret', 'password'] as const;
+const REDACTED_SUFFIXES = [
+  'token',
+  'secret',
+  'password',
+  // Added for pluggable auth: any spelling of an authorization header (`proxy_authorization`,
+  // `x_authorization`) and any spelling of an API key (`xapikey`, `hudu_api_key`).
+  'authorization',
+  'apikey',
+] as const;
 
-/** True when a key's name is credential-shaped and must never reach a log or audit payload. */
-export function isCredentialKey(key: string): boolean {
+/** True when a key's name is credential-shaped, or is one of `extraSecretKeys`. */
+export function isCredentialKey(key: string, extraSecretKeys?: readonly string[]): boolean {
   const normalized = normalizeCredentialKey(key);
   if (REDACTED_KEY_SET.has(normalized)) return true;
+  if (extraSecretKeys?.some((extra) => normalizeCredentialKey(extra) === normalized)) return true;
   return REDACTED_SUFFIXES.some((suffix) => normalized.endsWith(suffix));
 }
 
@@ -86,12 +99,12 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
  * events and available to callers as an opt-in helper for returned data
  * (policy §7.3). Returned data is never redacted implicitly.
  */
-export function redact(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map((item) => redact(item));
+export function redact(value: unknown, extraSecretKeys?: readonly string[]): unknown {
+  if (Array.isArray(value)) return value.map((item) => redact(item, extraSecretKeys));
   if (!isPlainRecord(value)) return value;
   const out: Record<string, unknown> = {};
   for (const [key, item] of Object.entries(value)) {
-    out[key] = isCredentialKey(key) ? REDACTED : redact(item);
+    out[key] = isCredentialKey(key, extraSecretKeys) ? REDACTED : redact(item, extraSecretKeys);
   }
   return out;
 }
