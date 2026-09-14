@@ -940,6 +940,13 @@ export class KnowledgeSearchEngine {
   // ---------------------------------------------------------------- index build
 
   private async build(full: boolean): Promise<void> {
+    // The trailing comma on the watermark is LOAD-BEARING, and its meaning is verified against the
+    // vendor rather than assumed: on the live tenant (2026-09-14) `updated_at=<value>` returned 0 of 4
+    // articles while `updated_at=<value>,` returned all 4, including the record whose `updated_at`
+    // EQUALS the value. The plain form is therefore a STRICT lower bound and the comma makes it
+    // INCLUSIVE. That is what lets an incremental walk re-fetch a record sitting exactly on the
+    // watermark instead of losing it, and it bounds the capped-walk purge window: a boundary document
+    // dropped by a truncated walk is re-fetched on the next build (`indexTtlMs`).
     const sinceWatermark = full ? undefined : (this.watermarks.articles ?? undefined);
     const assetWatermark = full ? undefined : (this.watermarks.assets ?? undefined);
     const requests = { count: 0 };
