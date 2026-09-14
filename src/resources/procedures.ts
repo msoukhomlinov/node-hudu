@@ -13,7 +13,7 @@ import type {
 } from '../types/procedure.js';
 import { ProcedureTasksResource, toProcedureTaskSummary } from './procedure_tasks.js';
 import {
-  decideResolution, helperLimit, identifierError, numericIds,
+  ambiguityProbeLimit, decideResolution, helperLimit, identifierError, numericIds,
   refuseDryRunInPayload, refuseExpectedUpdatedAtOutsideUpdate, requirePositiveId,
 } from './agent-layer-helpers.js';
 
@@ -354,7 +354,7 @@ export class ProceduresResource extends BaseResource<Procedure> {
     const scan = await this.boundedScan<Procedure>(this.pageFetcher(filter), {
       match: (record) => {
         if (record[field] === value) matches.push(record);
-        return matches.length >= limit;
+        return matches.length >= ambiguityProbeLimit(limit);
       },
       label: (record) => record.name,
       idOf: (record) => record.id,

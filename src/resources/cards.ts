@@ -7,7 +7,7 @@ import type { Page } from '../pagination.js';
 import type { Resolution, ResolutionOptions } from '../types/common.js';
 import type { IntegratorCard } from '../types/index.js';
 import type { IntegratorCardIdentifier, IntegratorCardSummary } from '../types/integrator_card.js';
-import { decideResolution, helperLimit, identifierError } from './agent-layer-helpers.js';
+import { ambiguityProbeLimit, decideResolution, helperLimit, identifierError } from './agent-layer-helpers.js';
 
 /** The vendor lookup filters (`GET /cards/lookup`). */
 interface CardLookupParams {
@@ -93,7 +93,7 @@ export class CardsResource extends BaseResource<unknown> {
       {
         match: (card) => {
           matches.push(card);
-          return matches.length >= limit;
+          return matches.length >= ambiguityProbeLimit(limit);
         },
         label: (card) => card.integrator_name,
         idOf: (card) => card.id,

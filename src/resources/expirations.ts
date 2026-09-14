@@ -14,7 +14,7 @@ import type {
 import type { Expiration, ExpirationUpdate } from '../types/index.js';
 import type { ExpirationIdentifier, ExpirationSummary } from '../types/expiration.js';
 import {
-  decideResolution, helperLimit, identifierError,
+  ambiguityProbeLimit, decideResolution, helperLimit, identifierError,
   refuseExpectedUpdatedAtOutsideUpdate, requirePositiveId,
 } from './agent-layer-helpers.js';
 
@@ -239,7 +239,7 @@ export class ExpirationsResource extends BaseResource<Expiration> {
             if (record.expirationable_type === resourceType && record.expirationable_id === resourceId) {
               matches.push(record);
             }
-            return matches.length >= limit;
+            return matches.length >= ambiguityProbeLimit(limit);
           },
           label: (record) => `${record.expiration_type} ${record.date}`,
           idOf: (record) => record.id,

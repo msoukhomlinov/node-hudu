@@ -1,9 +1,9 @@
 /**
  * Result shapes of `operations.searchKnowledge` (the knowledge search engine).
  *
- * Design of record: `.run/design/search/engine-design.md` S4/S5 and
- * `.run/design/search/PROPOSAL.md` S2-S4. One writer per shape: the engine, the capability
- * registry row and the MCP projection all read these declarations.
+ * Design of record: `engine-design.md` S4/S5 and `PROPOSAL.md` S2-S4 (search design docs, kept
+ * outside this repo). One writer per shape: the engine, the capability registry row and the MCP
+ * projection all read these declarations.
  *
  * HONESTY IS THE POINT of this shape:
  *   - `meta.reasons[]` names every bound that bit; `meta.complete` is false whenever any did;
@@ -46,7 +46,6 @@ export interface KnowledgeSearchMatch {
 
 /** Why a snippet could not be produced. Never used to hide a match. */
 export type KnowledgeSnippetReason =
-  | 'evicted'
   | 'not-indexed'
   | 'matched-title-only'
   | 'no-match-in-body'
@@ -110,21 +109,41 @@ export interface KnowledgeSearchHit {
 export interface KnowledgeIndexDocStat {
   /** Documents of this resource in the index. */
   indexed: number;
-  /** Documents whose full text (article body) is indexed. */
+  /**
+   * Documents whose body text is indexed — INCLUDING bodies that were cut at `maxDocBytes`, so this
+   * count and `bodiesTruncated` overlap (a cut body is indexed AND truncated). They do not coincide:
+   * a body cut down to nothing is truncated without being indexed.
+   */
   bodiesIndexed: number;
-  /** Documents whose raw input was cut at the byte cap. */
+  /** Documents whose raw input was cut at the byte cap (`maxDocBytes`): raise that cap to see more. */
   bodiesTruncated: number;
+  /** Documents whose body text was EVICTED under the text budget (`maxIndexTextBytes`), so their
+   * body terms are not searchable. Raising `maxDocBytes` does not restore this — the knob is
+   * `maxIndexTextBytes` (or a smaller corpus). */
+  bodiesEvicted: number;
   /** Documents seen on the last complete walk, or null when the walk was capped. */
   totalKnown: number | null;
 }
 
-/** The index's own state, so a caller can tell a fresh answer from a stale one. */
+/**
+ * The index's own state, so a caller can tell a fresh answer from a stale one.
+ *
+ * With a scored generation (`scoreScope: 'cross-resource'`) every figure here describes the generation
+ * the hits came from, so an answer cannot report metadata that contradicts its own hits.
+ */
 export interface KnowledgeIndexMeta {
   state: 'cold' | 'warm' | 'partial' | 'refreshing';
   builtAt?: string;
   ageMs?: number;
   staleness: 'fresh' | 'stale' | 'unknown';
   docs: Record<string, KnowledgeIndexDocStat>;
+  /**
+   * True when the index's CONTENT changed after this answer scored its rows — including a build that
+   * mutated the documents and then failed, and a bare eviction, which a completed-build counter would
+   * miss. The figures above still describe the generation the hits came from; a later query uses the
+   * newer content.
+   */
+  indexChangedSinceScore: boolean;
 }
 
 /** The bound that shortened this answer. */

@@ -516,7 +516,8 @@ describe('redact() — the one SDK redactor', () => {
   it('exports the documented key list and marker', () => {
     expect(REDACTED).toBe('[REDACTED]');
     expect([...REDACTED_KEYS]).toEqual([
-      'password', 'otp_secret', 'api_key', 'token', 'secret', 'authorization',
+      'password', 'passphrase', 'otp_secret', 'api_key', 'token', 'secret', 'authorization',
+      'auth', 'basic_auth', 'credential', 'credentials', 'session',
       'x-api-key', 'client_secret', 'private_key',
     ]);
   });
@@ -526,6 +527,7 @@ describe('redact() — the one SDK redactor', () => {
       password: 'p', otp_secret: 'o', api_key: 'a', token: 't', secret: 's',
       authorization: 'Bearer h', 'X-Api-Key': 'x', client_secret: 'cs', private_key: 'pk',
       user_token: 'ut', my_secret: 'ms', db_password: 'dp', name: 'Acme', id: 7,
+      passphrase: 'pp', credential: 'c', credentials: 'cc', auth: 'au', basic_auth: 'ba', session: 'ss',
     };
     const out = redact(input) as Record<string, unknown>;
     expect(out.password).toBe(REDACTED);
@@ -540,6 +542,14 @@ describe('redact() — the one SDK redactor', () => {
     expect(out.user_token).toBe(REDACTED);
     expect(out.my_secret).toBe(REDACTED);
     expect(out.db_password).toBe(REDACTED);
+    // Credential NAMES the suffix patterns never caught (a security review of the audit surface
+    // found `passphrase` reaching an audit event unmasked).
+    expect(out.passphrase).toBe(REDACTED);
+    expect(out.credential).toBe(REDACTED);
+    expect(out.credentials).toBe(REDACTED);
+    expect(out.auth).toBe(REDACTED);
+    expect(out.basic_auth).toBe(REDACTED);
+    expect(out.session).toBe(REDACTED);
     expect(out.name).toBe('Acme');
     expect(out.id).toBe(7);
     // The input is untouched — returned data is never silently altered.

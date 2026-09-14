@@ -609,10 +609,16 @@ describe('ProceduresResource — resolution edge cases', () => {
 describe('ProceduresResource — bounded candidate collection', () => {
   afterEach(() => clearFetch());
 
-  it('stops at the first collected candidate when limit is 1', async () => {
+  it('never resolves a duplicate as unique, whatever limit the caller passes', async () => {
     const spy = routed({ [PATH]: procedurePages([procedure, { ...procedure, id: 6, slug: 'other' }]) });
     const client = clientWith();
-    await expect(client.procedures.resolve({ name: procedure.name }, { limit: 1 })).resolves.toMatchObject({ id: 5 });
+    // Two records share the NAME, so the lookup is ambiguous. `limit` bounds what the helper
+    // RETURNS; it must not bound the uniqueness DECISION, or `limit: 1` would collect the first
+    // duplicate alone and report a wrong record as the unique match.
+    const ambiguous = await rejection(client.procedures.resolve({ name: procedure.name }, { limit: 1 }));
+    expect(ambiguous.code).toBe('RESOLUTION_AMBIGUOUS');
+    expect(ambiguous.resourceIds).toEqual([5, 6]);
+    // The same limit on a slug only one record has still resolves.
     await expect(client.procedures.resolve({ slug: procedure.slug }, { limit: 1 })).resolves.toMatchObject({ id: 5 });
     expect(spy.calls).toHaveLength(2);
     // `numericIds` reads a numeric string and an object id; both reach the dry-run target.

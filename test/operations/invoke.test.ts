@@ -824,3 +824,43 @@ describe('operations.invoke — a streaming `*.list` is REFUSED, never silently 
     }
   });
 });
+
+describe('SEC-5 — a non-finite number is refused, never serialised as null', () => {
+  it('refuses NaN and Infinity in a dispatched payload', () => {
+    const record = getCapability('assets.update') as CapabilityRecord;
+    const base = { companyId: 1, id: 1, data: { name: 'n', company_id: 1 } };
+    expect(validateInvokeInput(record, base).ok).toBe(true);
+
+    // `JSON.stringify(NaN)` is `null`, so accepting it here would send the vendor a NULL field.
+    for (const value of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      const verdict = validateInvokeInput(record, { ...base, data: { name: 'n', company_id: value } });
+      expect(verdict.ok).toBe(false);
+      expect(verdict.code).toBe('CONFIG_ERROR');
+      expect(JSON.stringify(verdict.problems)).toContain('company_id');
+    }
+  });
+});
+
+describe('F5 — the cross-resource resource LIST is published as an enum of names', () => {
+  it('accepts the string form the typed method honours', () => {
+    for (const name of ['operations.resolveAny', 'operations.searchAcrossResources']) {
+      const record = getCapability(name) as CapabilityRecord;
+      const resources = (record.inputSchema.opts as Field).fields as Field[];
+      const node = resources.find((field) => field.name === 'resources') as Field;
+      expect(node.type).toBe('array');
+      // A `keyof` alias published as `items: { type: 'object' }` made the parameter unusable
+      // through `hudu_invoke`: the validator refused the valid strings before dispatch.
+      expect(node.items).toMatchObject({ type: 'string' });
+      expect((node.items as Field).enum).toEqual([
+        'companies', 'articles', 'assets', 'websites', 'asset_passwords', 'password_folders', 'groups', 'users',
+      ]);
+    }
+  });
+
+  it('passes a string resource list through the validator', () => {
+    const record = getCapability('operations.resolveAny') as CapabilityRecord;
+    const verdict = validateInvokeInput(record, { identifier: 'seven-corp', opts: { resources: ['companies'] } });
+    expect(verdict.problems).toEqual([]);
+    expect(verdict.ok).toBe(true);
+  });
+});

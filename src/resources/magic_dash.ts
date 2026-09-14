@@ -16,7 +16,7 @@ import type {
 import type { MagicDash, MagicDashCreate } from '../types/index.js';
 import type { MagicDashIdentifier, MagicDashSummary } from '../types/magic_dash.js';
 import {
-  MAX_HELPER_LIMIT, decideResolution, helperLimit, identifierError, numericIds,
+  MAX_HELPER_LIMIT, ambiguityProbeLimit, decideResolution, helperLimit, identifierError, numericIds,
   refuseExpectedUpdatedAtOutsideUpdate, refuseQueryOnlyWriteField, requirePositiveId,
 } from './agent-layer-helpers.js';
 
@@ -386,7 +386,7 @@ export class MagicDashResource extends BaseResource<MagicDash> {
       const scan = await this.boundedScan<MagicDash>(this.pageFetcher(filter), {
         match: (record) => {
           if (record.title === title) matches.push(record);
-          return matches.length >= limit;
+          return matches.length >= ambiguityProbeLimit(limit);
         },
         label: (record) => record.title,
         idOf: (record) => record.id,

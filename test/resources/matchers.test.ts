@@ -296,10 +296,15 @@ describe('MatchersResource — resolution edge cases', () => {
 describe('MatchersResource — bounded candidate collection', () => {
   afterEach(() => clearFetch());
 
-  it('stops at the first collected candidate when limit is 1', async () => {
+  it('never resolves a duplicate sync_id as unique, whatever limit the caller passes', async () => {
     const spy = routed({ '/api/v1/matchers': matcherPages([matcher(), matcher({ id: 56 })]) });
     const client = makeClient();
-    await expect(client.matchers.resolve({ sync_id: 29683607, integration_id: 4 }, { limit: 1 })).resolves.toMatchObject({ id: 55 });
+    // Two matchers share the sync_id: the scan must collect a second candidate even for `limit: 1`,
+    // or the first duplicate would be returned as if it were the unique match.
+    const ambiguous = await rejection(client.matchers.resolve({ sync_id: 29683607, integration_id: 4 }, { limit: 1 }));
+    expect(ambiguous.code).toBe('RESOLUTION_AMBIGUOUS');
+    expect(ambiguous.resourceIds).toEqual([55, 56]);
+    // An id names exactly one record, so that kind still stops at its first match.
     await expect(client.matchers.resolve({ id: 55, integration_id: 4 }, { limit: 1 })).resolves.toMatchObject({ id: 55 });
     expect(spy.calls).toHaveLength(2);
   });

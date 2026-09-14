@@ -788,3 +788,41 @@ describe('getRateLimitStatus', () => {
     expect(limited.getRateLimitStatus()).toMatchObject({ enabled: true, burst: 4, throttled: false });
   });
 });
+
+describe('SEC-2 — an error surface never echoes the query string', () => {
+  it('reports the path only for a vendor error and for a network failure', async () => {
+    const spy = stubFetch(() => json({ error: { message: 'boom' } }, 500));
+    const client = makeClient();
+    let caught: HuduError | undefined;
+    try {
+      await client.request<unknown>({
+        method: 'GET',
+        path: '/articles',
+        query: { search: 'top-secret-search-term', page: 1 },
+      });
+    } catch (err) {
+      caught = err as HuduError;
+    }
+    expect(caught?.code).toBe('SERVER_ERROR');
+    // `err.url` and the message are the values that reach a log, a transcript or a bug report:
+    // the caller's search terms must not travel with them.
+    expect(caught?.url).toBe('https://hudu.example.com/api/v1/articles');
+    expect(caught?.message).not.toContain('top-secret-search-term');
+    expect(spy.calls[0].url).toContain('top-secret-search-term'); // the REQUEST still carries it
+    clearFetch();
+  });
+
+  it('strips the query from the URL a rate-limit refusal reports', async () => {
+    stubFetch(() => new Response('', { status: 429, headers: { 'Retry-After': '1' } }));
+    const client = makeClient({ maxRetries: 0 });
+    let caught: HuduError | undefined;
+    try {
+      await client.request<unknown>({ method: 'GET', path: '/articles', query: { search: 'secret-term' } });
+    } catch (err) {
+      caught = err as HuduError;
+    }
+    expect(caught?.code).toBe('RATE_LIMIT');
+    expect(caught?.url).toBe('https://hudu.example.com/api/v1/articles');
+    clearFetch();
+  });
+});

@@ -1,8 +1,8 @@
 /**
  * Tokeniser and fuzzy primitives for the knowledge search engine.
  *
- * Design of record: `.run/design/search/engine-design.md` S2. This module is INTERNAL (not
- * re-exported from the package root) and has zero dependencies.
+ * Design of record: `engine-design.md` S2 (search design doc, kept outside this repo). This
+ * module is INTERNAL (not re-exported from the package root) and has zero dependencies.
  *
  * The pipeline is deliberately not a stemmer: NFKD fold -> camelCase split on lower->upper
  * boundaries only -> lowercase -> non-letter/digit to space -> whitespace collapse -> tokens

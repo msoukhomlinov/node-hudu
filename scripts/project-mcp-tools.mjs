@@ -222,7 +222,7 @@ const missingPurpose = tools.filter((t) => String(t.description).startsWith('<MI
 
 
 // ---------------------------------------------------------------- CORE profile (progressive disclosure)
-// `.run/design/search/progressive-disclosure.md` §3, build order step 4. The rule is IMPLEMENTED
+// Progressive-disclosure design, section 3, build order step 4. The rule is IMPLEMENTED
 // here, not described elsewhere: this block is what "core" means, and `npm run capabilities:check`
 // re-reads the generated artifacts against it. Selection is mechanical (no hand-picked list), so
 // adding a workflow resource to the plan changes the core set without anyone editing a list.
@@ -244,7 +244,7 @@ const CORE_TENANT_OPS = ['api_info.resolve'];
 // R3 = "find a record the caller cannot name". `operations.searchAcrossResources` is NOT here:
 // `hudu_search` supersedes it as the cross-resource entry point, and the projection retires that
 // tool (`MCP_TOOL_OVERRIDES.json`), while the SDK operation stays callable and `hudu_invoke`-reachable
-// (design `.run/design/search/single-search-tool.md` 4.1).
+// (single-search-tool design, section 4.1).
 const CORE_DISCOVERY_OPS = ['operations.resolveAny', 'operations.searchKnowledge'];
 
 /**
@@ -483,7 +483,7 @@ if (IS_MAIN) {
   lines.push('The client-visible `tools/list` is a TOKEN BUDGET, not a security boundary. MCP has no');
   lines.push('per-call schema fetch, so a host holds every registered tool on every turn; a reference');
   lines.push('server therefore registers a CORE profile plus three META tools that make the whole registry');
-  lines.push('reachable on demand (`.run/design/search/progressive-disclosure.md`).');
+  lines.push('reachable on demand (progressive-disclosure design).');
   lines.push('');
   lines.push(`> **CORE inclusion rule (implemented in \`scripts/project-mcp-tools.mjs\`, not hand-listed):** ${CORE_RULE}`);
   lines.push('');

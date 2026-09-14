@@ -1,8 +1,8 @@
 /**
  * The in-memory postings index behind `operations.searchKnowledge`.
  *
- * Design of record: `.run/design/search/engine-design.md` S1/S2/S5. INTERNAL module, zero
- * dependencies, nothing on disk.
+ * Design of record: `engine-design.md` S1/S2/S5 (search design doc, kept outside this repo).
+ * INTERNAL module, zero dependencies, nothing on disk.
  *
  * Shape: one postings list per (field, token) — NOT a per-document scan. The design measured a
  * document-loop scorer at 18.4 s for one exact query and 229 s for a two-token query over 5,000
@@ -14,8 +14,15 @@
  *   - a body longer than `maxDocBytes` of RAW HTML is truncated and the document is flagged
  *     `longTruncated`, so a term past the cut is reported as not found rather than found;
  *   - extracted text is capped at `maxIndexTextBytes`; over the cap the least-recently-used
- *     document drops its TEXT (so a snippet is unavailable with reason `evicted`) but keeps its
- *     postings (so body recall still works);
+ *     document drops its TEXT as a UNIT — `longText` and the field string that holds the same
+ *     text (`body` for an article, `cfield` for an asset) are released together, because keeping
+ *     the field string keeps the whole text alive (the eviction would free nothing) and lets the
+ *     index claim a body it no longer holds. Body RECALL goes with the text, and that cost is
+ *     REPORTED rather than hidden: the document is flagged `longTruncated` (so a query that would
+ *     have matched its body is answered without it, and the answer says so through
+ *     `bodiesTruncated`/the `body-truncated` reason). Keeping the tokens instead would be no
+ *     cheaper than keeping the text — a measured token array costs several times the text it came
+ *     from — so the bound would be a claim, not a limit;
  *   - `maxDocs` is applied in `updated_at` descending order, so the documents that are indexed
  *     are the freshest ones, and `partial` is reported rather than implied.
  */
@@ -41,6 +48,16 @@ export const INDEX_FIELDS: readonly IndexField[] = ['title', 'slug', 'ident', 'c
 
 /** Where a document's long text came from — the snippet's `source`. */
 export type LongTextSource = 'article.content' | 'asset.fields' | 'title';
+
+/**
+ * The field that holds the same string as `longText` for each long-text source. Eviction and
+ * re-index must treat the two as one unit: a document cannot hold its body text in a field while
+ * claiming no body text is held.
+ */
+const LONG_TEXT_FIELD: Partial<Record<LongTextSource, IndexField>> = {
+  'article.content': 'body',
+  'asset.fields': 'cfield',
+};
 
 /** One indexed document (a record, reduced to what search needs). */
 export interface SearchDoc {
@@ -106,8 +123,27 @@ export function utf8Bytes(text: string): number {
 
 /** The in-memory index. Documents are added, then `finalize()` rebuilds the derived structures. */
 export class KnowledgeIndex {
-  /** Documents, in index order (which is `updated_at` descending for a capped walk). */
-  readonly docs: SearchDoc[] = [];
+  /**
+   * Documents, in index order (which is `updated_at` descending for a capped walk).
+   *
+   * The ARRAY IS REPLACED (never reordered in place) by `retain`/`capDocs`: a reader that
+   * captured this reference — a search that scored rows against it and then awaited the vendor
+   * tier — keeps a consistent snapshot, so a numerical `docIndex` can never address a different
+   * document after a concurrent build. Appends (`upsert` of a new key) leave existing indices
+   * untouched, so they stay compatible with an in-flight reader.
+   */
+  docs: SearchDoc[] = [];
+  /**
+   * Changes to the document set/contents, monotonically. A reader compares it to tell whether the
+   * data it scored is still what the index holds — a BUILD counter would miss a build that mutated
+   * the index and then failed, and would also miss a bare eviction.
+   */
+  private contentVersion = 0;
+
+  /** Live snapshot readers; while one is live the array is detached before any in-place write. */
+  private readers = 0;
+  /** True when `docs` was already copied away from the readers currently holding it. */
+  private detachedForReaders = false;
   /** `resource:id` -> document index. */
   private readonly byKey = new Map<string, number>();
   private readonly postings = new Map<IndexField, Map<string, Posting>>();
@@ -123,6 +159,53 @@ export class KnowledgeIndex {
   private dirty = true;
 
   constructor(readonly bounds: IndexBounds = DEFAULT_INDEX_BOUNDS) {}
+
+  /**
+   * Hand out the current document array and keep it STABLE for the caller until `endRead`.
+   *
+   * A reader (a search that scored rows against these coordinates and may await a vendor call
+   * before hydrating them) must never see an element of its snapshot replaced by a newer revision
+   * of the same record: the row it scored described the revision it scored. While any reader is
+   * live, the next in-place write copies the array first, so one array copy per write-batch keeps
+   * every reader consistent.
+   *
+   * MEMORY. A live reader pins the documents of the generation it scored, so peak held text is the
+   * index account plus one generation per in-flight search — the revision each search is answering
+   * from, released when it calls `endRead` (the engine does that in a `finally`, so a reader's
+   * lifetime is one search call). Those pinned generations are deliberately NOT charged to the text
+   * budget: they cannot be freed while the reader lives, so charging them would evict live index text
+   * to pay for bytes the eviction does not own.
+   *
+   * The account itself is normally at or below `maxIndexTextBytes`. It can stay ABOVE the bound when
+   * no document remains whose text can be released (every remaining long text is one the account
+   * cannot free): the loop then stops, because there is nothing left to evict. The bound is a limit
+   * on what eviction may take, not a promise that unreleasable text disappears.
+   */
+  beginRead(): readonly SearchDoc[] {
+    this.readers += 1;
+    // The array handed out now has a reader, so the NEXT in-place write must detach again — even if a
+    // previous write already copied it away from an earlier reader.
+    this.detachedForReaders = false;
+    return this.docs;
+  }
+
+  /** Release a snapshot handed out by `beginRead`. */
+  endRead(): void {
+    this.readers = Math.max(0, this.readers - 1);
+    if (this.readers === 0) this.detachedForReaders = false;
+  }
+
+  /** Copy `docs` away from its live readers before a write that would otherwise change it in place. */
+  private detachForReaders(): void {
+    if (this.readers === 0 || this.detachedForReaders) return;
+    this.docs = [...this.docs];
+    this.detachedForReaders = true;
+  }
+
+  /** Monotonic version of the document contents (see `contentVersion`). */
+  get version(): number {
+    return this.contentVersion;
+  }
 
   /** Number of indexed documents. */
   get size(): number {
@@ -143,8 +226,13 @@ export class KnowledgeIndex {
   upsert(doc: SearchDoc): void {
     const key = `${doc.resource}:${doc.id}`;
     const existing = this.byKey.get(key);
+    this.detachForReaders();
     if (existing !== undefined) {
-      this.dropText(this.docs[existing] as SearchDoc, false);
+      const previous = this.docs[existing] as SearchDoc;
+      // The replaced object leaves the index without being touched: a reader may still hold it, and
+      // its text stays accounted for that reader's benefit until the object is collected.
+      this.releaseTextAccount(previous);
+      this.evictedDocs.delete(previous);
       this.docs[existing] = doc;
     } else {
       this.byKey.set(key, this.docs.length);
@@ -152,6 +240,7 @@ export class KnowledgeIndex {
     }
     this.holdText(doc);
     this.dirty = true;
+    this.contentVersion += 1;
   }
 
   /** True when a document is present under `resource:id`. */
@@ -159,26 +248,25 @@ export class KnowledgeIndex {
     return this.byKey.has(`${resource}:${id}`);
   }
 
-  /** Keep only the documents whose key is in `keys` (a full re-walk's delete detection). */
-  retain(keys: ReadonlySet<string>): number {
+  /**
+   * Keep only the documents whose key is in `keys` (a full re-walk's delete detection).
+   *
+   * `only`, when given, restricts the delete-by-absence to the resources named in it: absence from
+   * `keys` proves a deletion only for a resource whose walk actually completed. A capped walk that
+   * never reached a resource's older records must NOT be read as "every record outside the walk is
+   * gone" — that purges live documents.
+   */
+  retain(keys: ReadonlySet<string>, only?: ReadonlySet<string>): number {
     const kept: SearchDoc[] = [];
     const removed: string[] = [];
     for (const doc of this.docs) {
       const key = `${doc.resource}:${doc.id}`;
-      if (keys.has(key)) kept.push(doc);
-      else removed.push(key);
+      const absenceProvesDeletion = keys.has(key) ? false : only === undefined || only.has(doc.resource);
+      if (absenceProvesDeletion) removed.push(key);
+      else kept.push(doc);
     }
     if (removed.length === 0) return 0;
-    this.docs.length = 0;
-    this.byKey.clear();
-    this.textBytes = 0;
-    this.accessClock.clear();
-    this.dirty = true;
-    for (const doc of kept) {
-      this.byKey.set(`${doc.resource}:${doc.id}`, this.docs.length);
-      this.docs.push(doc);
-      this.holdText(doc);
-    }
+    this.replaceDocs(kept);
     return removed.length;
   }
 
@@ -188,17 +276,40 @@ export class KnowledgeIndex {
     const sorted = [...this.docs].sort((a, b) => (a.updated_at < b.updated_at ? 1 : a.updated_at > b.updated_at ? -1 : 0));
     const kept = sorted.slice(0, this.bounds.maxDocs);
     const dropped = this.docs.length - kept.length;
-    this.docs.length = 0;
+    this.replaceDocs(kept);
+    return dropped;
+  }
+
+  /**
+   * Swap in a new document array and re-derive the per-document bookkeeping (key map, held-text
+   * total, LRU clock). The array is REPLACED so a reader holding the previous reference keeps a
+   * consistent snapshot; documents that left the index are forgotten by the eviction set, which
+   * would otherwise pin them (and their text) for the lifetime of the index.
+   */
+  private replaceDocs(next: readonly SearchDoc[]): void {
+    this.docs = [...next];
+    // A fresh array is unshared, so the next in-place write must detach again for the readers that
+    // are still holding the PREVIOUS one.
+    this.detachedForReaders = false;
     this.byKey.clear();
     this.textBytes = 0;
     this.accessClock.clear();
     this.dirty = true;
-    for (const doc of kept) {
-      this.byKey.set(`${doc.resource}:${doc.id}`, this.docs.length);
-      this.docs.push(doc);
+    this.contentVersion += 1;
+    this.pruneEvicted();
+    this.docs.forEach((doc, index) => {
+      this.byKey.set(`${doc.resource}:${doc.id}`, index);
       this.holdText(doc);
+    });
+  }
+
+  /** Forget evicted documents that are no longer part of the index (they would pin their objects). */
+  private pruneEvicted(): void {
+    if (this.evictedDocs.size === 0) return;
+    const present = new Set(this.docs);
+    for (const doc of [...this.evictedDocs]) {
+      if (!present.has(doc)) this.evictedDocs.delete(doc);
     }
-    return dropped;
   }
 
   /** Rebuild postings, vocabulary and statistics from the documents. */
@@ -220,8 +331,12 @@ export class KnowledgeIndex {
       const doc = this.docs[i] as SearchDoc;
       for (const field of INDEX_FIELDS) {
         const text = doc.fields[field];
-        if (text === undefined || text.length === 0) continue;
-        const { tokens, compact } = tokenizeField(text);
+        // An evicted long field has no text and therefore no postings; the document is in
+        // `evictedDocs` (see `withoutText`), which is how the lost recall is reported.
+        const { tokens, compact } = text !== undefined && text.length > 0
+          ? tokenizeField(text)
+          : { tokens: [] as string[], compact: null as string | null };
+        if (tokens.length === 0) continue;
         const lengths = this.docLens.get(field) as number[];
         lengths[i] = tokens.length;
         const list = this.postings.get(field) as Map<string, Posting>;
@@ -351,39 +466,111 @@ export class KnowledgeIndex {
     this.accessClock.set(docIndex, this.clock);
   }
 
+  /**
+   * Note that a document was read, addressed by KEY.
+   *
+   * A coordinate belongs to the generation it was scored in: after a rebuild reorders or caps the
+   * array, touching that number would mark a DIFFERENT document as recently used, and the next
+   * eviction would then drop the body of the document the caller actually received. A document that
+   * is no longer in the index is simply not touched.
+   */
+  touchDocument(resource: string, id: number): void {
+    const docIndex = this.byKey.get(`${resource}:${id}`);
+    if (docIndex !== undefined) this.touch(docIndex);
+  }
+
   private holdText(doc: SearchDoc): void {
     if (doc.longText !== null) this.textBytes += utf8Bytes(doc.longText);
     this.ensureTextBudget();
   }
 
-  private dropText(doc: SearchDoc, evict: boolean): void {
-    if (doc.longText !== null) {
-      this.textBytes -= utf8Bytes(doc.longText);
-      if (this.textBytes < 0) this.textBytes = 0;
-      doc.longText = null;
-      if (evict) this.evictedDocs.add(doc);
+  /**
+   * Return a document with its long text released, and take the released bytes out of the account.
+   *
+   * The document OBJECT a reader holds is never mutated: a snapshot must be trustworthy field by
+   * field, not only in its order, so the index stores the returned copy instead of editing the
+   * original (which a live reader may still be reading).
+   *
+   * The long text and its field string are the SAME string: dropping only `longText` keeps the
+   * whole text reachable (the eviction frees nothing) while `bodiesIndexed` keeps counting a body
+   * the index no longer holds. Release both — and with the recall that text carried: the document
+   * joins `evictedDocs`, which the engine reports as `bodiesEvicted` + the `body-evicted` reason.
+   */
+  private withoutText(doc: SearchDoc, evict: boolean): SearchDoc {
+    const freed = doc.longText === null ? 0 : utf8Bytes(doc.longText);
+    // Only an EVICTABLE document may come through here (the caller's predicate guarantees it), and the
+    // field mapping is what makes the release real: a long text with no field of its own would leave
+    // the string reachable while the account claimed it was freed.
+    this.textBytes -= freed;
+    if (this.textBytes < 0) this.textBytes = 0;
+    const copy: SearchDoc = { ...doc, longText: null, fields: { ...doc.fields } };
+    const longField = LONG_TEXT_FIELD[doc.longSource];
+    if (longField !== undefined) {
+      const text = copy.fields[longField];
+      if (text !== undefined) delete copy.fields[longField];
+    }
+    // `longTruncated` keeps its own meaning (the raw input was cut at `maxDocBytes`), so eviction is
+    // reported through its own signal instead of overloading that flag: a caller who raises
+    // `maxDocBytes` cannot restore what the TEXT budget took away.
+    if (evict) this.evictedDocs.add(copy);
+    return copy;
+  }
+
+  /** Take a document that is LEAVING the index out of the text account (it is not mutated). */
+  private releaseTextAccount(doc: SearchDoc): void {
+    if (doc.longText === null) return;
+    this.textBytes -= utf8Bytes(doc.longText);
+    if (this.textBytes < 0) this.textBytes = 0;
+  }
+
+  /**
+   * Documents whose long text was evicted under `maxIndexTextBytes`. They keep their postings for
+   * the fields they still hold (title, slug, custom-field labels), but a BODY term no longer reaches
+   * them, so the engine reports the count (`bodiesEvicted`) and the reason (`body-evicted`) instead
+   * of leaving a caller to infer the gap from an answer that quietly misses a match.
+   */
+  readonly evictedDocs = new Set<SearchDoc>();
+
+  /**
+   * True when this document's long text is held in a field of its own, so releasing it really frees
+   * memory. A `longSource` outside `LONG_TEXT_FIELD` (the declared `'title'`) holds no separate
+   * string, and evicting it would decrement the account without releasing anything.
+   */
+  private static isEvictable(doc: SearchDoc): boolean {
+    return doc.longText !== null && LONG_TEXT_FIELD[doc.longSource] !== undefined;
+  }
+
+  /**
+   * Drop the least-recently-read documents' TEXT until the account is back inside
+   * `maxIndexTextBytes`. The text is what the bound measures and what the eviction really frees;
+   * the recall that goes with it is recorded in `evictedDocs` and reported by the engine.
+   */
+  private ensureTextBudget(): void {
+    while (this.textBytes > this.bounds.maxIndexTextBytes) {
+      const victim = this.leastRecentlyRead((doc) => KnowledgeIndex.isEvictable(doc));
+      if (victim < 0) return;
+      // This is a WRITE to the document array, so it detaches first like every other write: a reader
+      // must never see an element of its snapshot replaced, whoever triggered the eviction.
+      this.detachForReaders();
+      // The index keeps the TEXT-FREE COPY; the evicted object a reader may be holding keeps its text.
+      this.docs[victim] = this.withoutText(this.docs[victim] as SearchDoc, true);
+      this.contentVersion += 1;
     }
   }
 
-  /** Documents that lost their text (they keep postings, so they still rank). */
-  readonly evictedDocs = new Set<SearchDoc>();
-
-  /** Drop the least-recently-read documents' text until `maxIndexTextBytes` is satisfied. */
-  private ensureTextBudget(): void {
-    while (this.textBytes > this.bounds.maxIndexTextBytes) {
-      let victim = -1;
-      let oldest = Number.POSITIVE_INFINITY;
-      for (let i = 0; i < this.docs.length; i += 1) {
-        const doc = this.docs[i] as SearchDoc;
-        if (doc.longText === null) continue;
-        const at = this.accessClock.get(i) ?? -1;
-        if (at < oldest) {
-          oldest = at;
-          victim = i;
-        }
+  /** Index of the least-recently-read document matching `predicate`, or -1 when none does. */
+  private leastRecentlyRead(predicate: (doc: SearchDoc) => boolean): number {
+    let victim = -1;
+    let oldest = Number.POSITIVE_INFINITY;
+    for (let i = 0; i < this.docs.length; i += 1) {
+      const doc = this.docs[i] as SearchDoc;
+      if (!predicate(doc)) continue;
+      const at = this.accessClock.get(i) ?? -1;
+      if (at < oldest) {
+        oldest = at;
+        victim = i;
       }
-      if (victim < 0) return;
-      this.dropText(this.docs[victim] as SearchDoc, true);
     }
+    return victim;
   }
 }

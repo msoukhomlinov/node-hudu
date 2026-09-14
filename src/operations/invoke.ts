@@ -201,6 +201,9 @@ export function auditSchemaVocabulary(inputSchema: unknown): string[] {
 function runtimeTypeOf(value: unknown): string {
   if (value === null) return 'null';
   if (Array.isArray(value)) return 'array';
+  // A non-finite number is reported as what it IS: `typeof NaN === 'number'` would make the refusal
+  // read "expected number, got number", which names no problem at all.
+  if (typeof value === 'number' && !Number.isFinite(value)) return String(value);
   return typeof value;
 }
 
@@ -210,7 +213,10 @@ function matchesType(expected: unknown, value: unknown): boolean {
   const actual = runtimeTypeOf(value);
   if (expected === 'object') return actual === 'object';
   if (expected === 'array') return actual === 'array';
-  if (expected === 'number') return actual === 'number';
+  // A non-finite number is NOT a valid number: `JSON.stringify(NaN)` is `null`, so accepting
+  // NaN/Infinity here let a caller's bug reach the vendor as a NULL field value (found by a
+  // security review: `company_id: NaN` dispatched `{"company_id":null}`).
+  if (expected === 'number') return actual === 'number' && Number.isFinite(value);
   if (expected === 'string') return actual === 'string';
   if (expected === 'boolean') return actual === 'boolean';
   if (expected === 'null') return actual === 'null';

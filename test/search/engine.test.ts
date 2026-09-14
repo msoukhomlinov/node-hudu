@@ -281,8 +281,13 @@ describe('knowledge search engine', () => {
     const evicting = engine({ articles: many }, { bounds: { maxDocBytes: 256 * 1024, maxIndexTextBytes: 1, maxDocs: 20_000 } });
     await evicting.warm();
     const evicted = await evicting.search('runbook', { tier: 'index' });
+    // Titles still match, so the answer is not empty; the bodies however are GONE (the eviction
+    // released them), and the answer reports that instead of implying the bodies were searched.
     expect(evicted.hits.length).toBeGreaterThan(0);
-    expect(evicted.hits.some((hit) => hit.snippet?.reason === 'evicted')).toBe(true);
+    expect(evicted.meta.index.docs.articles?.bodiesIndexed).toBe(0);
+    expect(evicted.meta.index.docs.articles?.bodiesTruncated).toBe(0);
+    expect(evicted.meta.index.docs.articles?.bodiesEvicted).toBe(6);
+    expect(evicted.meta.reasons).toContain('body-evicted');
   });
 });
 
