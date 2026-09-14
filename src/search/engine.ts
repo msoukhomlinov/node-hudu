@@ -774,12 +774,13 @@ export class KnowledgeSearchEngine {
         candidatesScored: opts.candidatesScored,
       };
     }
-    // The flag is set BEFORE the last size is taken, so the reported `meta.bytes` counts the
-    // truncation notice as well.
+    // The flag is set BEFORE the size is taken again, so the reported `meta.bytes` counts the
+    // truncation notice too (a notice added after the last measurement would be reported as free).
     meta.truncation = opts.truncation;
     opts.reasons.push('result-limit');
     meta.reasons = [...new Set(opts.reasons)];
     meta.complete = meta.reasons.length === 0;
+    size = sizeOf();
     while (result.hits.length > 1 && size > this.config.maxResponseBytes) {
       result.hits.pop();
       meta.returned = result.hits.length;
@@ -920,7 +921,14 @@ export class KnowledgeSearchEngine {
     this.builtAt = this.now();
   }
 
-  /** Walk pages sequentially, stopping at the page cap. Never `Promise.all` across pages. */
+  /**
+   * Walk pages sequentially, stopping at the page cap. Never `Promise.all` across pages.
+   *
+   * `truncated` decides whether the caller may treat ABSENCE from this walk as a deletion, so it
+   * must be exact: a walk whose last read page reports `hasMore: false` has seen the whole
+   * collection, whether or not that page happened to be the cap. Only a page that claims more
+   * data behind it makes the walk incomplete.
+   */
   private async walk(
     pages: AsyncIterable<Page<Record<string, unknown>>>,
     requests: { count: number },
@@ -931,6 +939,7 @@ export class KnowledgeSearchEngine {
       requests.count += 1;
       pages0 += 1;
       rows.push(...(page.items as Record<string, unknown>[]));
+      if (page.hasMore === false) return { rows, truncated: false };
       if (pages0 >= this.config.maxIndexPages) return { rows, truncated: true };
     }
     return { rows, truncated: false };

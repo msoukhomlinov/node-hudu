@@ -58,13 +58,14 @@
 //                            every group), unlike related-dangling
 //   pagination                a record's pagination is absent, or claims nonPaginated AND mode "page"
 //   inputSchema-name          an inputSchema field object omits the `name` key CapabilityField declares
-//   inputSchema-unresolved-item  a published inputSchema node is a NAMED unresolvable object: an
+//   inputSchema-unresolved-item  a published inputSchema node is an unresolvable object: an
 //                            `items` projection that carries a typeName (the generator keeps the
-//                            item's name ONLY when resolution failed — resolvable and inline items
-//                            project detail-less by design), or any node the generator marked
-//                            resolved:false. A bare {"type":"object"} item without a name is the
-//                            detail-drop of a resolvable/inline type and is tolerated; platform
-//                            binary names (Blob/File/Buffer/...) are excluded, mirroring the
+//                            item's name ONLY when resolution failed), any node the generator marked
+//                            resolved:false, or a DETAIL-LESS object item outside the `.data` record
+//                            payload — the last one is the shape the reproduced defect emitted
+//                            (`items: {"type":"object"}` with the name dropped, invisible to the
+//                            other two markers because the projection is what lost the evidence).
+//                            Platform binary names (Blob/File/Buffer/...) are excluded, mirroring the
 //                            generator's opaqueSchemaNodes policy. Covers inputSchema only: the
 //                            pre-dispatch validator contract is the input surface, and generic
 //                            output shapes (typeName R) are out of scope
@@ -602,25 +603,39 @@ if (registry) {
     for (const [fieldName, fieldNode] of Object.entries(rec.inputSchema ?? {})) {
       walkFields(fieldNode, `CAPABILITY_REGISTRY['${name}'].inputSchema`, fieldName);
     }
-    // A NAMED unresolvable object must never be published in a public inputSchema (F5/SEC-1):
-    // the invoke validator would refuse exactly the shape the schema tells a caller to pass.
-    // Two visible markers: (1) an `items` node that carries a typeName — the generator's item
+    // An unresolvable object must never be published in a public inputSchema (F5/SEC-1): the
+    // invoke validator would refuse exactly the shape the schema tells a caller to pass. Three
+    // visible markers: (1) an `items` node that carries a typeName — the generator's item
     // projection keeps a name only when resolution failed, so a named object item IS an
-    // unresolvable-and-named emission; (2) any node the generator marked resolved:false.
-    // Platform binary names are excluded, mirroring the generator's own opaqueSchemaNodes policy.
+    // unresolvable-and-named emission; (2) any node the generator marked resolved:false; (3) a
+    // DETAIL-LESS object item OUTSIDE the record payload, which is the shape the reproduced defect
+    // actually emitted (`items: {"type":"object"}` with the name dropped, which markers 1-2 cannot
+    // see — the projection is exactly what lost the evidence). An authored position carries no
+    // legitimate bare object item: either the type resolved (then its fields are known) or it did
+    // not (then the caller is told to pass an object the validator cannot check).
+    // `.inputSchema.data` is excluded: that subtree is the vendor's RECORD payload, where a
+    // free-form object item is the vendor's own shape. Platform binary names are excluded,
+    // mirroring the generator's own opaqueSchemaNodes policy.
     const UNRESOLVED_PLATFORM_OPAQUE = new Set(['Blob', 'File', 'Buffer', 'ArrayBuffer', 'ReadableStream', 'Uint8Array', 'Date']);
     const walkUnresolved = (node, jsonPath, key) => {
       if (!node || typeof node !== 'object') return;
+      const here = key === undefined || key === '' ? jsonPath : `${jsonPath}.${key}`;
       const named = typeof node.typeName === 'string' && node.typeName.length > 0
         && !node.typeName.startsWith('{') && !node.typeName.startsWith('(');
       const platformOpaque = named && UNRESOLVED_PLATFORM_OPAQUE.has(node.typeName);
       const marked = node.resolved === false;
       const unresolvedItem = key === 'items' && node.type === 'object' && named && !platformOpaque;
-      if (unresolvedItem || marked) {
-        fail('inputSchema-unresolved-item', `${jsonPath}.${key}`,
-          `${name}: a published inputSchema ${key === 'items' ? 'item' : 'node'} is a named unresolvable object (typeName=${JSON.stringify(node.typeName ?? null)}) — the generator could not resolve it, so the invoke validator would refuse the shape the schema advertises`);
+      const bareAuthoredItem = key === 'items' && node.type === 'object' && !named
+        && node.enum === undefined && node.fields === undefined && node.additionalProperties === undefined
+        && !/\.inputSchema\.data(\.|$)/.test(here);
+      if (unresolvedItem || marked || bareAuthoredItem) {
+        const detail = bareAuthoredItem
+          ? 'a detail-less object item OUTSIDE the record payload — an authored parameter position cannot legitimately advertise an untyped object, so the item projection dropped the resolution evidence'
+          : `a named unresolvable object (typeName=${JSON.stringify(node.typeName ?? null)})`;
+        fail('inputSchema-unresolved-item', here,
+          `${name}: a published inputSchema ${key === 'items' ? 'item' : 'node'} is ${detail} — the invoke validator would refuse the shape the schema advertises`);
       }
-      for (const [k, v] of Object.entries(node)) if (v && typeof v === 'object') walkUnresolved(v, jsonPath, k);
+      for (const [k, v] of Object.entries(node)) if (v && typeof v === 'object') walkUnresolved(v, here, k);
     };
     for (const [fieldName, fieldNode] of Object.entries(rec.inputSchema ?? {})) {
       walkUnresolved(fieldNode, `CAPABILITY_REGISTRY['${name}'].inputSchema`, fieldName);

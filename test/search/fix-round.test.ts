@@ -153,6 +153,25 @@ describe('F1 — a CAPPED full walk must not purge documents it never reached', 
   });
 });
 
+describe('F1 (edge) — a walk that reaches the cap on the last page has COMPLETED', () => {
+  it('purges a deleted document when the remaining corpus exactly fills the page cap', async () => {
+    const { harness: h, deps } = harness({ articles: [1, 2, 3, 4].map((id) => article(id, `zebra ${id}`, 'alpha body')) });
+    // Cap = 2 pages of 2 rows. After the deletion the corpus is 3 documents, which the walk reads
+    // in exactly 2 pages — the cap is reached on a page that reports `hasMore: false`.
+    const engine = new KnowledgeSearchEngine(deps, { pageSize: 2, maxIndexPages: 2, maxDocsScored: 2000, maxResponseBytes: BYTES.small });
+    const first = await engine.search('zebra', { refresh: true });
+    expect(first.meta.index.docs.articles?.indexed).toBe(4);
+
+    h.corpus.articles = h.corpus.articles.filter((row) => row.id !== 4);
+    const after = await engine.search('zebra', { refresh: true });
+
+    // The walk saw the whole collection, so absence IS a deletion and the stale document must go.
+    expect(after.meta.index.docs.articles?.indexed).toBe(3);
+    const gone = await engine.search('zebra four', { tier: 'index' });
+    expect(gone.hits.some((hit) => hit.id === 4)).toBe(false);
+  });
+});
+
 describe('F4 — the automatic path runs the full re-walk when one is due', () => {
   it('purges a deleted document through a background warm', async () => {
     const { harness: h, deps } = harness({ articles: [1, 2, 3, 4].map((id) => article(id, `zebra ${id}`, 'alpha body')), pageSize: 10 });
@@ -243,6 +262,24 @@ describe('F6 — the response budget counts UTF-8 BYTES of the whole response', 
     expect(result.meta.reasons).toContain('result-limit');
     expect(result.meta.complete).toBe(false);
     expect(result.meta.returned).toBe(result.hits.length);
+    // `bytes` IS a field of the response it measures, so the reported value must be the size of the
+    // FINAL serialisation — including the truncation notice that the budget decision adds. A notice
+    // added after the last measurement would be reported as free.
+    expect(result.meta.bytes).toBe(Buffer.byteLength(JSON.stringify(result), 'utf8'));
+  });
+
+  it('reports the exact size when ONE hit alone exceeds the budget', async () => {
+    const budget = 1200;
+    const { harness: h, deps } = harness({});
+    const engine = new KnowledgeSearchEngine(deps, { pageSize: 2, maxIndexPages: 2, maxDocs: 100, maxDocsScored: 2000, maxResponseBytes: budget });
+    h.corpus.articles = [article(1, `zebra ${'日'.repeat(900)}`, '')];
+    const result = await engine.search('zebra', { tier: 'vendor', scope: ['articles'], limit: 25 });
+
+    // The first hit is always kept, so this path drops nothing: the size must still be exact.
+    expect(result.hits).toHaveLength(1);
+    expect(result.meta.truncation?.reason).toBe('result-limit');
+    expect(result.meta.bytes).toBe(Buffer.byteLength(JSON.stringify(result), 'utf8'));
+    expect(result.meta.bytes).toBeGreaterThan(budget);
   });
 
   it('leaves an ASCII payload of the same shape inside the budget unflagged', async () => {
