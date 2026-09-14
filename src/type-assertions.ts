@@ -45,7 +45,7 @@ type MaybeIncludes<T> = T | AssetWithIncludes[];
  * inputs are declared (never executed) values, so no runtime dependency exists.
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- used via `typeof` (compile-time only)
-function includeSurface(client: HuduClient) {
+function includeSurface(client: HuduClient, flag: boolean) {
   const cfgOptional: { include?: string[] } = {};
   const widened: string[] = ['expirations'];
   const declaredGroups = [] as unknown as AssetIncludeGroup[];
@@ -74,6 +74,10 @@ function includeSurface(client: HuduClient) {
   const searchPlain = client.assets.search('x', { limit: 5 });
   const searchNoOpts = client.assets.search('x');
   const searchOptionalWidened = client.assets.search('x', cfgOptional);
+  const searchWidenedExpand = client.assets.search('x', { expand: flag });
+  const searchWidenedExpandLiteral = client.assets.search('x', { expand: flag, include: ['expirations'] });
+  const searchOptionsValue: { expand?: boolean; include?: string[] } = {};
+  const searchOptionsTyped = client.assets.search('x', searchOptionsValue);
 
   return [
     listAllLiteral, listAllWidened, listAllNone, listAllOtherParam, listAllOptionalWidened,
@@ -81,6 +85,7 @@ function includeSurface(client: HuduClient) {
     streamedLiteral, streamedWidened, pagesOptional, accountAllAsConst, accountStreamWidened,
     searchExpandLiteral, searchLiteral, searchExpandWidened, searchWidened, searchExpandOnly,
     searchPlain, searchNoOpts, searchOptionalWidened,
+    searchWidenedExpand, searchWidenedExpandLiteral, searchOptionsTyped,
   ] as const;
 }
 
@@ -115,4 +120,8 @@ export type IncludeSurfaceAssertions = [
   Expect<Equal<Call<19>, AssetSummary[]>>,
   Expect<Equal<Call<20>, AssetSummary[]>>,
   Expect<Equal<Call<21>, AssetSummary[] | Asset[] | AssetSummaryWithIncludes[] | AssetWithIncludes[]>>,
+  // A widened boolean `expand` means BOTH shapes are possible at runtime: never the summary-only branch.
+  Expect<Equal<Call<22>, AssetSummary[] | Asset[]>>,
+  Expect<Equal<Call<23>, AssetSummaryWithIncludes[] | AssetWithIncludes[]>>,
+  Expect<Equal<Call<24>, AssetSummary[] | Asset[] | AssetSummaryWithIncludes[] | AssetWithIncludes[]>>,
 ];

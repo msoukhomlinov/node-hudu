@@ -548,14 +548,21 @@ export class AssetsResource extends BaseResource<Asset> {
     query: string,
     opts?: Omit<AssetSearchOptions, 'include' | 'expand'> & { include?: T; expand?: E },
   ): Promise<
+    // `expand` may be a widened boolean (`AssetSearchOptions` carries `expand?: boolean`), in which case
+    // BOTH shapes are possible at runtime: the summary/full union is the honest answer, and the
+    // summary-only shape is selected only when `expand` is definitely false or absent.
     [T] extends [readonly AssetIncludeGroup[]]
       ? [E] extends [true]
         ? AssetWithIncludes[]
-        : AssetSummaryWithIncludes[]
+        : [E] extends [false | undefined]
+          ? AssetSummaryWithIncludes[]
+          : AssetSummaryWithIncludes[] | AssetWithIncludes[]
       : [T] extends [undefined]
         ? [E] extends [true]
           ? Asset[]
-          : AssetSummary[]
+          : [E] extends [false | undefined]
+            ? AssetSummary[]
+            : AssetSummary[] | Asset[]
         : [E] extends [true]
           ? Asset[] | AssetWithIncludes[]
           : AssetSummary[] | Asset[] | AssetSummaryWithIncludes[] | AssetWithIncludes[]
