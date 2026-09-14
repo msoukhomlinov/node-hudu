@@ -98,9 +98,12 @@ error code changed meaning. `test/public-surface.test.ts` proves that against th
   uniqueness decision collects at least two candidates in all six affected resources (and in
   `matchers.resolve`'s sync-id path); `limit` bounds the returned list, not the decision.
 - The knowledge index releases an evicted document's text as ONE unit (`longText` plus the field
-  string that holds the same string) and keeps only its token snapshot, so body recall survives the
-  eviction, `bodiesIndexed` counts text the index really holds, and the eviction bookkeeping no
-  longer pins documents that `retain`/`capDocs` removed.
+  string that holds the same string), so `bodiesIndexed` counts text the index really holds and the
+  bound frees what it claims to free. The body recall that goes with the text is REPORTED per
+  document (`longTruncated`, so `bodiesTruncated` and the `body-truncated` reason name it) rather
+  than hidden: keeping the tokens instead would cost several times the text they came from (measured
+  ~5-10x for prose and CJK), which would leave the memory bound nominal. The eviction bookkeeping
+  also no longer pins documents that `retain`/`capDocs` removed.
 - The automatic warm path consults `needsFullRefresh()`, so a deletion is noticed within
   `indexTtlMs * fullRefreshEvery` without an explicit `refresh: true`, and `partial` is cleared by a
   completed full walk instead of latching.

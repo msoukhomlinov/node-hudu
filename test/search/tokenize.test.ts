@@ -106,7 +106,7 @@ describe('knowledge index', () => {
     expect(utf8Bytes('é')).toBe(2);
   });
 
-  it('retains, caps and evicts documents without losing their postings', () => {
+  it('retains and caps documents, and evicts text as a unit with its recall reported', () => {
     const index = new KnowledgeIndex({ maxDocBytes: 1024, maxIndexTextBytes: 1024 * 1024, maxDocs: 1 });
     index.upsert(doc(1, 'Kept article', 'body text'));
     index.upsert(doc(2, 'Dropped article', 'body text'));
@@ -121,11 +121,24 @@ describe('knowledge index', () => {
     expect(index.retain(new Set(['articles:1']))).toBe(0);
 
     const small = new KnowledgeIndex({ maxDocBytes: 1024, maxIndexTextBytes: 1, maxDocs: 10 });
-    small.upsert(doc(1, 'Evicted article', 'a long body that will not fit in one byte'));
+    const evictedDoc = doc(1, 'Evicted article', 'a long body that will not fit in one byte');
+    small.upsert(evictedDoc);
     small.finalize();
     expect(small.textBytesHeld).toBe(0);
     expect(small.evicted).toBe(1);
-    expect(small.posting('body', 'long')?.ids).toEqual([0]);
+    // The eviction releases the TEXT as one unit: `longText` and the `body` field string that holds
+    // the same string go together, because keeping the field string would keep the whole text alive —
+    // which is exactly what the eviction exists to free. The tokenised form is not kept instead: a
+    // measured token array costs several times the text it came from, so it would make the bound a
+    // claim rather than a limit. The cost is the body recall, and the flag reports it.
+    const held = small.docs[0] as SearchDoc;
+    expect(held.longText).toBeNull();
+    expect(held.fields.body).toBeUndefined();
+    expect(held.longTruncated).toBe(true);
+    // The object the CALLER still holds is untouched: eviction stores a text-free copy, so a reader
+    // that captured the document never loses a field under it (the snapshot invariant).
+    expect(evictedDoc.longText).not.toBeNull();
+    expect(small.posting('body', 'long')).toBeUndefined();
     small.touch(0);
     expect(small.evictedDocs.size).toBe(1);
   });

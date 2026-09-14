@@ -17,10 +17,12 @@
  *     document drops its TEXT as a UNIT — `longText` and the field string that holds the same
  *     text (`body` for an article, `cfield` for an asset) are released together, because keeping
  *     the field string keeps the whole text alive (the eviction would free nothing) and lets the
- *     index claim a body it no longer holds. What survives is the document's TOKEN snapshot taken
- *     at eviction, so body recall still works while the text itself is gone: the document keeps
- *     matching, its snippet is unavailable with reason `evicted`, and `bodiesIndexed` counts the
- *     documents whose text is really held;
+ *     index claim a body it no longer holds. Body RECALL goes with the text, and that cost is
+ *     REPORTED rather than hidden: the document is flagged `longTruncated` (so a query that would
+ *     have matched its body is answered without it, and the answer says so through
+ *     `bodiesTruncated`/the `body-truncated` reason). Keeping the tokens instead would be no
+ *     cheaper than keeping the text — a measured token array costs several times the text it came
+ *     from — so the bound would be a claim, not a limit;
  *   - `maxDocs` is applied in `updated_at` descending order, so the documents that are indexed
  *     are the freshest ones, and `partial` is reported rather than implied.
  */
@@ -204,7 +206,6 @@ export class KnowledgeIndex {
       // its text stays accounted for that reader's benefit until the object is collected.
       this.releaseTextAccount(previous);
       this.evictedDocs.delete(previous);
-      this.evictedTokens.delete(previous);
       this.docs[existing] = doc;
     } else {
       this.byKey.set(key, this.docs.length);
@@ -275,13 +276,10 @@ export class KnowledgeIndex {
 
   /** Forget evicted documents that are no longer part of the index (they would pin their objects). */
   private pruneEvicted(): void {
-    if (this.evictedDocs.size === 0 && this.evictedTokens.size === 0) return;
+    if (this.evictedDocs.size === 0) return;
     const present = new Set(this.docs);
     for (const doc of [...this.evictedDocs]) {
       if (!present.has(doc)) this.evictedDocs.delete(doc);
-    }
-    for (const doc of [...this.evictedTokens.keys()]) {
-      if (!present.has(doc)) this.evictedTokens.delete(doc);
     }
   }
 
@@ -304,14 +302,11 @@ export class KnowledgeIndex {
       const doc = this.docs[i] as SearchDoc;
       for (const field of INDEX_FIELDS) {
         const text = doc.fields[field];
-        // An evicted long field has no text left: its TOKEN SNAPSHOT (taken at eviction) is what
-        // keeps the document matching the body terms it used to hold.
-        const snapshot = text === undefined ? this.evictedTokens.get(doc) : undefined;
+        // An evicted long field has no text and therefore no postings: the document is flagged
+        // `longTruncated` (see `withoutText`), which is how the lost recall is reported.
         const { tokens, compact } = text !== undefined && text.length > 0
           ? tokenizeField(text)
-          : snapshot !== undefined && snapshot.field === field
-            ? { tokens: snapshot.tokens, compact: snapshot.compact }
-            : { tokens: [] as string[], compact: null as string | null };
+          : { tokens: [] as string[], compact: null as string | null };
         if (tokens.length === 0) continue;
         const lengths = this.docLens.get(field) as number[];
         lengths[i] = tokens.length;
@@ -457,7 +452,7 @@ export class KnowledgeIndex {
    * The long text and its field string are the SAME string: dropping only `longText` keeps the
    * whole text reachable (the eviction frees nothing) while `bodiesIndexed` keeps counting a body
    * the index no longer holds. Release both — after taking the document's token snapshot, which is
-   * what keeps body RECALL working without the text (see `evictedTokens`).
+   * and with the recall that text carried: the document's `longTruncated` flag says so.
    */
   private withoutText(doc: SearchDoc, evict: boolean): SearchDoc {
     const freed = doc.longText === null ? 0 : utf8Bytes(doc.longText);
@@ -468,7 +463,11 @@ export class KnowledgeIndex {
     if (longField !== undefined) {
       const text = copy.fields[longField];
       if (text !== undefined) {
-        if (evict) this.evictedTokens.set(copy, { field: longField, ...tokenizeField(text) });
+        if (evict) {
+          // The text is gone, so this document's body terms are no longer searchable: say so where a
+          // cut body is already reported, instead of leaving a silent recall gap.
+          copy.longTruncated = true;
+        }
         delete copy.fields[longField];
       }
     }
@@ -483,36 +482,40 @@ export class KnowledgeIndex {
     if (this.textBytes < 0) this.textBytes = 0;
   }
 
-  /** Documents that lost their text (they keep postings, so they still rank). */
+  /**
+   * Documents whose long text was evicted. Their `longTruncated` flag is set, so the recall the
+   * eviction costs is reported (`bodiesTruncated`, the `body-truncated` reason) rather than left
+   * for a caller to infer from an answer that quietly misses a body match.
+   */
   readonly evictedDocs = new Set<SearchDoc>();
 
-  /**
-   * The tokens of a long field whose TEXT was evicted, kept so `finalize` can still index it.
-   *
-   * Eviction releases the text, and the text was the only source the postings were derived from —
-   * so without this the document would silently stop matching its body terms. The snapshot holds
-   * the tokenised form only (no raw text), which is what the design's "keeps its postings" promise
-   * requires and costs a fraction of the text it replaces.
+/**
+   * Drop the least-recently-read documents' TEXT until the account is back inside
+   * `maxIndexTextBytes`. The text is what the bound measures and what the eviction really frees;
+   * the recall that goes with it is flagged per document (`longTruncated`).
    */
-  private readonly evictedTokens = new Map<SearchDoc, { field: IndexField; tokens: string[]; compact: string | null }>();
-
-  /** Drop the least-recently-read documents' text until `maxIndexTextBytes` is satisfied. */
   private ensureTextBudget(): void {
     while (this.textBytes > this.bounds.maxIndexTextBytes) {
-      let victim = -1;
-      let oldest = Number.POSITIVE_INFINITY;
-      for (let i = 0; i < this.docs.length; i += 1) {
-        const doc = this.docs[i] as SearchDoc;
-        if (doc.longText === null) continue;
-        const at = this.accessClock.get(i) ?? -1;
-        if (at < oldest) {
-          oldest = at;
-          victim = i;
-        }
-      }
+      const victim = this.leastRecentlyRead((doc) => doc.longText !== null);
       if (victim < 0) return;
       // The index keeps the TEXT-FREE COPY; the evicted object a reader may be holding keeps its text.
       this.docs[victim] = this.withoutText(this.docs[victim] as SearchDoc, true);
     }
+  }
+
+  /** Index of the least-recently-read document matching `predicate`, or -1 when none does. */
+  private leastRecentlyRead(predicate: (doc: SearchDoc) => boolean): number {
+    let victim = -1;
+    let oldest = Number.POSITIVE_INFINITY;
+    for (let i = 0; i < this.docs.length; i += 1) {
+      const doc = this.docs[i] as SearchDoc;
+      if (!predicate(doc)) continue;
+      const at = this.accessClock.get(i) ?? -1;
+      if (at < oldest) {
+        oldest = at;
+        victim = i;
+      }
+    }
+    return victim;
   }
 }
