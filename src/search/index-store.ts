@@ -549,8 +549,12 @@ export class KnowledgeIndex {
     while (this.textBytes > this.bounds.maxIndexTextBytes) {
       const victim = this.leastRecentlyRead((doc) => KnowledgeIndex.isEvictable(doc));
       if (victim < 0) return;
+      // This is a WRITE to the document array, so it detaches first like every other write: a reader
+      // must never see an element of its snapshot replaced, whoever triggered the eviction.
+      this.detachForReaders();
       // The index keeps the TEXT-FREE COPY; the evicted object a reader may be holding keeps its text.
       this.docs[victim] = this.withoutText(this.docs[victim] as SearchDoc, true);
+      this.contentVersion += 1;
     }
   }
 
