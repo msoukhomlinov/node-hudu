@@ -231,8 +231,10 @@ export class AssetsResource extends BaseResource<Asset> {
   list<const T extends readonly string[] | undefined = undefined>(
     companyId: number,
     params?: CompanyAssetsListParams & { include?: T },
-  ): [T] extends [readonly AssetIncludeGroup[]]
-    ? AsyncIterable<AssetWithIncludes>
+  ): [T] extends [readonly []]
+    ? AsyncIterable<Asset>
+    : [T] extends [readonly AssetIncludeGroup[]]
+      ? AsyncIterable<AssetWithIncludes>
     : [T] extends [undefined]
       ? AsyncIterable<Asset>
       : AsyncIterable<Asset | AssetWithIncludes>;
@@ -259,8 +261,10 @@ export class AssetsResource extends BaseResource<Asset> {
     companyId: number,
     params?: CompanyAssetsListParams & { include?: T },
   ): Promise<
-    [T] extends [readonly AssetIncludeGroup[]]
-      ? AssetWithIncludes[]
+    [T] extends [readonly []]
+      ? Asset[]
+      : [T] extends [readonly AssetIncludeGroup[]]
+        ? AssetWithIncludes[]
       : [T] extends [undefined]
         ? Asset[]
         : Asset[] | AssetWithIncludes[]
@@ -279,8 +283,10 @@ export class AssetsResource extends BaseResource<Asset> {
   listPages<const T extends readonly string[] | undefined = undefined>(
     companyId: number,
     params?: CompanyAssetsListParams & { include?: T },
-  ): [T] extends [readonly AssetIncludeGroup[]]
-    ? AsyncIterable<Page<AssetWithIncludes>>
+  ): [T] extends [readonly []]
+    ? AsyncIterable<Page<Asset>>
+    : [T] extends [readonly AssetIncludeGroup[]]
+      ? AsyncIterable<Page<AssetWithIncludes>>
     : [T] extends [undefined]
       ? AsyncIterable<Page<Asset>>
       : AsyncIterable<Page<Asset> | Page<AssetWithIncludes>>;
@@ -432,8 +438,10 @@ export class AssetsResource extends BaseResource<Asset> {
   async listAllAcrossCompanies<const T extends readonly string[] | undefined = undefined>(
     params?: AccountAssetsListParams & { include?: T },
   ): Promise<
-    [T] extends [readonly AssetIncludeGroup[]]
-      ? AssetWithIncludes[]
+    [T] extends [readonly []]
+      ? Asset[]
+      : [T] extends [readonly AssetIncludeGroup[]]
+        ? AssetWithIncludes[]
       : [T] extends [undefined]
         ? Asset[]
         : Asset[] | AssetWithIncludes[]
@@ -454,8 +462,10 @@ export class AssetsResource extends BaseResource<Asset> {
   /** Same `include` contract as `list` (see there): one generic overload per shape. */
   listAcrossCompanies<const T extends readonly string[] | undefined = undefined>(
     params?: AccountAssetsListParams & { include?: T },
-  ): [T] extends [readonly AssetIncludeGroup[]]
-    ? AsyncIterable<AssetWithIncludes>
+  ): [T] extends [readonly []]
+    ? AsyncIterable<Asset>
+    : [T] extends [readonly AssetIncludeGroup[]]
+      ? AsyncIterable<AssetWithIncludes>
     : [T] extends [undefined]
       ? AsyncIterable<Asset>
       : AsyncIterable<Asset | AssetWithIncludes>;
@@ -470,8 +480,10 @@ export class AssetsResource extends BaseResource<Asset> {
    * optional array, the expanded page type for a literal one. */
   listAcrossCompaniesPages<const T extends readonly string[] | undefined = undefined>(
     params?: AccountAssetsListParams & { include?: T },
-  ): [T] extends [readonly AssetIncludeGroup[]]
-    ? AsyncIterable<Page<AssetWithIncludes>>
+  ): [T] extends [readonly []]
+    ? AsyncIterable<Page<Asset>>
+    : [T] extends [readonly AssetIncludeGroup[]]
+      ? AsyncIterable<Page<AssetWithIncludes>>
     : [T] extends [undefined]
       ? AsyncIterable<Page<Asset>>
       : AsyncIterable<Page<Asset> | Page<AssetWithIncludes>>;
@@ -551,21 +563,29 @@ export class AssetsResource extends BaseResource<Asset> {
     // `expand` may be a widened boolean (`AssetSearchOptions` carries `expand?: boolean`), in which case
     // BOTH shapes are possible at runtime: the summary/full union is the honest answer, and the
     // summary-only shape is selected only when `expand` is definitely false or absent.
-    [T] extends [readonly AssetIncludeGroup[]]
+    // An EMPTY literal array requests no groups (the runtime attaches none), so it takes the
+    // no-include answer rather than the expanded one.
+    [T] extends [readonly []]
       ? [E] extends [true]
-        ? AssetWithIncludes[]
+        ? Asset[]
         : [E] extends [false | undefined]
-          ? AssetSummaryWithIncludes[]
-          : AssetSummaryWithIncludes[] | AssetWithIncludes[]
-      : [T] extends [undefined]
+          ? AssetSummary[]
+          : AssetSummary[] | Asset[]
+      : [T] extends [readonly AssetIncludeGroup[]]
         ? [E] extends [true]
-          ? Asset[]
+          ? AssetWithIncludes[]
           : [E] extends [false | undefined]
-            ? AssetSummary[]
-            : AssetSummary[] | Asset[]
-        : [E] extends [true]
-          ? Asset[] | AssetWithIncludes[]
-          : AssetSummary[] | Asset[] | AssetSummaryWithIncludes[] | AssetWithIncludes[]
+            ? AssetSummaryWithIncludes[]
+            : AssetSummaryWithIncludes[] | AssetWithIncludes[]
+        : [T] extends [undefined]
+          ? [E] extends [true]
+            ? Asset[]
+            : [E] extends [false | undefined]
+              ? AssetSummary[]
+              : AssetSummary[] | Asset[]
+          : [E] extends [true]
+            ? Asset[] | AssetWithIncludes[]
+            : AssetSummary[] | Asset[] | AssetSummaryWithIncludes[] | AssetWithIncludes[]
   >;
   async search(query: string, opts?: AssetSearchOptions & { include?: readonly string[] }): Promise<AssetSummary[] | Asset[] | AssetSummaryWithIncludes[] | AssetWithIncludes[]> {
     const size = helperLimit(opts?.limit);
