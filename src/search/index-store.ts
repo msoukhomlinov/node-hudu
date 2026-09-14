@@ -159,8 +159,15 @@ export class KnowledgeIndex {
    * A reader (a search that scored rows against these coordinates and may await a vendor call
    * before hydrating them) must never see an element of its snapshot replaced by a newer revision
    * of the same record: the row it scored described the revision it scored. While any reader is
-   * live, the next in-place write copies the array first, so one array copy per build keeps every
-   * reader consistent.
+   * live, the next in-place write copies the array first, so one array copy per write-batch keeps
+   * every reader consistent.
+   *
+   * MEMORY: a live reader pins the documents of the generation it scored, so peak held text is the
+   * index account (≤ `maxIndexTextBytes`) plus ONE generation per in-flight search — the previous
+   * revision of whatever that search scored, released when it calls `endRead` (the engine does that
+   * in a `finally`, so a reader's lifetime is one search call). Those pinned generations are
+   * deliberately NOT charged to the text budget: they cannot be freed while the reader lives, so
+   * charging them would evict live index text to pay for bytes the eviction does not own.
    */
   beginRead(): readonly SearchDoc[] {
     this.readers += 1;

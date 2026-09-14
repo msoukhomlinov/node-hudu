@@ -101,8 +101,9 @@ error code changed meaning. `test/public-surface.test.ts` proves that against th
   `matchers.resolve`'s sync-id path); `limit` bounds the returned list, not the decision.
 - The knowledge index releases an evicted document's text as ONE unit (`longText` plus the field
   string that holds the same string), so `bodiesIndexed` counts text the index really holds and the
-  bound frees what it claims to free (peak live text during a concurrent read can be up to twice the
-  bound, because a reader's snapshot keeps its copy alive until the read ends). The body recall that
+  bound frees what it claims to free (peak live text is the account plus one pinned generation per
+  in-flight search, so a single concurrent read can hold up to twice the bound until it ends; those
+  generations are not charged to the budget because the reader still needs them). The body recall that
   goes with the text is REPORTED with its own signal — the per-resource `bodiesEvicted` count, the
   `body-evicted` reason, and an advice that names `maxIndexTextBytes` instead of suggesting a retry
   — rather than hidden or blamed on the byte cap (`bodiesTruncated` keeps that meaning, so raising
