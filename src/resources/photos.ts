@@ -63,7 +63,7 @@ function helperLimit(limit: number | undefined): number {
 }
 
 /** Compact projection of a photo (policy §9): drops `created_at`. */
-function toPhotoSummary(photo: Photo): PhotoSummary {
+export function toPhotoSummary(photo: Photo): PhotoSummary {
   return {
     id: photo.id,
     company_id: photo.company_id,

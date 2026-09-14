@@ -219,7 +219,9 @@ for (const f of [...resourceFiles, ...operationFiles]) {
 const PRIMITIVES = new Set(['string', 'number', 'boolean', 'unknown', 'any', 'void', 'null']);
 function jsonType(typeText) {
   const t = typeText.replace(/\s+/g, ' ');
-  const m = /^['"`](.*)['"`]$/.exec(t);
+  // A single string literal has no top-level `|`; a union of literals (`'a' | 'b'`) must fall
+  // through to the union branch so each member is surfaced, not the whole text as one value.
+  const m = /^['"`]([^'"`|]*)['"`]$/.exec(t);
   if (m) return { type: 'string', enum: [m[1]] };
   if (t === 'true' || t === 'false') return { type: 'boolean', enum: [t === 'true'] };
   if (t.endsWith('[]')) {
@@ -345,12 +347,27 @@ function inlineProps(text) {
   });
   return out;
 }
-function fieldsForType(typeText) {
+function fieldsForType(typeText, namedItems = false) {
   const t = typeText.replace(/\s+/g, ' ');
   const resolved = resolveProps(t);
   if (resolved) {
     return resolved.map((p) => {
       const base = jsonType(p.type);
+      // Variant context (namedItems): an array of a NAMED type keeps the item's name and its
+      // fields on `items` — jsonType()'s array branch reduces items to `{ type }` (G1), which
+      // hides the ExpirationSummary/RelationSummary/PhotoSummary fields behind the include
+      // groups. Only the variant emission passes namedItems, so base (non-variant) schemas
+      // keep the historical reduction byte-for-byte. An unresolvable name keeps its name
+      // (resolved:false), mirroring jsonType()'s other unresolvable-name emission; an inline
+      // literal item has no name and stays `{ type: 'object' }`.
+      if (namedItems && base.type === 'array' && base.items && typeof base.items === 'object') {
+        const inner = unwrapArrayMember(p.type);
+        const it = inner !== p.type ? jsonType(inner) : null;
+        if (it && it.typeName && !it.enum && !it.typeName.startsWith('{') && !it.typeName.startsWith('(')) {
+          const itemFields = fieldsForType(it.typeName, namedItems);
+          base.items = { ...it, ...(itemFields ? { fields: itemFields } : {}) };
+        }
+      }
       const node = { name: p.name, ...base, required: !p.optional, ...(p.enumValues ? { enum: p.enumValues.map((e) => e.replace(/^['"`]|['"`]$/g, '')) } : {}) };
       // Nested union members carry the field's `name` too (CapabilityField declares name).
       if (Array.isArray(node.variants)) node.variants = node.variants.map((v) => ({ name: p.name, ...v }));
@@ -538,10 +555,25 @@ function unwrapArrayMember(member) {
 }
 function isResolutionMember(member) { return /^Resolution<.+>$/.test(member.trim()); }
 
+// A union member that is itself a PROJECTION of the compact shape — e.g.
+// `type AssetSummaryWithIncludes = AssetSummary & AssetIncludes` — is not the full record: it
+// adds fields to the compact shape, so it is a TIGHTER superset of the compact props than the
+// real full record and would steal the "tightest superset" pick (which is exactly what made
+// `assets.search` advertise `AssetSummaryWithIncludes` with the include fields as `drops`).
+// A wrapped alias whose source names the compact type as a whole identifier is such a
+// projection; a full record like `Asset & AssetIncludes` names `Asset`, never the compact.
+function isCompactProjection(name, compactName) {
+  const alias = aliasText.get(name);
+  if (!alias) return false;
+  return new RegExp(`(?<![A-Za-z0-9_])${compactName}(?![A-Za-z0-9_])`).test(alias);
+}
+
 // Pick the full-record member of a union return type for a compact-shape helper:
 //   1. skip null/undefined and the Resolution<...> (resolutionDetails) member,
 //   2. resolve the remaining members,
-//   3. prefer the tightest STRICT superset of the compact shape's fields (the full record),
+//   3. prefer the tightest STRICT superset of the compact shape's fields that is NOT itself a
+//      projection of the compact shape (the full record: `Asset` without include, not
+//      `AssetSummaryWithIncludes`),
 //   4. if only the compact shape itself resolves, keep it — `drops: []` is then the correct,
 //      honest answer (the compact shape keeps every field, e.g. `type ExportSummary = Export`).
 function pickFullMember(returnType, compactProps, compactName) {
@@ -555,7 +587,9 @@ function pickFullMember(returnType, compactProps, compactName) {
     candidates.push({ name: m, props: props.map((x) => x.name) });
   }
   if (!compactProps) return candidates.length === 1 ? candidates[0] : null;
-  const supersets = candidates.filter((c) => c.name !== compactName && compactProps.every((n) => c.props.includes(n)));
+  const supersets = candidates.filter(
+    (c) => c.name !== compactName && !isCompactProjection(c.name, compactName) && compactProps.every((n) => c.props.includes(n)),
+  );
   if (supersets.length) return supersets.reduce((a, b) => (a.props.length <= b.props.length ? a : b));
   return candidates.length === 1 ? candidates[0] : null;
 }
@@ -565,7 +599,19 @@ function outputSchema(row, method) {
   if (!method) return { type: rt, unresolved: true };
   if (method.stream) {
     const item = jsonType(rt);
-    return { type: 'AsyncIterable', itemType: item.typeName ?? item.type, note: 'streams items one page at a time' };
+    const schema = { type: 'AsyncIterable', itemType: item.typeName ?? item.type, note: 'streams items one page at a time' };
+    if (item.variants) {
+      // The implementation signature (TS 2394) returns the UNION of the public returns — e.g.
+      // `list` with optional `include` is `AsyncIterable<Asset | AssetWithIncludes>`. A bare
+      // `itemType: "union"` strips the prior item contract, so keep the concrete variants
+      // (name + fields) so schema-driven callers can discover the included output shape.
+      // Re-serialize each variant's fields with named array items (G1): the generic union path
+      // above reduces `ExpirationSummary[]` items to `{ type: 'object' }`, hiding the summary
+      // fields a registry-driven consumer needs.
+      schema.itemVariants = item.variants.map((v) =>
+        (v.typeName && Array.isArray(v.fields) ? { ...v, fields: fieldsForType(v.typeName, true) } : v));
+    }
+    return schema;
   }
   const jt = jsonType(rt);
   if (row.compact) {
@@ -579,6 +625,21 @@ function outputSchema(row, method) {
     // loudly instead of the registry lying.
     const drops = compactProps && fullProps ? fullProps.filter((n) => !compactProps.includes(n)) : [];
     const dropsUnresolved = !(compactProps && fullProps);
+    // include-aware variants (F1): a helper whose options advertise `include` returns the compact
+    // and full shapes WITH the named include groups — e.g. assets.search resolves to
+    // `AssetSummary | Asset | AssetSummaryWithIncludes | AssetWithIncludes`. The base modeling
+    // above keeps the compact projection (`type`) and the plain full record (`fullType`), so the
+    // remaining concrete named variants (name + fields) are preserved next to them — the same
+    // mechanism as the stream `itemVariants` (D1), adapted to this record model. A union holding
+    // only the base shapes (every other helper) emits nothing, so this is a no-op outside the
+    // include rows and the base `fullType` pick (C3) is untouched. Variant fields are serialized
+    // with named array items (G1): the include-group arrays keep their item type name + fields.
+    const includeVariants = compactProps
+      ? splitTopLevel(rt)
+          .map(unwrapArrayMember)
+          .filter((m) => m && !['null', 'undefined', 'void'].includes(m) && !isResolutionMember(m) && m !== compactName && (!full || m !== full.name) && resolveProps(m))
+          .map((m) => ({ type: 'object', typeName: m, fields: fieldsForType(m, true) }))
+      : [];
     return {
       type: compactName,
       drops,
@@ -586,6 +647,7 @@ function outputSchema(row, method) {
       fields: compactProps ? fieldsForType(compactName) : null,
       fullType: full ? full.name : rt,
       expand: 'expand: true returns the full typed record',
+      ...(includeVariants.length ? { includeVariants } : {}),
     };
   }
   const fields = fieldsForType(rt);

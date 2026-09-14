@@ -125,7 +125,7 @@ function relationLabel(relation: Relation): string {
 }
 
 /** Compact projection (policy §9): drops created_at and updated_at. */
-function toRelationSummary(relation: Relation): RelationSummary {
+export function toRelationSummary(relation: Relation): RelationSummary {
   return {
     id: relation.id,
     name: relation.name,

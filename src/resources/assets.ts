@@ -6,13 +6,18 @@ import { BaseResource } from './base.js';
 import type { ListParams, Page, PaginateOptions } from '../pagination.js';
 import { collectAll, paginate, paginateItems } from '../pagination.js';
 import type { Asset, AssetCreate, AssetUpdate } from '../types/index.js';
-import type { AssetContext, AssetContextExpand, AssetIdentifier, AssetSummary } from '../types/asset.js';
+import type {
+  AssetContext, AssetContextExpand, AssetIdentifier, AssetIncludeGroup, AssetIncludes,
+  AssetSummary, AssetSummaryWithIncludes, AssetWithIncludes,
+} from '../types/asset.js';
 import type { DryRunResult, HelperOptions, Resolution, ResolutionCandidate } from '../types/common.js';
 import { HuduConfigError, HuduError, NotFoundError, ResolutionError } from '../errors.js';
 import { assertScanDecided, refuseDryRunInPayload, refuseExpectedUpdatedAtOutsideUpdate } from './agent-layer-helpers.js';
-import { AssetLayoutsResource } from './asset_layouts.js';
-import { ExpirationsResource } from './expirations.js';
-import { RelationsResource } from './relations.js';
+import { DEFAULT_PAGE_SIZE } from '../config.js';
+import { AssetLayoutsResource, toAssetLayoutSummary } from './asset_layouts.js';
+import { ExpirationsResource, toExpirationSummary } from './expirations.js';
+import { PhotosResource, toPhotoSummary } from './photos.js';
+import { RelationsResource, toRelationSummary } from './relations.js';
 
 /**
  * Options of `assets.search`. A search returns a LIST, so it offers neither
@@ -86,6 +91,39 @@ function requireCompanyId(companyId: number | undefined, method: string): number
   }
   return companyId;
 }
+
+/** The relation groups `include` accepts on the asset list-shaped calls. */
+const ASSET_INCLUDE_GROUPS: AssetIncludeGroup[] = ['layout', 'expirations', 'relations', 'photos'];
+
+/**
+ * Validate an `include` array BEFORE any IO (validate-before-IO rule). An unknown group
+ * name is a structured `HuduConfigError` naming the operation, the offending group and
+ * the valid groups — explicit for agent callers. Returns the de-duplicated groups in
+ * first-seen order; an absent or empty array means "no extras" (today's behavior).
+ */
+function validateIncludeGroups(include: readonly string[] | undefined, operation: string): AssetIncludeGroup[] {
+  if (include === undefined) return [];
+  if (!Array.isArray(include)) {
+    throw new HuduConfigError(
+      `${operation}: include must be an array of group names, got ${typeof include}`,
+      { operation, suggestedAction: "Pass an array, e.g. include: ['expirations']." },
+    );
+  }
+  const seen: AssetIncludeGroup[] = [];
+  for (const group of include) {
+    if (!ASSET_INCLUDE_GROUPS.includes(group)) {
+      throw new HuduConfigError(
+        `${operation}: unknown include group "${String(group)}"; valid groups are ${ASSET_INCLUDE_GROUPS.join(', ')}`,
+        { operation, suggestedAction: `Pass one of: ${ASSET_INCLUDE_GROUPS.join(', ')}.` },
+      );
+    }
+    if (!seen.includes(group)) seen.push(group);
+  }
+  return seen;
+}
+
+/** The fields the include-group fetchers read from an asset (both `Asset` and `AssetSummary` satisfy it). */
+type AssetIncludeSource = { id: number; company_id: number; asset_layout_id: number };
 
 /** Case-insensitive, whitespace-trimmed equality — the exact compare applied to a vendor filter. */
 function sameText(a: string | null | undefined, b: string | null | undefined): boolean {
@@ -179,19 +217,42 @@ export class AssetsResource extends BaseResource<Asset> {
     return this.unwrapSingle<Asset>(body);
   }
 
-  list(companyId: number, params?: CompanyAssetsListParams): AsyncIterable<Asset> {
+  /**
+   * `include` attaches the named relation groups to each asset (each group = its own fetch).
+   * Declared BEFORE the plain overload on purpose: `ListParams` carries an index signature, so
+   * the plain overload accepts `{ include: [...] }` too and would otherwise shadow this one.
+   */
+  list(companyId: number, params: CompanyAssetsListParams & { include: AssetIncludeGroup[] }): AsyncIterable<AssetWithIncludes>;
+  list(companyId: number, params?: CompanyAssetsListParams): AsyncIterable<Asset>;
+  list(companyId: number, params?: CompanyAssetsListParams & { include?: AssetIncludeGroup[] }): AsyncIterable<Asset | AssetWithIncludes> {
     requireCompanyId(companyId, 'assets.list');
-    return paginateItems<Asset>((page, pageSize) => this.fetchScopedPage(companyId, params ?? {}, page, pageSize), this.companyPaginationOpts(params));
+    const groups = validateIncludeGroups(params?.include, 'assets.list');
+    const vendor = this.vendorParams(params);
+    const base = paginateItems<Asset>((page, pageSize) => this.fetchScopedPage(companyId, vendor, page, pageSize), this.companyPaginationOpts(vendor));
+    return groups.length === 0 ? base : this.withIncludes(base, groups, this.includePageSize(params));
   }
 
-  async listAll(companyId: number, params?: CompanyAssetsListParams): Promise<Asset[]> {
+  /** `include` attaches the named relation groups to each asset (each group = its own fetch); keep before the plain overload (see `list`). */
+  async listAll(companyId: number, params: CompanyAssetsListParams & { include: AssetIncludeGroup[] }): Promise<AssetWithIncludes[]>;
+  async listAll(companyId: number, params?: CompanyAssetsListParams): Promise<Asset[]>;
+  async listAll(companyId: number, params?: CompanyAssetsListParams & { include?: AssetIncludeGroup[] }): Promise<Asset[] | AssetWithIncludes[]> {
     requireCompanyId(companyId, 'assets.listAll');
-    return collectAll<Asset>((page, pageSize) => this.fetchScopedPage(companyId, params ?? {}, page, pageSize), this.companyPaginationOpts(params));
+    const groups = validateIncludeGroups(params?.include, 'assets.listAll');
+    const vendor = this.vendorParams(params);
+    const items = await collectAll<Asset>((page, pageSize) => this.fetchScopedPage(companyId, vendor, page, pageSize), this.companyPaginationOpts(vendor));
+    if (groups.length === 0) return items;
+    return this.withIncludesAll(items, groups, this.includePageSize(params));
   }
 
-  listPages(companyId: number, params?: CompanyAssetsListParams): AsyncIterable<Page<Asset>> {
+  /** `include` attaches the named relation groups to each asset in each page; keep before the plain overload (see `list`). */
+  listPages(companyId: number, params: CompanyAssetsListParams & { include: AssetIncludeGroup[] }): AsyncIterable<Page<AssetWithIncludes>>;
+  listPages(companyId: number, params?: CompanyAssetsListParams): AsyncIterable<Page<Asset>>;
+  listPages(companyId: number, params?: CompanyAssetsListParams & { include?: AssetIncludeGroup[] }): AsyncIterable<Page<Asset> | Page<AssetWithIncludes>> {
     requireCompanyId(companyId, 'assets.listPages');
-    return paginate<Asset>((page, pageSize) => this.fetchScopedPage(companyId, params ?? {}, page, pageSize), this.companyPaginationOpts(params));
+    const groups = validateIncludeGroups(params?.include, 'assets.listPages');
+    const vendor = this.vendorParams(params);
+    const base = paginate<Asset>((page, pageSize) => this.fetchScopedPage(companyId, vendor, page, pageSize), this.companyPaginationOpts(vendor));
+    return groups.length === 0 ? base : this.withIncludesPages(base, groups, this.includePageSize(params));
   }
 
   async create(companyId: number, data: AssetCreate): Promise<Asset>;
@@ -330,23 +391,42 @@ export class AssetsResource extends BaseResource<Asset> {
     return this.unwrapSingle<Asset>(body);
   }
 
-  async listAllAcrossCompanies(params?: AccountAssetsListParams): Promise<Asset[]> {
+  /** `include` attaches the named relation groups to each asset (each group = its own fetch); keep before the plain overload (see `list`). */
+  async listAllAcrossCompanies(params: AccountAssetsListParams & { include: AssetIncludeGroup[] }): Promise<AssetWithIncludes[]>;
+  async listAllAcrossCompanies(params?: AccountAssetsListParams): Promise<Asset[]>;
+  async listAllAcrossCompanies(params?: AccountAssetsListParams & { include?: AssetIncludeGroup[] }): Promise<Asset[] | AssetWithIncludes[]> {
     // The account-wide list accepts a `company_id` narrowing; a supplied one is
     // validated like a company-scoped path segment so a caller bug is named here.
     if (params !== undefined && 'company_id' in params) {
       requireCompanyId(params.company_id, 'assets.listAllAcrossCompanies');
     }
-    return collectAll<Asset>((page, pageSize) => this.fetchAccountPage(params ?? {}, page, pageSize), this.accountPaginationOpts(params));
+    const groups = validateIncludeGroups(params?.include, 'assets.listAllAcrossCompanies');
+    const vendor = this.vendorParams(params);
+    const items = await collectAll<Asset>((page, pageSize) => this.fetchAccountPage(vendor, page, pageSize), this.accountPaginationOpts(vendor));
+    if (groups.length === 0) return items;
+    return this.withIncludesAll(items, groups, this.includePageSize(params));
   }
 
+  /** `include` attaches the named relation groups to each asset (each group = its own fetch); keep before the plain overload (see `list`). */
+  listAcrossCompanies(params: AccountAssetsListParams & { include: AssetIncludeGroup[] }): AsyncIterable<AssetWithIncludes>;
   /** Stream account-wide assets across pages (GET /assets). */
-  listAcrossCompanies(params?: AccountAssetsListParams): AsyncIterable<Asset> {
-    return paginateItems<Asset>((page, pageSize) => this.fetchAccountPage(params ?? {}, page, pageSize), this.accountPaginationOpts(params));
+  listAcrossCompanies(params?: AccountAssetsListParams): AsyncIterable<Asset>;
+  listAcrossCompanies(params?: AccountAssetsListParams & { include?: AssetIncludeGroup[] }): AsyncIterable<Asset | AssetWithIncludes> {
+    const groups = validateIncludeGroups(params?.include, 'assets.listAcrossCompanies');
+    const vendor = this.vendorParams(params);
+    const base = paginateItems<Asset>((page, pageSize) => this.fetchAccountPage(vendor, page, pageSize), this.accountPaginationOpts(vendor));
+    return groups.length === 0 ? base : this.withIncludes(base, groups, this.includePageSize(params));
   }
 
+  /** `include` attaches the named relation groups to each asset in each page; keep before the plain overload (see `list`). */
+  listAcrossCompaniesPages(params: AccountAssetsListParams & { include: AssetIncludeGroup[] }): AsyncIterable<Page<AssetWithIncludes>>;
   /** Iterate account-wide asset pages (GET /assets). */
-  listAcrossCompaniesPages(params?: AccountAssetsListParams): AsyncIterable<Page<Asset>> {
-    return paginate<Asset>((page, pageSize) => this.fetchAccountPage(params ?? {}, page, pageSize), this.accountPaginationOpts(params));
+  listAcrossCompaniesPages(params?: AccountAssetsListParams): AsyncIterable<Page<Asset>>;
+  listAcrossCompaniesPages(params?: AccountAssetsListParams & { include?: AssetIncludeGroup[] }): AsyncIterable<Page<Asset> | Page<AssetWithIncludes>> {
+    const groups = validateIncludeGroups(params?.include, 'assets.listAcrossCompaniesPages');
+    const vendor = this.vendorParams(params);
+    const base = paginate<Asset>((page, pageSize) => this.fetchAccountPage(vendor, page, pageSize), this.accountPaginationOpts(vendor));
+    return groups.length === 0 ? base : this.withIncludesPages(base, groups, this.includePageSize(params));
   }
 
   // ---------------------------------------------------------------------------
@@ -408,14 +488,24 @@ export class AssetsResource extends BaseResource<Asset> {
    * throws `HuduConfigError`).
    */
   async search(query: string): Promise<AssetSummary[]>;
+  /**
+   * `expand: true` + `include` — full records, each carrying the named relation groups.
+   * Declared BEFORE the single-flag overloads on purpose: with the options in a variable or
+   * a spread (no excess-property check), `{ expand: true, include: [...] }` is structurally
+   * assignable to the narrower opts shapes and would otherwise be shadowed by them (see `list`).
+   */
+  async search(query: string, opts: { expand: true; include: AssetIncludeGroup[]; limit?: number; company_id?: number; primary_serial?: string }): Promise<AssetWithIncludes[]>;
+  /** `include` attaches the named relation groups to each compact summary (each group = its own fetch). */
+  async search(query: string, opts: { include: AssetIncludeGroup[]; limit?: number; company_id?: number; primary_serial?: string }): Promise<AssetSummaryWithIncludes[]>;
   /** `expand: true` returns the full records. */
   async search(query: string, opts: { expand: true; limit?: number; company_id?: number; primary_serial?: string }): Promise<Asset[]>;
-  async search(query: string, opts?: AssetSearchOptions): Promise<AssetSummary[] | Asset[]>;
-  async search(query: string, opts?: AssetSearchOptions): Promise<AssetSummary[] | Asset[]> {
+  async search(query: string, opts?: AssetSearchOptions & { include?: AssetIncludeGroup[] }): Promise<AssetSummary[] | Asset[] | AssetSummaryWithIncludes[] | AssetWithIncludes[]>;
+  async search(query: string, opts?: AssetSearchOptions & { include?: AssetIncludeGroup[] }): Promise<AssetSummary[] | Asset[] | AssetSummaryWithIncludes[] | AssetWithIncludes[]> {
     const size = helperLimit(opts?.limit);
     if (typeof query !== 'string' || query.trim().length === 0) {
       throw new HuduConfigError('assets.search requires a non-empty query');
     }
+    const groups = validateIncludeGroups(opts?.include, 'assets.search');
     const filter: Record<string, unknown> = { search: query };
     if (typeof opts?.company_id === 'number') filter.company_id = opts.company_id;
     if (typeof opts?.primary_serial === 'string' && opts.primary_serial.length > 0) {
@@ -428,7 +518,10 @@ export class AssetsResource extends BaseResource<Asset> {
       operation: 'assets.search',
     });
     const items = this.unwrapList<Asset>(body).slice(0, size);
-    return opts?.expand === true ? items : items.map(toAssetSummary);
+    if (groups.length === 0) return opts?.expand === true ? items : items.map(toAssetSummary);
+    return opts?.expand === true
+      ? this.withIncludesAll(items, groups, size)
+      : this.withIncludesAll(items.map(toAssetSummary), groups, size);
   }
 
   /**
@@ -663,5 +756,120 @@ export class AssetsResource extends BaseResource<Asset> {
     const body = await this.http.request<unknown>({ method: 'GET', path: `/assets`, query: { ...params, page, page_size: pageSize }, operation: 'assets.listAcrossCompanies' });
     const items = this.unwrapList<Asset>(body);
     return { items, page, page_size: pageSize, hasMore: items.length === pageSize };
+  }
+
+  // ---------------------------------------------------------------------------
+  // `include` groups (issue #24): opt-in relation groups on the list-shaped calls.
+  // Each named group triggers ONLY its own extra fetch; an unrequested group is
+  // never fetched. `include` is an SDK option, never a vendor query param.
+  // ---------------------------------------------------------------------------
+
+  /** Strip the SDK-only `include` option so it never reaches the vendor as a query param. */
+  private vendorParams<T extends ListParams>(params: (T & { include?: readonly string[] }) | undefined): T {
+    if (params === undefined) return {} as T;
+    const rest: Record<string, unknown> = { ...params };
+    delete rest.include;
+    return rest as T;
+  }
+
+  /** The effective page size for the per-group fetches (the list's page_size, default 25). */
+  private includePageSize(params: { page_size?: number } | undefined): number {
+    return typeof params?.page_size === 'number' ? params.page_size : DEFAULT_PAGE_SIZE;
+  }
+
+  /** Wrap an item stream, attaching the named groups to each asset as it is yielded. */
+  private async *withIncludes(
+    items: AsyncIterable<Asset>,
+    groups: AssetIncludeGroup[],
+    pageSize: number,
+  ): AsyncGenerator<AssetWithIncludes> {
+    for await (const item of items) {
+      yield { ...item, ...(await this.fetchAssetIncludes(item, groups, pageSize)) };
+    }
+  }
+
+  /** Wrap a page stream, attaching the named groups to each asset in each page. */
+  private async *withIncludesPages(
+    pages: AsyncIterable<Page<Asset>>,
+    groups: AssetIncludeGroup[],
+    pageSize: number,
+  ): AsyncGenerator<Page<AssetWithIncludes>> {
+    for await (const page of pages) {
+      const items = await this.withIncludesAll(page.items, groups, pageSize);
+      yield { ...page, items };
+    }
+  }
+
+  /**
+   * Attach the named groups to a collected array of assets (or summaries). One task per
+   * (asset, group) pair, run through the client's bounded-concurrency pool (`mapConcurrent`)
+   * so a large tenant's asset set cannot start a relation fetch per asset at once: at most
+   * `concurrency` requests are in flight. Order is preserved, and a failing group fetch
+   * rejects the whole call — the same contract as the unbounded `Promise.all` it replaced
+   * (no partial include results are ever returned).
+   */
+  private async withIncludesAll<T extends AssetIncludeSource>(
+    items: T[],
+    groups: AssetIncludeGroup[],
+    pageSize: number,
+  ): Promise<(T & AssetIncludes)[]> {
+    const tasks = items.flatMap((item, index) => groups.map((group) => ({ item, group, index })));
+    const partials: Array<Partial<AssetIncludes>> = items.map(() => ({}));
+    await this.mapConcurrent(tasks, async (task) => {
+      const extra = await this.fetchOneInclude(task.item, task.group, pageSize);
+      Object.assign(partials[task.index] as Partial<AssetIncludes>, extra);
+    });
+    return items.map((item, index) => ({ ...item, ...partials[index] }) as T & AssetIncludes);
+  }
+
+  /** Fetch a single include group for one asset; each group is its own fetch. */
+  private fetchOneInclude(asset: AssetIncludeSource, group: AssetIncludeGroup, pageSize: number): Promise<Partial<AssetIncludes>> {
+    switch (group) {
+      case 'layout': return this.fetchLayoutInclude(asset);
+      case 'expirations': return this.fetchExpirationsInclude(asset, pageSize);
+      case 'relations': return this.fetchRelationsInclude(asset, pageSize);
+      case 'photos': return this.fetchPhotosInclude(asset, pageSize);
+    }
+  }
+
+  /**
+   * Fetch the named groups for one asset. Runs the per-group fetches through the client's
+   * bounded-concurrency pool (`mapConcurrent`) so a `concurrency` lower than the requested
+   * group count cannot start every group at once: `concurrency: 1` fetches one asset's groups
+   * serially. A failing group fetch rejects the whole call — the same stream error contract
+   * as the unbounded `Promise.all` it replaced (no partial include results are ever returned).
+   */
+  private async fetchAssetIncludes(asset: AssetIncludeSource, groups: AssetIncludeGroup[], pageSize: number): Promise<AssetIncludes> {
+    const results = await this.mapConcurrent(groups, (group) => this.fetchOneInclude(asset, group, pageSize));
+    return Object.assign({}, ...results);
+  }
+
+  /** `layout` group: the asset's layout as a compact summary, or null when it has none. */
+  private async fetchLayoutInclude(asset: AssetIncludeSource): Promise<Partial<AssetIncludes>> {
+    const layoutId = typeof asset.asset_layout_id === 'number' && asset.asset_layout_id > 0 ? asset.asset_layout_id : null;
+    if (layoutId === null) return { layout: null };
+    const layout = await optionalGet(() => new AssetLayoutsResource(this.http).get(layoutId));
+    return { layout: layout === null ? null : toAssetLayoutSummary(layout) };
+  }
+
+  /** `expirations` group: the asset's expirations as compact summaries (one bounded page). */
+  private async fetchExpirationsInclude(asset: AssetIncludeSource, pageSize: number): Promise<Partial<AssetIncludes>> {
+    const params = { company_id: asset.company_id, resource_id: asset.id, resource_type: 'Asset', page_size: pageSize };
+    const items = await take(new ExpirationsResource(this.http).list(params), pageSize);
+    return { expirations: items.map(toExpirationSummary) };
+  }
+
+  /** `relations` group: the asset's outgoing relations as compact summaries (one bounded page). */
+  private async fetchRelationsInclude(asset: AssetIncludeSource, pageSize: number): Promise<Partial<AssetIncludes>> {
+    const params = { fromable_type: 'Asset', fromable_id: asset.id, page_size: pageSize };
+    const items = await take(new RelationsResource(this.http).list(params), pageSize);
+    return { relations: items.map(toRelationSummary) };
+  }
+
+  /** `photos` group: the asset's photos as compact summaries (one bounded page). */
+  private async fetchPhotosInclude(asset: AssetIncludeSource, pageSize: number): Promise<Partial<AssetIncludes>> {
+    const params = { photoable_type: 'Asset', photoable_id: asset.id, page_size: pageSize };
+    const items = await take(new PhotosResource(this.http).list(params), pageSize);
+    return { photos: items.map(toPhotoSummary) };
   }
 }
