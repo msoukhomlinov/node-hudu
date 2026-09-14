@@ -94,13 +94,16 @@ error code changed meaning. `test/public-surface.test.ts` proves that against th
 
 ### Fixed
 
-- A WIDENED `include` array (`string[]`, or any value the compiler cannot narrow to the group names) no
-  longer infers the plain shape on the asset list methods. `ListParams`' index signature let the plain
-  overload match, so the type said `Asset` while the runtime fetched the includes the array held; the
-  widened case now infers the union (`Asset[] | AssetWithIncludes[]`), and `assets.search` accepts such
-  an array where it previously failed to compile. The union is a statement about what MAY be present,
-  not an enforcement: `AssetWithIncludes` adds only optional group fields to `Asset`, so a caller can
-  still annotate the result as the plain shape.
+- An `include` array the compiler cannot narrow no longer infers the plain shape. Each list-shaped call
+  and `assets.search` now carry ONE generic overload whose return depends on what the compiler can prove:
+  a literal, `as const` tuple or typed `AssetIncludeGroup[]` still resolves to the expanded records; a
+  `string[]`, a readonly array, or an OPTIONAL widened property (`{ include?: string[] }`, possibly absent
+  at runtime) resolves to the union; no `include` (or an explicit `undefined`) resolves to the plain
+  records — with `search`'s `expand` still selecting summaries versus full records. Before, a widened
+  array matched a plain overload through `ListParams`' index signature, so the type said `Asset` while the
+  runtime fetched the includes the array held, and `assets.search` refused the call outright. The union is
+  a statement about what MAY be present, not an enforcement: `AssetWithIncludes` adds only optional group
+  fields to `Asset`, so a caller can still annotate the result as the plain shape.
 - The cross-resource helpers' `resources` parameter (`operations.resolveAny`,
   `operations.searchAcrossResources`) now projects as a string enum of the eight searchable
   resources instead of an unresolvable object item that the invoke validator refused in both
