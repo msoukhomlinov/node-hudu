@@ -164,6 +164,9 @@ export class KnowledgeIndex {
    */
   beginRead(): readonly SearchDoc[] {
     this.readers += 1;
+    // The array handed out now has a reader, so the NEXT in-place write must detach again — even if a
+    // previous write already copied it away from an earlier reader.
+    this.detachedForReaders = false;
     return this.docs;
   }
 
@@ -302,8 +305,8 @@ export class KnowledgeIndex {
       const doc = this.docs[i] as SearchDoc;
       for (const field of INDEX_FIELDS) {
         const text = doc.fields[field];
-        // An evicted long field has no text and therefore no postings: the document is flagged
-        // `longTruncated` (see `withoutText`), which is how the lost recall is reported.
+        // An evicted long field has no text and therefore no postings; the document is in
+        // `evictedDocs` (see `withoutText`), which is how the lost recall is reported.
         const { tokens, compact } = text !== undefined && text.length > 0
           ? tokenizeField(text)
           : { tokens: [] as string[], compact: null as string | null };
@@ -451,8 +454,8 @@ export class KnowledgeIndex {
    *
    * The long text and its field string are the SAME string: dropping only `longText` keeps the
    * whole text reachable (the eviction frees nothing) while `bodiesIndexed` keeps counting a body
-   * the index no longer holds. Release both — after taking the document's token snapshot, which is
-   * and with the recall that text carried: the document's `longTruncated` flag says so.
+   * the index no longer holds. Release both — and with the recall that text carried: the document
+   * joins `evictedDocs`, which the engine reports as `bodiesEvicted` + the `body-evicted` reason.
    */
   private withoutText(doc: SearchDoc, evict: boolean): SearchDoc {
     const freed = doc.longText === null ? 0 : utf8Bytes(doc.longText);
@@ -462,15 +465,11 @@ export class KnowledgeIndex {
     const longField = LONG_TEXT_FIELD[doc.longSource];
     if (longField !== undefined) {
       const text = copy.fields[longField];
-      if (text !== undefined) {
-        if (evict) {
-          // The text is gone, so this document's body terms are no longer searchable: say so where a
-          // cut body is already reported, instead of leaving a silent recall gap.
-          copy.longTruncated = true;
-        }
-        delete copy.fields[longField];
-      }
+      if (text !== undefined) delete copy.fields[longField];
     }
+    // `longTruncated` keeps its own meaning (the raw input was cut at `maxDocBytes`), so eviction is
+    // reported through its own signal instead of overloading that flag: a caller who raises
+    // `maxDocBytes` cannot restore what the TEXT budget took away.
     if (evict) this.evictedDocs.add(copy);
     return copy;
   }
@@ -483,16 +482,17 @@ export class KnowledgeIndex {
   }
 
   /**
-   * Documents whose long text was evicted. Their `longTruncated` flag is set, so the recall the
-   * eviction costs is reported (`bodiesTruncated`, the `body-truncated` reason) rather than left
-   * for a caller to infer from an answer that quietly misses a body match.
+   * Documents whose long text was evicted under `maxIndexTextBytes`. They keep their postings for
+   * the fields they still hold (title, slug, custom-field labels), but a BODY term no longer reaches
+   * them, so the engine reports the count (`bodiesEvicted`) and the reason (`body-evicted`) instead
+   * of leaving a caller to infer the gap from an answer that quietly misses a match.
    */
   readonly evictedDocs = new Set<SearchDoc>();
 
-/**
+  /**
    * Drop the least-recently-read documents' TEXT until the account is back inside
    * `maxIndexTextBytes`. The text is what the bound measures and what the eviction really frees;
-   * the recall that goes with it is flagged per document (`longTruncated`).
+   * the recall that goes with it is recorded in `evictedDocs` and reported by the engine.
    */
   private ensureTextBudget(): void {
     while (this.textBytes > this.bounds.maxIndexTextBytes) {

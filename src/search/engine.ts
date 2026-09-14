@@ -241,8 +241,8 @@ export class KnowledgeSearchEngine {
   private partial = false;
   /** True when the MOST RECENT build truncated: reported for that answer, while `partial` is the index's own state. */
   private lastBuildTruncated = false;
-  /** Set when a `refresh: true` request could not be satisfied by a full walk within `MAX_WARM_ATTEMPTS`. */
-  private refreshDowngraded = false;
+  /** Counts `refresh: true` requests that contention kept from being a full walk (see `warm`). */
+  private downgradeSeq = 0;
   private truncatedDocs = 0;
   private readonly watermarks: Record<string, string | null> = { articles: null, assets: null };
   private readonly totalKnown: Record<string, number | null> = { articles: null, assets: null };
@@ -303,7 +303,7 @@ export class KnowledgeSearchEngine {
     }
     // The attempt bound was reached: the caller asked for a full re-walk and this answer is built on
     // a completed build that may be incremental. Say so instead of implying the refresh happened.
-    if (wantFull) this.refreshDowngraded = true;
+    if (wantFull) this.downgradeSeq += 1;
   }
 
   /** Start a warm build without waiting for it (the cold-client path must not block a tool call). */
@@ -349,6 +349,9 @@ export class KnowledgeSearchEngine {
     const vendorMs = { value: 0 };
 
     const tier = opts.tier ?? 'auto';
+    // A downgrade is announced to the answer that ASKED for the refresh, so the sequence is captured
+    // per call rather than left as an engine-wide flag a concurrent search could consume.
+    const downgradesBefore = this.downgradeSeq;
     if (opts.refresh === true) {
       await this.warm({ full: true });
     } else if (tier === 'index') {
@@ -425,15 +428,21 @@ export class KnowledgeSearchEngine {
           : { reason: 'vendor-only', advice: this.vendorOnlyAdvice() };
       reasons.push(degraded.reason === 'vendor-only' ? 'vendor-only' : 'body-not-indexed');
     } else if (!bodyCapable) {
-      degraded = { reason: 'body-not-indexed', advice: this.bodyNotIndexedAdvice() };
-      reasons.push('body-not-indexed');
+      const evicted = this.bodiesEvicted();
+      // The index exists but holds no body text: when the TEXT BUDGET evicted it, waiting cannot
+      // help, so the advice names the real cause and the bound that would restore it.
+      degraded = {
+        reason: 'body-not-indexed',
+        advice: evicted > 0 ? this.bodyEvictedAdvice(evicted) : this.bodyNotIndexedAdvice(),
+      };
+      reasons.push(evicted > 0 ? 'body-evicted' : 'body-not-indexed');
     }
     if (this.lastBuildTruncated) reasons.push('index-partial');
-    if (this.refreshDowngraded) {
+    if (this.bodiesEvicted() > 0) reasons.push('body-evicted');
+    if (this.downgradeSeq !== downgradesBefore) {
       // `refresh: true` promises a full re-walk, so a caller must be told when contention stopped it
       // from being one: the index may still hold a record the vendor has deleted.
       reasons.push('refresh-downgraded');
-      this.refreshDowngraded = false;
     }
     if (this.truncatedDocs > 0) reasons.push('body-truncated');
 
@@ -834,6 +843,9 @@ export class KnowledgeSearchEngine {
       };
     }
     if (doc.longText === null) {
+      // The document matched a body/custom-field term but holds no long text: the text is not in
+      // memory. (Eviction releases the postings too, so an evicted document cannot reach this branch
+      // with a body match; the eviction is reported per index instead — `bodiesEvicted`.)
       return {
         text: '',
         spans: [],
@@ -842,7 +854,7 @@ export class KnowledgeSearchEngine {
         source: doc.longSource,
         truncated: false,
         available: false,
-        reason: (this.index.evictedDocs.has(doc) ? 'evicted' : 'not-indexed') satisfies KnowledgeSnippetReason,
+        reason: 'not-indexed' satisfies KnowledgeSnippetReason,
       };
     }
     const built = buildSnippet(doc.longText, [...terms], {
@@ -990,16 +1002,28 @@ export class KnowledgeSearchEngine {
     return this.index.docs.filter((doc) => doc.fields.body !== undefined).length;
   }
 
+  /** Documents whose body text was evicted under the text budget, so body terms cannot reach them. */
+  private bodiesEvicted(): number {
+    let evicted = 0;
+    for (const doc of this.index.docs) if (this.index.evictedDocs.has(doc)) evicted += 1;
+    return evicted;
+  }
+
   private docStats(): Record<string, KnowledgeIndexDocStat> {
     const out: Record<string, KnowledgeIndexDocStat> = {};
+    const blank = (resource: string): KnowledgeIndexDocStat => ({
+      indexed: 0, bodiesIndexed: 0, bodiesTruncated: 0, bodiesEvicted: 0,
+      totalKnown: this.totalKnown[resource] ?? null,
+    });
     for (const doc of this.index.docs) {
-      const stat = out[doc.resource] ?? (out[doc.resource] = { indexed: 0, bodiesIndexed: 0, bodiesTruncated: 0, totalKnown: this.totalKnown[doc.resource] ?? null });
+      const stat = out[doc.resource] ?? (out[doc.resource] = blank(doc.resource));
       stat.indexed += 1;
       if (doc.fields.body !== undefined) stat.bodiesIndexed += 1;
       if (doc.longTruncated) stat.bodiesTruncated += 1;
+      if (this.index.evictedDocs.has(doc)) stat.bodiesEvicted += 1;
     }
     for (const resource of Object.keys(this.totalKnown)) {
-      if (!(resource in out)) out[resource] = { indexed: 0, bodiesIndexed: 0, bodiesTruncated: 0, totalKnown: this.totalKnown[resource] ?? null };
+      if (!(resource in out)) out[resource] = blank(resource);
     }
     return out;
   }
@@ -1013,6 +1037,12 @@ export class KnowledgeSearchEngine {
       staleness: status.staleness,
       docs: status.docs,
     };
+  }
+
+  private bodyEvictedAdvice(evicted: number): string {
+    return `No article body text is in memory: ${evicted} document(s) had their body text evicted under the ` +
+      `text budget, so body terms in them are NOT searched. Call again later will not restore it — raise ` +
+      `maxIndexTextBytes (or index fewer documents) and re-run, or search the vendor tier for titles.`;
   }
 
   private bodyNotIndexedAdvice(): string {

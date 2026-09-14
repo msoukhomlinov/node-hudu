@@ -46,7 +46,6 @@ export interface KnowledgeSearchMatch {
 
 /** Why a snippet could not be produced. Never used to hide a match. */
 export type KnowledgeSnippetReason =
-  | 'evicted'
   | 'not-indexed'
   | 'matched-title-only'
   | 'no-match-in-body'
@@ -112,8 +111,12 @@ export interface KnowledgeIndexDocStat {
   indexed: number;
   /** Documents whose full text (article body) is indexed. */
   bodiesIndexed: number;
-  /** Documents whose raw input was cut at the byte cap. */
+  /** Documents whose raw input was cut at the byte cap (`maxDocBytes`): raise that cap to see more. */
   bodiesTruncated: number;
+  /** Documents whose body text was EVICTED under the text budget (`maxIndexTextBytes`), so their
+   * body terms are not searchable. Raising `maxDocBytes` does not restore this — the knob is
+   * `maxIndexTextBytes` (or a smaller corpus). */
+  bodiesEvicted: number;
   /** Documents seen on the last complete walk, or null when the walk was capped. */
   totalKnown: number | null;
 }

@@ -277,6 +277,33 @@ describe('F-L1 (revision) — an in-place re-upsert cannot change a snapshot the
   });
 });
 
+describe('eviction — reported with its own signal, never as the byte cap', () => {
+  it('counts the evicted bodies and tells the caller that retrying will not help', async () => {
+    const { harness: h, deps } = harness({});
+    h.corpus.articles = [1, 2, 3].map((id) => article(id, `zebra ${id}`, 'alpha body'));
+    const engine = new KnowledgeSearchEngine(deps, {
+      pageSize: 10,
+      maxIndexPages: 10,
+      bounds: { maxDocBytes: 256 * 1024, maxIndexTextBytes: 1, maxDocs: 100 },
+      maxDocsScored: 2000,
+      maxResponseBytes: BYTES.small,
+    });
+    const result = await engine.search('alpha', { tier: 'index' });
+    const stat = result.meta.index.docs.articles;
+
+    expect(stat?.bodiesIndexed).toBe(0);
+    // Eviction is the TEXT budget's doing, so it is counted (and named) separately from the byte cap.
+    expect(stat?.bodiesEvicted).toBe(3);
+    expect(stat?.bodiesTruncated).toBe(0);
+    expect(result.meta.reasons).toContain('body-evicted');
+    expect(result.meta.reasons).not.toContain('body-truncated');
+    // The advice must not promise that waiting restores what the budget took.
+    expect(result.meta.degraded?.reason).toBe('body-not-indexed');
+    expect(result.meta.degraded?.advice).toContain('maxIndexTextBytes');
+    expect(result.meta.degraded?.advice).not.toContain('in a moment');
+  });
+});
+
 describe('F6 — the response budget counts UTF-8 BYTES of the whole response', () => {
   it('flags a multi-byte payload that overshoots the budget', async () => {
     const budget = 8192;

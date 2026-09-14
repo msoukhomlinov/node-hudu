@@ -106,6 +106,25 @@ describe('knowledge index', () => {
     expect(utf8Bytes('é')).toBe(2);
   });
 
+  it('gives every reader its own stable document array', () => {
+    const index = new KnowledgeIndex({ maxDocBytes: 1024, maxIndexTextBytes: 1024 * 1024, maxDocs: 10 });
+    index.upsert(doc(1, 'one', 'body one'));
+    const first = index.beginRead();
+    index.upsert(doc(2, 'two', 'body two')); // detaches the array from `first`
+    const second = index.beginRead(); // the SECOND reader gets the current array
+    index.upsert(doc(2, 'two revised', 'body two')); // must detach again, from `second`
+
+    // A stale detach latch would let this write reach the second reader's array.
+    expect((second[1] as SearchDoc).title).toBe('two');
+    expect(second).toHaveLength(2);
+    // The first reader's array is the earlier snapshot: it never grew and never changed.
+    expect(first).toHaveLength(1);
+    expect((first[0] as SearchDoc).title).toBe('one');
+    expect((index.docs[1] as SearchDoc).title).toBe('two revised');
+    index.endRead();
+    index.endRead();
+  });
+
   it('retains and caps documents, and evicts text as a unit with its recall reported', () => {
     const index = new KnowledgeIndex({ maxDocBytes: 1024, maxIndexTextBytes: 1024 * 1024, maxDocs: 1 });
     index.upsert(doc(1, 'Kept article', 'body text'));
@@ -134,7 +153,9 @@ describe('knowledge index', () => {
     const held = small.docs[0] as SearchDoc;
     expect(held.longText).toBeNull();
     expect(held.fields.body).toBeUndefined();
-    expect(held.longTruncated).toBe(true);
+    // Eviction is NOT the byte cap: `longTruncated` keeps that meaning, and the eviction is reported
+    // through its own count so a caller who raises `maxDocBytes` is not told it will help.
+    expect(held.longTruncated).toBe(false);
     // The object the CALLER still holds is untouched: eviction stores a text-free copy, so a reader
     // that captured the document never loses a field under it (the snapshot invariant).
     expect(evictedDoc.longText).not.toBeNull();

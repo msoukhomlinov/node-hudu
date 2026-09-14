@@ -622,9 +622,9 @@ if (registry) {
     const UNRESOLVED_PLATFORM_OPAQUE = new Set(['Blob', 'File', 'Buffer', 'ArrayBuffer', 'ReadableStream', 'Uint8Array', 'Date']);
     const walkUnresolved = (node, jsonPath, key) => {
       if (!node || typeof node !== 'object') return;
-      const here = Array.isArray(node)
-        ? jsonPath
-        : key === undefined || key === '' ? jsonPath : `${jsonPath}.${key}`;
+      // Arrays keep the key so reported paths stay precise (`...fields.0.items`, not `...fields`);
+      // the `.data` exclusion works either way, because a `.data` node is never itself an array.
+      const here = key === undefined || key === '' ? jsonPath : `${jsonPath}.${key}`;
       const named = typeof node.typeName === 'string' && node.typeName.length > 0
         && !node.typeName.startsWith('{') && !node.typeName.startsWith('(');
       const platformOpaque = named && UNRESOLVED_PLATFORM_OPAQUE.has(node.typeName);

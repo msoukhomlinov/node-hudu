@@ -91,7 +91,9 @@ error code changed meaning. `test/public-surface.test.ts` proves that against th
   cleaned overrides.
 - A search that scores index rows and then awaits the vendor tier answers from that exact document
   generation: a rebuild completing during the await can no longer re-point a scored row at another
-  document, nor crash hydration with a raw `TypeError`.
+  document, nor crash hydration with a raw `TypeError`. Indexed documents are immutable to a live
+  reader, so a re-upsert of the same record cannot change what a scored row reports; the document
+  array is copied away from a reader on the first write while that reader is live.
 - A capped full re-walk keeps the documents it never reached: delete-by-absence applies only to a
   resource whose walk actually completed.
 - `resolve(..., { limit: 1 })` no longer returns the first duplicate as a unique match. The
@@ -99,11 +101,16 @@ error code changed meaning. `test/public-surface.test.ts` proves that against th
   `matchers.resolve`'s sync-id path); `limit` bounds the returned list, not the decision.
 - The knowledge index releases an evicted document's text as ONE unit (`longText` plus the field
   string that holds the same string), so `bodiesIndexed` counts text the index really holds and the
-  bound frees what it claims to free. The body recall that goes with the text is REPORTED per
-  document (`longTruncated`, so `bodiesTruncated` and the `body-truncated` reason name it) rather
-  than hidden: keeping the tokens instead would cost several times the text they came from (measured
-  ~5-10x for prose and CJK), which would leave the memory bound nominal. The eviction bookkeeping
-  also no longer pins documents that `retain`/`capDocs` removed.
+  bound frees what it claims to free (peak live text during a concurrent read can be up to twice the
+  bound, because a reader's snapshot keeps its copy alive until the read ends). The body recall that
+  goes with the text is REPORTED with its own signal — the per-resource `bodiesEvicted` count, the
+  `body-evicted` reason, and an advice that names `maxIndexTextBytes` instead of suggesting a retry
+  — rather than hidden or blamed on the byte cap (`bodiesTruncated` keeps that meaning, so raising
+  `maxDocBytes` is never the answer to an eviction). Keeping the tokens instead would cost several
+  times the text they came from (a fix-round probe measured ~5-10x: ~55 bytes/token for prose and
+  ~33 for CJK, 200 samples), which would leave the memory bound nominal. The eviction bookkeeping
+  also no longer pins documents that `retain`/`capDocs` removed, and `KnowledgeSnippetReason` no
+  longer advertises an `evicted` value that no path could produce once the postings go with the text.
 - The automatic warm path consults `needsFullRefresh()`, so a deletion is noticed within
   `indexTtlMs * fullRefreshEvery` without an explicit `refresh: true`, and `partial` is cleared by a
   completed full walk instead of latching.

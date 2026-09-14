@@ -102,7 +102,6 @@ export type SnippetUnavailableReason =
   | 'no-match-in-body'
   | 'matched-title-only'
   | 'no-span-in-shown-text'
-  | 'evicted'
   | 'snippet-budget';
 
 /** Options for {@link buildSnippet}. */
