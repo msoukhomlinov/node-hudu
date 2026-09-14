@@ -97,7 +97,9 @@
 //   emission-missing         capabilities.json / capabilities.schema.json / src/capabilities.ts absent
 //   include-groups           an operation whose SDK surface accepts relation include-groups does not
 //                            publish them (or the four group names) in its input schema, or publishes
-//                            `include` without the include-expanded output variant
+//                            `include` without the include-expanded output variants it advertises
+//                            (`itemVariants` for the list-shaped calls, `includeVariants` for
+//                            `assets.search`)
 //
 // Warnings (never failures): a public source method in neither the plan nor the registry
 // (unplanned surface), a record with purpose:null, a destructive row without requiresApproval,
@@ -1146,10 +1148,30 @@ if (searchModeTable !== null) {
 // by design — they are client-side collectors — and their include surface is pinned by the compile-time
 // assertions in `src/type-assertions.ts` instead.
 const INCLUDE_GROUPS = ['layout', 'expirations', 'relations', 'photos'];
+// `expanded` names the output half this operation publishes: a list-shaped call advertises the
+// include-expanded record variants (`itemVariants`), while `assets.search` carries its own
+// `includeVariants` collection (summaries and full records). Both are checked — an operation that
+// advertises `include` while its expanded shapes silently disappear is the same lie as one that never
+// published the parameter.
 const INCLUDE_OPERATIONS = [
-  { name: 'assets.list', at: (rec) => rec.inputSchema && rec.inputSchema.params && rec.inputSchema.params.fields, expandedVariant: true },
-  { name: 'assets.listAcrossCompanies', at: (rec) => rec.inputSchema && [rec.inputSchema.include], expandedVariant: true },
-  { name: 'assets.search', at: (rec) => rec.inputSchema && rec.inputSchema.opts && rec.inputSchema.opts.fields, expandedVariant: false },
+  {
+    name: 'assets.list',
+    at: (rec) => rec.inputSchema && rec.inputSchema.params && rec.inputSchema.params.fields,
+    expanded: ['AssetWithIncludes'],
+    readVariants: (rec) => ((rec.outputSchema && rec.outputSchema.itemVariants) || []).map((v) => v && v.typeName),
+  },
+  {
+    name: 'assets.listAcrossCompanies',
+    at: (rec) => rec.inputSchema && [rec.inputSchema.include],
+    expanded: ['AssetWithIncludes'],
+    readVariants: (rec) => ((rec.outputSchema && rec.outputSchema.itemVariants) || []).map((v) => v && v.typeName),
+  },
+  {
+    name: 'assets.search',
+    at: (rec) => rec.inputSchema && rec.inputSchema.opts && rec.inputSchema.opts.fields,
+    expanded: ['AssetSummaryWithIncludes', 'AssetWithIncludes'],
+    readVariants: (rec) => ((rec.outputSchema && rec.outputSchema.includeVariants) || []).map((v) => v && v.typeName),
+  },
 ];
 for (const spec of INCLUDE_OPERATIONS) {
   if (!registry) break;
@@ -1169,11 +1191,10 @@ for (const spec of INCLUDE_OPERATIONS) {
   if (enumValues === null || enumValues.length !== INCLUDE_GROUPS.length || !INCLUDE_GROUPS.every((g) => enumValues.includes(g))) {
     fail('include-groups', `${where}.inputSchema.include`, `${spec.name}: include must publish the ${INCLUDE_GROUPS.length} group names ${INCLUDE_GROUPS.join(', ')}; got ${JSON.stringify(enumValues)}`);
   }
-  if (spec.expandedVariant) {
-    const variants = (rec.outputSchema && rec.outputSchema.itemVariants) || [];
-    const expanded = variants.some((v) => v && v.typeName === 'AssetWithIncludes');
-    if (!expanded) {
-      fail('include-groups', `${where}.outputSchema`, `${spec.name}: publishes \`include\` but no include-expanded output variant, so a caller cannot see what the groups add`);
+  const publishedVariants = spec.readVariants(rec);
+  for (const expected of spec.expanded) {
+    if (!publishedVariants.includes(expected)) {
+      fail('include-groups', `${where}.outputSchema`, `${spec.name}: publishes \`include\` but not the expanded output variant "${expected}" (got ${JSON.stringify(publishedVariants)}), so a caller cannot see what the groups add`);
     }
   }
 }
