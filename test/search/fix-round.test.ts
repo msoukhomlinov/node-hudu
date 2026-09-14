@@ -377,8 +377,10 @@ describe('F6 — the response budget counts UTF-8 BYTES of the whole response', 
     const budget = 8192;
     const { harness: h, deps } = harness({});
     const engine = new KnowledgeSearchEngine(deps, { pageSize: 2, maxIndexPages: 2, maxDocs: 100, maxDocsScored: 2000, maxResponseBytes: budget });
+    // 490 rather than the CJK case's 500: the meta carries two extra timestamps, and the point of this
+    // control is the byte-per-character contrast, not the exact payload length.
     h.corpus.articles = Array.from({ length: 8 }, (_v, index) => ({
-      ...article(index + 1, `zebra ${'a'.repeat(500)}-${index}`, ''),
+      ...article(index + 1, `zebra ${'a'.repeat(490)}-${index}`, ''),
     }));
     const result = await engine.search('zebra', { tier: 'vendor', scope: ['articles'], limit: 25 });
 
@@ -415,12 +417,19 @@ describe('full-walk transparency — a caller can tell an incremental warm from 
       fullRefreshEvery: 1,
     });
 
-    // Nothing has run yet: no full walk, and one is due.
+    // Nothing has run yet: no full walk, no complete walk, and one is due. The meta reports null too
+    // (never an absent field), so a caller can read the two the same way.
     expect(engine.status().lastFullAt).toBeNull();
+    expect(engine.status().lastCompleteFullAt).toBeNull();
     expect(engine.status().fullWalkDue).toBe(true);
+    const cold = await engine.search('zebra', { tier: 'vendor' });
+    expect(cold.meta.index.lastFullAt).toBeNull();
+    expect(cold.meta.index.lastCompleteFullAt).toBeNull();
+    expect(cold.meta.index.fullWalkDue).toBe(true);
 
     const full = await engine.search('zebra', { refresh: true });
-    expect(full.meta.index.lastFullAt).toBeDefined();
+    expect(full.meta.index.lastFullAt).not.toBeNull();
+    expect(full.meta.index.lastCompleteFullAt).not.toBeNull();
     expect(full.meta.index.fullWalkDue).toBe(false);
     expect(full.meta.index.staleness).toBe('fresh');
 
@@ -437,6 +446,27 @@ describe('full-walk transparency — a caller can tell an incremental warm from 
     const refreshed = await engine.search('zebra', { refresh: true });
     expect(refreshed.meta.index.fullWalkDue).toBe(false);
     expect(refreshed.meta.index.docs.articles?.indexed).toBe(3);
+  });
+
+  it('does not let a TRUNCATED full walk claim that the whole corpus was seen', async () => {
+    // A corpus larger than the page cap: EVERY full walk is truncated, so no walk has ever seen the
+    // whole collection. The scheduler clock still advances (don't re-walk on every build), but the
+    // completeness claim must not.
+    const { deps } = harness({ articles: Array.from({ length: 8 }, (_v, i) => article(i + 1, `zebra ${i + 1}`, 'alpha body')) });
+    const engine = new KnowledgeSearchEngine(deps, {
+      pageSize: 2,
+      maxIndexPages: 2,
+      maxDocsScored: 2000,
+      maxResponseBytes: BYTES.small,
+      ttlMs: 60_000,
+      fullRefreshEvery: 6,
+    });
+
+    const truncated = await engine.search('zebra', { refresh: true });
+    expect(truncated.meta.index.lastFullAt).not.toBeNull(); // a full walk DID run…
+    expect(truncated.meta.index.lastCompleteFullAt).toBeNull(); // …but it saw only part of the corpus
+    expect(truncated.meta.index.fullWalkDue).toBe(true); // so the index may still be missing records
+    expect(engine.needsFullRefresh()).toBe(false); // the scheduler does not thrash on every build
   });
 });
 

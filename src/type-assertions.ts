@@ -9,6 +9,12 @@
  * The include-group surface is pinned here because it has two overload shapes per method (a literal
  * array of group names, and everything else) and the `ListParams` index signature used to let the plain
  * overload swallow a widened array, making the type claim `Asset` while the runtime fetched includes.
+ *
+ * LIMIT, stated so nobody reads more into it: the widened case returns `Asset[] | AssetWithIncludes[]`,
+ * and because `AssetWithIncludes` only ADDS OPTIONAL group fields to `Asset`, the two members are
+ * mutually assignable — so the union documents that includes may be present, but it cannot stop a
+ * caller from annotating the result `Asset[]`. What these assertions guarantee is that the inference
+ * itself cannot silently revert to a single member.
  */
 import type { HuduClient } from './client.js';
 import type { Asset, AssetWithIncludes, AssetSummary, AssetSummaryWithIncludes } from './types/asset.js';
@@ -59,5 +65,3 @@ export type IncludeSurfaceAssertions = [
   Expect<Equal<Awaited<Surface[6]>, AsyncIterable<Page<Asset> | Page<AssetWithIncludes>>>>,
 ];
 
-/** A single `true` only while every assertion above holds; any change makes this file fail to compile. */
-export type IncludeSurfaceHolds = IncludeSurfaceAssertions extends true[] ? true : false;

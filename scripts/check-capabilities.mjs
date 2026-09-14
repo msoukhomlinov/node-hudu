@@ -1140,6 +1140,11 @@ if (searchModeTable !== null) {
 // list-shaped one must advertise the include-expanded record shape as an output variant. A revert
 // that drops either half leaves callers (and the MCP projection, which is generated FROM this
 // registry) with no way to request includes, so the contract is asserted here.
+// The REGISTRY models endpoint-shaped operations, so it carries the three that accept groups
+// (`assets.list`, `assets.listAcrossCompanies`, `assets.search`). The helper-tier forms
+// (`listAll`/`listPages`/`listAllAcrossCompanies`/`listAcrossCompaniesPages`) are not registry records
+// by design — they are client-side collectors — and their include surface is pinned by the compile-time
+// assertions in `src/type-assertions.ts` instead.
 const INCLUDE_GROUPS = ['layout', 'expirations', 'relations', 'photos'];
 const INCLUDE_OPERATIONS = [
   { name: 'assets.list', at: (rec) => rec.inputSchema && rec.inputSchema.params && rec.inputSchema.params.fields, expandedVariant: true },
