@@ -93,7 +93,11 @@ error code changed meaning. `test/public-surface.test.ts` proves that against th
   generation: a rebuild completing during the await can no longer re-point a scored row at another
   document, nor crash hydration with a raw `TypeError`. Indexed documents are immutable to a live
   reader, so a re-upsert of the same record cannot change what a scored row reports; the document
-  array is copied away from a reader on the first write while that reader is live.
+  array is copied away from a reader on the first write while that reader is live. The answer's index
+  block describes the generation its hits came from (statistics, body signals, age), with
+  `indexChangedSinceScore` telling the caller when the index content has moved on since — so a response
+  can no longer serve a body snippet beside "no bodies are indexed" — and the LRU clock that orders text
+  eviction is updated by document KEY, so a rebuild cannot make it protect an unrelated record.
 - A capped full re-walk keeps the documents it never reached: delete-by-absence applies only to a
   resource whose walk actually completed.
 - `resolve(..., { limit: 1 })` no longer returns the first duplicate as a unique match. The

@@ -162,8 +162,8 @@ interface ScoredGeneration {
   bodiesEvicted: number;
   truncatedDocs: number;
   builtAt: number | null;
-  /** Which build produced this generation: a COUNTER, so a same-millisecond rebuild is still visible. */
-  buildSeq: number;
+  /** The index's content version when this generation was scored (see `KnowledgeIndex.version`). */
+  indexVersion: number;
   partial: boolean;
   buildTruncated: boolean;
 }
@@ -252,8 +252,6 @@ export class KnowledgeSearchEngine {
   private readonly config: EngineConfig;
   private readonly now: () => number;
   private builtAt: number | null = null;
-  /** Completed builds, monotonically: identifies a generation without relying on clock resolution. */
-  private buildSeq = 0;
   private lastFullAt: number | null = null;
   private building: Promise<void> | null = null;
   /** Whether the in-flight build (if any) re-walks everything — a `full` caller must not dedup onto an incremental. */
@@ -387,13 +385,18 @@ export class KnowledgeSearchEngine {
     // scoring and hydration: capture the document ARRAY the rows were scored against, so a build
     // that completes during that await can never re-point a coordinate at another document.
     let generation: ScoredGeneration | null = null;
+    let reading = false;
     let hits: { hits: KnowledgeSearchHit[]; truncation: KnowledgeSearchTruncation | undefined; candidatesScored: number };
     // The latch try starts BEFORE scoring: `scoreIndex` calls `beginRead`, and a throw inside the
     // synchronous scan must release the reader exactly like a throw during hydration.
     try {
       if (useIndex) {
         indexUsed = true;
-        const scored = this.scoreIndex(terms, { exactOnly, maxDocsScored: this.config.maxDocsScored });
+        // Pin the generation BEFORE the first call that can throw: `endRead` in the `finally` below
+        // must always have a matching `beginRead`, or it would release a reader this search never took.
+        const pinned = this.index.beginRead();
+        reading = true;
+        const scored = this.scoreIndex(pinned, terms, { exactOnly, maxDocsScored: this.config.maxDocsScored });
         generation = scored.generation;
         candidatesScored = scored.candidatesScored;
         if (scored.capped) {
@@ -427,8 +430,9 @@ export class KnowledgeSearchEngine {
         truncation,
       });
     } finally {
-      // The snapshot lives exactly as long as the rows that address it.
-      if (indexUsed) this.index.endRead();
+      // The snapshot lives exactly as long as the rows that address it — released only when one was
+      // actually taken.
+      if (reading) this.index.endRead();
     }
     truncation = hits.truncation;
     if (this.buildError !== null) {
@@ -560,14 +564,13 @@ export class KnowledgeSearchEngine {
   // ---------------------------------------------------------------- index tier
 
   private scoreIndex(
+    docs: readonly SearchDoc[],
     terms: readonly string[],
     opts: { exactOnly: boolean; maxDocsScored: number },
   ): { rows: ScoredRow[]; candidatesScored: number; capped: boolean; generation: ScoredGeneration } {
     this.index.ensureFinalized();
-    // Scoring is synchronous, so this snapshot and the postings it was derived from are consistent
-    // for the whole scan; the caller keeps it for hydration and releases it with `endRead` (see
-    // `search`), which pins it against in-place writes until then.
-    const docs = this.index.beginRead();
+    // `docs` is the generation the CALLER pinned (see `search`), so it stays consistent with the
+    // postings read here and is held against in-place writes until that caller releases it.
     const rows = new Map<number, ScoredRow>();
     const compactQuery = opts.exactOnly ? null : compactOfQuery(terms);
     for (const term of terms) {
@@ -987,7 +990,6 @@ export class KnowledgeSearchEngine {
     this.index.finalize();
     this.requestsLastBuild = requests.count;
     this.builtAt = this.now();
-    this.buildSeq += 1;
   }
 
   /**
@@ -1068,7 +1070,7 @@ export class KnowledgeSearchEngine {
       bodiesEvicted,
       truncatedDocs: this.truncatedDocs,
       builtAt: this.builtAt,
-      buildSeq: this.buildSeq,
+      indexVersion: this.index.version,
       partial: this.partial,
       buildTruncated: this.lastBuildTruncated,
     };
@@ -1076,7 +1078,7 @@ export class KnowledgeSearchEngine {
 
   /**
    * The index block of an answer. With a scored generation it describes THAT generation (the data the
-   * hits came from), plus `rebuiltAfterScore` when the index has moved on since; without one (the
+   * hits came from), plus `indexChangedSinceScore` when the content has moved on since; without one (the
    * vendor tier) it describes the live index, which is all the answer knows.
    */
   private indexMeta(generation: ScoredGeneration | null): KnowledgeIndexMeta {
@@ -1088,7 +1090,7 @@ export class KnowledgeSearchEngine {
         ...(status.ageMs !== null ? { ageMs: status.ageMs } : {}),
         staleness: status.staleness,
         docs: status.docs,
-        rebuiltAfterScore: false,
+        indexChangedSinceScore: false,
       };
     }
     const ageMs = generation.builtAt === null ? null : Math.max(0, this.now() - generation.builtAt);
@@ -1100,7 +1102,7 @@ export class KnowledgeSearchEngine {
       ...(ageMs !== null ? { ageMs } : {}),
       staleness: ageMs === null ? 'unknown' : ageMs > this.config.ttlMs ? 'stale' : 'fresh',
       docs: generation.stats,
-      rebuiltAfterScore: this.buildSeq !== generation.buildSeq,
+      indexChangedSinceScore: this.index.version !== generation.indexVersion,
     };
   }
 

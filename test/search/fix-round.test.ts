@@ -308,7 +308,7 @@ describe('index metadata describes the generation its hits came from', () => {
     expect(result.meta.index.docs.articles?.bodiesIndexed).toBeGreaterThan(0);
     expect(result.meta.reasons).not.toContain('body-evicted');
     // The answer still says the index has moved on since it scored.
-    expect(result.meta.index.rebuiltAfterScore).toBe(true);
+    expect(result.meta.index.indexChangedSinceScore).toBe(true);
   });
 });
 

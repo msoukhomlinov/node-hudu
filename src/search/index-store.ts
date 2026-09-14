@@ -133,6 +133,13 @@ export class KnowledgeIndex {
    * untouched, so they stay compatible with an in-flight reader.
    */
   docs: SearchDoc[] = [];
+  /**
+   * Changes to the document set/contents, monotonically. A reader compares it to tell whether the
+   * data it scored is still what the index holds — a BUILD counter would miss a build that mutated
+   * the index and then failed, and would also miss a bare eviction.
+   */
+  private contentVersion = 0;
+
   /** Live snapshot readers; while one is live the array is detached before any in-place write. */
   private readers = 0;
   /** True when `docs` was already copied away from the readers currently holding it. */
@@ -162,16 +169,17 @@ export class KnowledgeIndex {
    * live, the next in-place write copies the array first, so one array copy per write-batch keeps
    * every reader consistent.
    *
-   * MEMORY: a live reader pins the documents of the generation it scored, so peak held text is the
-   * index account plus ONE generation per in-flight search. The account itself is normally at or
-   * below `maxIndexTextBytes`; when NO document remains whose text can be released (every remaining
-   * long text is one the account cannot free) the loop stops with the account still above the bound,
-   * because there is nothing left to evict — the bound is a limit on what eviction may take, not a
-   * promise that unreleasable text disappears — the previous
-   * revision of whatever that search scored, released when it calls `endRead` (the engine does that
-   * in a `finally`, so a reader's lifetime is one search call). Those pinned generations are
-   * deliberately NOT charged to the text budget: they cannot be freed while the reader lives, so
-   * charging them would evict live index text to pay for bytes the eviction does not own.
+   * MEMORY. A live reader pins the documents of the generation it scored, so peak held text is the
+   * index account plus one generation per in-flight search — the revision each search is answering
+   * from, released when it calls `endRead` (the engine does that in a `finally`, so a reader's
+   * lifetime is one search call). Those pinned generations are deliberately NOT charged to the text
+   * budget: they cannot be freed while the reader lives, so charging them would evict live index text
+   * to pay for bytes the eviction does not own.
+   *
+   * The account itself is normally at or below `maxIndexTextBytes`. It can stay ABOVE the bound when
+   * no document remains whose text can be released (every remaining long text is one the account
+   * cannot free): the loop then stops, because there is nothing left to evict. The bound is a limit
+   * on what eviction may take, not a promise that unreleasable text disappears.
    */
   beginRead(): readonly SearchDoc[] {
     this.readers += 1;
@@ -192,6 +200,11 @@ export class KnowledgeIndex {
     if (this.readers === 0 || this.detachedForReaders) return;
     this.docs = [...this.docs];
     this.detachedForReaders = true;
+  }
+
+  /** Monotonic version of the document contents (see `contentVersion`). */
+  get version(): number {
+    return this.contentVersion;
   }
 
   /** Number of indexed documents. */
@@ -227,6 +240,7 @@ export class KnowledgeIndex {
     }
     this.holdText(doc);
     this.dirty = true;
+    this.contentVersion += 1;
   }
 
   /** True when a document is present under `resource:id`. */
@@ -281,6 +295,7 @@ export class KnowledgeIndex {
     this.textBytes = 0;
     this.accessClock.clear();
     this.dirty = true;
+    this.contentVersion += 1;
     this.pruneEvicted();
     this.docs.forEach((doc, index) => {
       this.byKey.set(`${doc.resource}:${doc.id}`, index);

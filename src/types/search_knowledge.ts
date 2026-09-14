@@ -138,11 +138,12 @@ export interface KnowledgeIndexMeta {
   staleness: 'fresh' | 'stale' | 'unknown';
   docs: Record<string, KnowledgeIndexDocStat>;
   /**
-   * True when a build completed after this answer scored its rows, so the index has moved on since:
-   * the figures above still describe the generation the hits came from, and a later query will use
-   * the newer one.
+   * True when the index's CONTENT changed after this answer scored its rows — including a build that
+   * mutated the documents and then failed, and a bare eviction, which a completed-build counter would
+   * miss. The figures above still describe the generation the hits came from; a later query uses the
+   * newer content.
    */
-  rebuiltAfterScore: boolean;
+  indexChangedSinceScore: boolean;
 }
 
 /** The bound that shortened this answer. */
