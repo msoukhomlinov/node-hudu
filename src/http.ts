@@ -486,10 +486,14 @@ export class HttpClient {
     }
     // A dry run never reaches the transport, so it is not counted as in flight.
     this.state.inFlight += 1;
-    // Only so the audit hook can redact the header NAMES the strategy declares secret; the transport
-    // itself reads the strategy inside the retry loop (a retry may pick up a rotated credential).
+    // The SAME captured strategy instance is threaded into the transport: the audit hook redacts with
+    // its declared secret header names, and every attempt builds its headers from it. The strategy
+    // IDENTITY is pinned here, once, for the whole call — a caller that reuses one RequestOptions
+    // object and mutates `opts.auth` mid-flight cannot switch the credential on a later attempt while
+    // the audit event still redacts with the first strategy's names. What is NOT pinned is the header
+    // PRODUCTION: `headers(ctx)` still runs once per attempt, so a retry may pick up a rotation.
     try {
-      const result = await this.execute<T>(opts, correlationId);
+      const result = await this.execute<T>(opts, correlationId, auth);
       this.emitAudit(correlationId, opts, 'success', undefined, auth.secretHeaders);
       return result;
     } catch (err) {
@@ -577,8 +581,12 @@ export class HttpClient {
     hook(redact(event, secretHeaders) as AuditEvent);
   }
 
-  /** The transport proper: retries, deadline, error wrapping. Always reached through `request`. */
-  private async execute<T>(opts: RequestOptions, correlationId: string): Promise<T> {
+  /**
+   * The transport proper: retries, deadline, error wrapping. Always reached through `request`, which
+   * has already resolved and validated `strategy` — this method never reads `opts.auth`/`config.auth`
+   * again, so the credential source cannot change under a call in flight.
+   */
+  private async execute<T>(opts: RequestOptions, correlationId: string, strategy: AuthStrategy): Promise<T> {
     const method = opts.method;
     const url = this.buildUrl(opts);
 
@@ -606,13 +614,29 @@ export class HttpClient {
 
       // Per-attempt credential resolution: a retry that follows a backoff sleep may pick up a
       // rotated/refreshed credential. Bounded by `remaining`, so a slow resolver cannot eat the
-      // whole-call deadline silently (section 5).
-      const headers = await this.resolveHeaders(opts, url, correlationId, attempt, remaining);
+      // whole-call deadline silently (section 5). A failure BEFORE `fetch` must not spend limiter
+      // capacity, so the token taken above is refunded on this path only.
+      let headers: Record<string, string>;
+      try {
+        headers = await this.resolveHeaders(strategy, opts, url, correlationId, attempt, remaining);
+      } catch (err) {
+        this.refundToken();
+        throw err;
+      }
+
+      // `timeoutMs` bounds the WHOLE call, so the network budget is what is LEFT of the deadline after
+      // auth resolved — not the pre-auth `remaining`. Re-using the stale value let an async resolver
+      // that consumed most of the budget silently extend the call to roughly twice `timeoutMs`.
+      const remainingAfterAuth = deadline - Date.now();
+      if (remainingAfterAuth <= 0) {
+        const safe = pathOnlyUrl(url);
+        throw new HuduNetworkError(`Request timed out after ${this.config.timeoutMs}ms: ${method} ${safe}`, safe, TIMEOUT);
+      }
 
       const init: RequestInit = {
         method,
         headers,
-        signal: AbortSignal.timeout(remaining),
+        signal: AbortSignal.timeout(remainingAfterAuth),
       };
       if (opts.manualRedirect) init.redirect = 'manual';
       if (opts.formUrlEncoded) {
@@ -698,20 +722,22 @@ export class HttpClient {
   /**
    * Resolve the credential headers for ONE attempt (issue #23).
    *
-   * The strategy is read from `opts.auth ?? config.auth` — the single place a credential is read in
-   * this module — and `headers()` is called at most once per attempt. A synchronous strategy costs
-   * one object literal and adds no microtask; an async one is raced against the attempt's remaining
-   * budget so it can never hold the call past the whole-call deadline. Every failure is fail-closed:
-   * an `AuthError` and no request on the wire.
+   * The strategy is the one `request()` resolved and validated for the whole call — NOT re-read from
+   * `opts.auth ?? config.auth` here, so a concurrent caller reusing one `RequestOptions` object cannot
+   * swap the credential mid-flight while the audit event still redacts with the first strategy's
+   * declared secret headers. `headers()` is still called at most once per attempt, so a retry can pick
+   * up a rotated credential. A synchronous strategy costs one object literal and adds no microtask; an
+   * async one is raced against the attempt's remaining budget so it can never hold the call past the
+   * whole-call deadline. Every failure is fail-closed: an `AuthError` and no request on the wire.
    */
   private async resolveHeaders(
+    strategy: AuthStrategy,
     opts: RequestOptions,
     url: string,
     correlationId: string,
     attempt: number,
     remaining: number,
   ): Promise<Record<string, string>> {
-    const strategy = opts.auth ?? this.config.auth;
     const ctx: AuthContext = {
       method: opts.method,
       path: opts.path,
@@ -804,6 +830,28 @@ export class HttpClient {
     }
     const qs = params.toString();
     return qs ? `${base}?${qs}` : base;
+  }
+
+  /**
+   * Return ONE limiter token for a call that failed BEFORE `fetch` (issue #23 review, finding 3).
+   *
+   * `consumeToken` deducts before auth is resolved, so a strategy that rejects, times out or returns
+   * unusable headers would otherwise spend capacity on a request that never left the process. With a
+   * shared burst of 1, repeated auth failures starve every scope on that transport. The pending refill
+   * is applied first and `lastRefill` advanced, exactly as `consumeOne` does, so the bucket stays
+   * consistent; the add is capped at capacity. Never called on a path that reaches `fetch`, so no
+   * successful (or attempted) request is affected.
+   */
+  private refundToken(): void {
+    const bucket = this.state.bucket;
+    if (bucket === undefined) return;
+    const now = Date.now();
+    bucket.tokens = Math.min(
+      bucket.capacity,
+      bucket.tokens + (now - bucket.lastRefill) * bucket.refillPerMs,
+    );
+    bucket.lastRefill = now;
+    bucket.tokens = Math.min(bucket.capacity, bucket.tokens + 1);
   }
 
   private consumeToken(deadline: number): Promise<void> {

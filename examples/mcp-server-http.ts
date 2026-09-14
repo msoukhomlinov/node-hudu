@@ -44,6 +44,9 @@
  */
 import { createServer } from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
 import {
   McpServer,
   OAuthError,
@@ -223,10 +226,32 @@ async function toWebRequest(req: IncomingMessage): Promise<Request> {
   return new Request(url, { method: req.method, headers, body: Buffer.concat(chunks).toString('utf8') });
 }
 
+/**
+ * Stream a web `Response` into the Node `ServerResponse` — incrementally, never buffered.
+ *
+ * Buffering it (`res.end(Buffer.from(await response.arrayBuffer()))`) would deliver NOTHING to the
+ * client until the upstream body had closed, so a long-lived body — SSE, or any incremental tool
+ * output — would hang the caller. Piping the stream is what lets the SDK's streaming reach a real
+ * client.
+ */
 async function send(res: ServerResponse, response: Response): Promise<void> {
   res.statusCode = response.status;
   response.headers.forEach((value, name) => res.setHeader(name, value));
-  res.end(Buffer.from(await response.arrayBuffer()));
+  // A bodyless response (204/304) or a HEAD request has a null `body`; end it explicitly.
+  if (response.body === null || res.req.method === 'HEAD') {
+    res.end();
+    return;
+  }
+  try {
+    // `pipeline` destroys the upstream body when the client disconnects, and tears the response
+    // down on a stream error, so neither side is left waiting on a body that will never arrive.
+    // `fetch`'s `body` is the WHATWG stream type, which the `node:stream` overload does not name
+    // (a DOM-vs-`node:stream/web` type split); the runtime objects are the same stream.
+    await pipeline(Readable.fromWeb(response.body as unknown as NodeReadableStream<Uint8Array>), res);
+  } catch {
+    // Status and headers are already on the wire, so an upstream error cannot become a 500 page:
+    // `pipeline` has destroyed both ends and the socket is closed.
+  }
 }
 
 createServer((req, res) => {

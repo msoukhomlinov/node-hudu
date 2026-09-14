@@ -12,7 +12,7 @@ import {
 import { HuduClient } from '../src/client.js';
 import { resolveConfig, type ResolvedConfig } from '../src/config.js';
 import { AuthError, HuduConfigError, HuduNetworkError, UnauthorizedError } from '../src/errors.js';
-import { HttpClient } from '../src/http.js';
+import { HttpClient, type RequestOptions } from '../src/http.js';
 import { REDACTED, isCredentialKey, redact, type Logger } from '../src/logger.js';
 import { clearFetch, expectRequests, json, stubFetch, stubFetchAny, type FetchSpy } from './helpers.js';
 
@@ -112,7 +112,7 @@ describe('auth strategies reach the wire', () => {
   });
 
   it('the AuthContext describes the attempt, without any credential', async () => {
-    const TOKEN = 'AUTHCONTEXT-SECRET-8f3c1d';
+    const TOKEN = 'test-marker-not-a-real-credential-authcontext';
     stubFetch(() => json({}), { baseUrl: BASE });
     let seen: AuthContext | undefined;
     const strategy: AuthStrategy = {
@@ -364,18 +364,18 @@ describe('tokens never appear in logs or audit events', () => {
     const debug = vi.fn();
     const warn = vi.fn();
     const logger: Logger = { debug, info: vi.fn(), warn, error: vi.fn() };
-    const client = new HuduClient({ baseUrl: BASE, auth: new BearerTokenAuth('SUPERSECRET-TOKEN'), logger });
+    const client = new HuduClient({ baseUrl: BASE, auth: new BearerTokenAuth('test-marker-not-a-real-credential-token'), logger });
     await client.companies.get(1);
     expect(debug.mock.calls.length).toBeGreaterThan(0);
-    expect(JSON.stringify([...debug.mock.calls, ...warn.mock.calls])).not.toContain('SUPERSECRET-TOKEN');
+    expect(JSON.stringify([...debug.mock.calls, ...warn.mock.calls])).not.toContain('test-marker-not-a-real-credential-token');
   });
 
   it('audit events contain no credential and mask credential-shaped fields', async () => {
     stubFetch(() => json({}), { baseUrl: BASE });
     const events: { query?: Record<string, unknown> }[] = [];
-    const http = httpFor({ auth: new BearerTokenAuth('SECRET'), onAudit: (e: unknown) => events.push(e as { query?: Record<string, unknown> }) });
-    await http.request({ method: 'GET', path: '/companies', query: { authorization: 'Bearer SECRET', bearer: 'SECRET', page: 2 } });
-    expect(JSON.stringify(events)).not.toContain('SECRET');
+    const http = httpFor({ auth: new BearerTokenAuth('test-marker-not-a-real-credential'), onAudit: (e: unknown) => events.push(e as { query?: Record<string, unknown> }) });
+    await http.request({ method: 'GET', path: '/companies', query: { authorization: 'Bearer test-marker-not-a-real-credential', bearer: 'test-marker-not-a-real-credential', page: 2 } });
+    expect(JSON.stringify(events)).not.toContain('test-marker-not-a-real-credential');
     expect(events[0]?.query?.authorization).toBe(REDACTED);
     expect(events[0]?.query?.bearer).toBe(REDACTED);
     expect(events[0]?.query?.page).toBe(2);
@@ -385,11 +385,11 @@ describe('tokens never appear in logs or audit events', () => {
     stubFetch(() => json({}), { baseUrl: BASE });
     const events: { query?: Record<string, unknown> }[] = [];
     const http = httpFor({
-      auth: new HeaderAuth({ 'x-tenant-key': 'TENANT-SECRET' }),
+      auth: new HeaderAuth({ 'x-tenant-key': 'test-marker-not-a-real-credential-tenant' }),
       onAudit: (e: unknown) => events.push(e as { query?: Record<string, unknown> }),
     });
-    await http.request({ method: 'GET', path: '/companies', query: { 'x-tenant-key': 'TENANT-SECRET' } });
-    expect(JSON.stringify(events)).not.toContain('TENANT-SECRET');
+    await http.request({ method: 'GET', path: '/companies', query: { 'x-tenant-key': 'test-marker-not-a-real-credential-tenant' } });
+    expect(JSON.stringify(events)).not.toContain('test-marker-not-a-real-credential-tenant');
     expect(events[0]?.query?.['x-tenant-key']).toBe(REDACTED);
   });
 
@@ -398,7 +398,7 @@ describe('tokens never appear in logs or audit events', () => {
     const strategy: AuthStrategy = {
       name: 'vault',
       headers() {
-        throw new Error('invalid token SUPERSECRET');
+        throw new Error('invalid token test-marker-not-a-real-credential');
       },
     };
     const client = new HuduClient({ baseUrl: BASE, auth: strategy });
@@ -408,8 +408,8 @@ describe('tokens never appear in logs or audit events', () => {
     );
     expect(err).toBeInstanceOf(AuthError);
     const authError = err as AuthError;
-    expect(authError.message).not.toContain('SUPERSECRET');
-    expect(JSON.stringify(authError)).not.toContain('SUPERSECRET');
+    expect(authError.message).not.toContain('test-marker-not-a-real-credential');
+    expect(JSON.stringify(authError)).not.toContain('test-marker-not-a-real-credential');
     expect(authError.code).toBe('AUTH_ERROR');
     expect(authError.category).toBe('auth');
     expect(authError.retryable).toBe(false);
@@ -430,10 +430,10 @@ describe('tokens never appear in logs or audit events', () => {
 
   it('the transport dry-run marker carries no credential and has exactly five keys', async () => {
     const spy = stubFetchAny({ baseUrl: BASE });
-    const http = httpFor({ auth: new BearerTokenAuth('SECRET') });
+    const http = httpFor({ auth: new BearerTokenAuth('test-marker-not-a-real-credential') });
     const marker = (await http.request({ method: 'POST', path: '/companies', dryRun: true })) as unknown as Record<string, unknown>;
     expect(Object.keys(marker).sort()).toEqual(['__dryRun', 'method', 'path', 'simulated', 'url']);
-    expect(JSON.stringify(marker)).not.toContain('SECRET');
+    expect(JSON.stringify(marker)).not.toContain('test-marker-not-a-real-credential');
     expect(spy.calls).toHaveLength(0);
   });
 });
@@ -659,7 +659,7 @@ describe('an illegal HTTP header name or value fails closed before any request (
   });
 
   it('T5 a caller-supplied header with a control character never leaks through the network error', async () => {
-    const VALUE = 'trace\nCALLER-SUPERSECRET';
+    const VALUE = 'trace\ncaller-test-marker-not-a-real-credential';
     const spy = stubFetch(() => json({}), { baseUrl: BASE });
     // Exactly what native fetch does with an illegal value: `Headers` throws a TypeError that echoes
     // the value verbatim. Reproduced here from the real undici error, not a hand-written string.
@@ -675,7 +675,7 @@ describe('an illegal HTTP header name or value fails closed before any request (
     expect(netErr.message).toBe('Network error: an invalid HTTP header was produced; a header value is not a legal HTTP field value');
     expect(netErr.message).not.toContain(VALUE);
     expect(JSON.stringify(err, Object.getOwnPropertyNames(err))).not.toContain(VALUE);
-    expect(JSON.stringify(err, Object.getOwnPropertyNames(err))).not.toContain('CALLER-SUPERSECRET');
+    expect(JSON.stringify(err, Object.getOwnPropertyNames(err))).not.toContain('caller-test-marker-not-a-real-credential');
     expect(seen.sink.join('\n')).not.toContain(VALUE);
     expect(JSON.stringify(seen.audit)).not.toContain(VALUE);
     // The request really did reach fetch: the guard is the network-error wrap, not a pre-flight refusal.
@@ -743,7 +743,7 @@ describe("reading a strategy's produced header map fails closed, like the call i
   }
 
   it('P1 a throwing getter on the returned map is refused, and nothing is sent', async () => {
-    const SECRET = 'LEAK-GETTER-8f3c1d';
+    const SECRET = 'test-marker-not-a-real-credential-getter';
     const spy = stubFetchAny({ baseUrl: BASE });
     const seen = capturing();
     const map = {
@@ -758,7 +758,7 @@ describe("reading a strategy's produced header map fails closed, like the call i
   });
 
   it('P2 a Proxy whose ownKeys trap throws is refused, and nothing is sent', async () => {
-    const SECRET = 'LEAK-OWNKEYS-2b7e04';
+    const SECRET = 'test-marker-not-a-real-credential-ownkeys';
     const spy = stubFetchAny({ baseUrl: BASE });
     const seen = capturing();
     const map = new Proxy({}, {
@@ -771,7 +771,7 @@ describe("reading a strategy's produced header map fails closed, like the call i
   });
 
   it('P3 a Proxy whose get trap throws is refused, and nothing is sent', async () => {
-    const SECRET = 'LEAK-PROXYGET-5a19c2';
+    const SECRET = 'test-marker-not-a-real-credential-proxyget';
     const spy = stubFetchAny({ baseUrl: BASE });
     const seen = capturing();
     const map = new Proxy({}, {
@@ -784,7 +784,7 @@ describe("reading a strategy's produced header map fails closed, like the call i
   });
 
   it('P4 a Proxy whose ownKeys trap returns duplicate keys is refused, and nothing is sent', async () => {
-    const SECRET = 'LEAK-DUPKEY-c40d77';
+    const SECRET = 'test-marker-not-a-real-credential-dupkey';
     const spy = stubFetchAny({ baseUrl: BASE });
     const seen = capturing();
     // `Object.keys` raises a real TypeError ('trap returned duplicate entries') on this shape; the
@@ -858,7 +858,7 @@ describe('a credential-free map can never be returned, and values are printable 
   // `tchar` sequence, and `out[key] = value` used to set the prototype instead of adding a key. The
   // function then returned an EMPTY map and the request went out with no credential at all.
   it('Q1 a strategy returning JSON.parse(\'{"__proto__": ...}\') is refused, and nothing is sent', async () => {
-    const PLANTED = 'PROTO-EMPTY-9c1f2a';
+    const PLANTED = 'test-marker-not-a-real-credential-proto-empty';
     const spy = stubFetchAny({ baseUrl: BASE });
     const seen = capturing();
     const http = httpFor({
@@ -872,7 +872,7 @@ describe('a credential-free map can never be returned, and values are printable 
   });
 
   it('Q2 a Proxy whose ownKeys trap returns only __proto__ is refused, and nothing is sent', async () => {
-    const PLANTED = 'PROXY-PROTO-4b7d10';
+    const PLANTED = 'test-marker-not-a-real-credential-proxy-proto';
     const spy = stubFetchAny({ baseUrl: BASE });
     const seen = capturing();
     // A null-prototype target keeps the proxy invariants happy while the traps make the map look
@@ -889,7 +889,7 @@ describe('a credential-free map can never be returned, and values are printable 
   });
 
   it('Q3 an emoji above 0xFF in the value is refused, and nothing is sent', async () => {
-    const PLANTED = 'KEY-\u{1f511}-SECRET';
+    const PLANTED = 'test-marker-not-a-real-credential-\u{1f511}-emoji';
     const spy = stubFetchAny({ baseUrl: BASE });
     const seen = capturing();
     const http = httpFor({
@@ -903,7 +903,7 @@ describe('a credential-free map can never be returned, and values are printable 
   });
 
   it('Q4 a Latin-1 byte in the value is refused, and nothing is sent', async () => {
-    const PLANTED = 'caf\u00e9-SECRET';
+    const PLANTED = 'caf\u00e9-test-marker-not-a-real-credential';
     const spy = stubFetchAny({ baseUrl: BASE });
     const seen = capturing();
     const http = httpFor({
@@ -927,5 +927,192 @@ describe('a credential-free map can never be returned, and values are printable 
     expect(headersOf(spy, 0)['x-trace']).toBe('a.b-c_d~e!f');
     expect(headersOf(spy, 1)['x-api-key']).toBe('key-A');
     expect(headersOf(spy, 2)['Authorization']).toBe('Bearer tok-A');
+  });
+});
+
+
+/**
+ * The Codex review of PR #30 (issue #23 follow-up) found three holes in the transport itself:
+ * the auth STRATEGY was re-read inside the retry loop, the network deadline was computed BEFORE
+ * auth resolved, and the limiter token was never returned when auth failed before `fetch`.
+ *
+ * Each test below was mutation-checked: neutralising its fix makes exactly this test fail.
+ */
+describe('the strategy, the deadline and the limiter are pinned for the whole call (Codex review)', () => {
+  afterEach(() => clearFetch());
+
+  /** Run a request and hand back the thrown error, failing the test when nothing was thrown. */
+  async function thrown(pending: Promise<unknown>): Promise<unknown> {
+    return pending.then(
+      () => { throw new Error('expected the request to fail closed'); },
+      (err: unknown) => err,
+    );
+  }
+
+  it('R1 strategy pinning: mutating one RequestOptions mid-flight cannot switch the credential', async () => {
+    const MARKER = 'test-marker-not-a-real-credential-strategy-pin';
+    const A = 'credential-from-strategy-A';
+    const B = 'credential-from-strategy-B';
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let began: () => void = () => {};
+    const started = new Promise<void>((resolve) => { began = resolve; });
+    let aCalls = 0;
+    const strategyA: AuthStrategy = {
+      name: 'A',
+      // A name only A declares, and one the generic credential-key rules do NOT mask on their own
+      // (`x-marker-a` ends in no credential suffix), so the audit assertion below really tests A.
+      secretHeaders: ['x-marker-a'],
+      async headers() {
+        aCalls += 1;
+        began();
+        await gate;
+        return { 'x-api-key': A };
+      },
+    };
+    const strategyB: AuthStrategy = {
+      name: 'B',
+      secretHeaders: ['x-marker-b'],
+      headers: () => ({ 'x-api-key': B }),
+    };
+    // ONE options object, carrying strategy A when the call starts.
+    const opts: RequestOptions = {
+      method: 'GET',
+      path: '/companies',
+      auth: strategyA,
+      query: { 'x-marker-a': MARKER },
+    };
+    const audit: { query?: Record<string, unknown> }[] = [];
+    // 500 on the first attempt, then 200, so the retry loop resolves headers a SECOND time.
+    const spy = stubFetch(
+      () => (spy.calls.length <= 1 ? json({ error: 'boom' }, 500) : json({ company: { id: 1 } })),
+      { baseUrl: BASE },
+    );
+    const http = httpFor({ apiKey: 'config-key', maxRetries: 3, onAudit: (e: unknown) => audit.push(e as never) });
+
+    const pending = http.request(opts);
+    // Mutate the SAME object while attempt 0's resolver is still awaiting: a caller that reuses one
+    // options object (or hands it to a concurrent call) must not be able to change the credential
+    // under a call already in flight.
+    await started;
+    opts.auth = strategyB;
+    release();
+    await pending;
+
+    expect(spy.calls).toHaveLength(2);
+    expect(headersOf(spy, 0)['x-api-key']).toBe(A);
+    // THE pinned assertion: without the fix this is B, because the retry re-read `opts.auth`.
+    expect(headersOf(spy, 1)['x-api-key']).toBe(A);
+    expect(headersOf(spy, 1)['x-api-key']).not.toBe(B);
+    // The credential is still re-PRODUCED per attempt (rotation is a feature), under A's identity.
+    expect(aCalls).toBe(2);
+    // The audit event redacts with A's declared secret header name.
+    expect(audit[0]?.query?.['x-marker-a']).toBe(REDACTED);
+    expect(JSON.stringify(audit)).not.toContain(MARKER);
+  });
+
+  it('R2 the network deadline is recomputed after auth, so a slow resolver cannot extend the call', async () => {
+    const TIMEOUT_MS = 1200;
+    const RESOLVER_MS = 900;
+    // A fetch stub that never answers: it rejects only when the request's own abort signal fires.
+    const spy = stubFetch(
+      (_url, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          const signal = init.signal;
+          const abort = () => reject(Object.assign(new Error('the operation was aborted'), { name: 'AbortError' }));
+          if (!signal || signal.aborted) abort();
+          else signal.addEventListener('abort', abort);
+        }),
+      { baseUrl: BASE },
+    );
+    const http = httpFor({
+      timeoutMs: TIMEOUT_MS,
+      maxRetries: 0,
+      auth: {
+        name: 'slow',
+        async headers() {
+          await new Promise((resolve) => setTimeout(resolve, RESOLVER_MS));
+          return { 'x-api-key': 'slow-key' };
+        },
+      },
+    });
+
+    const startedAt = Date.now();
+    const err = await thrown(http.request({ method: 'GET', path: '/companies' }));
+    const elapsed = Date.now() - startedAt;
+
+    expect(spy.calls.length).toBeLessThanOrEqual(1);
+    expect(err).toBeInstanceOf(HuduNetworkError);
+    const netErr = err as HuduNetworkError;
+    expect(netErr.code).toBe('NETWORK_ERROR');
+    expect(netErr.category).toBe('timeout');
+    expect(netErr.retryable).toBe(true);
+    expect(netErr.message).toBe(`Request timed out after ${TIMEOUT_MS}ms: GET ${BASE}/api/v1/companies`);
+    // `timeoutMs` bounds the WHOLE call. A stale pre-auth budget would abort at RESOLVER_MS +
+    // TIMEOUT_MS (~2.1s); the window below (deadline + 40%) separates the two and stays stable on a
+    // slow CI box, while the lower bound still proves the call really did run to its deadline.
+    expect(elapsed).toBeGreaterThanOrEqual(TIMEOUT_MS - 50);
+    expect(elapsed).toBeLessThan(TIMEOUT_MS * 1.4);
+  });
+
+  it('R2b the deadline guard refuses to fetch when auth already spent the whole budget', async () => {
+    const TIMEOUT_MS = 100;
+    const spy = stubFetchAny({ baseUrl: BASE });
+    const http = httpFor({
+      timeoutMs: TIMEOUT_MS,
+      auth: {
+        // A SYNC resolver that blocks the loop past the deadline. The transport must fail closed with
+        // the timeout error rather than hand `fetch` an abort signal that has already expired.
+        name: 'blocking',
+        headers() {
+          const until = Date.now() + 250;
+          while (Date.now() < until) { /* deliberately block past the deadline */ }
+          return { 'x-api-key': 'late-key' };
+        },
+      },
+    });
+
+    const err = await thrown(http.request({ method: 'GET', path: '/companies' }));
+
+    expect(err).toBeInstanceOf(HuduNetworkError);
+    const netErr = err as HuduNetworkError;
+    expect(netErr.code).toBe('NETWORK_ERROR');
+    expect(netErr.category).toBe('timeout');
+    expect(netErr.message).toBe(`Request timed out after ${TIMEOUT_MS}ms: GET ${BASE}/api/v1/companies`);
+    expect(spy.calls).toHaveLength(0);
+  });
+
+  it('R3 a pre-fetch auth failure refunds the limiter token, so capacity is not spent', async () => {
+    let fail = true;
+    const strategy: AuthStrategy = {
+      name: 'flaky',
+      headers() {
+        if (fail) throw new Error('vault is down');
+        return { 'x-api-key': 'recovered-key' };
+      },
+    };
+    const spy = stubFetch(() => json({}), { baseUrl: BASE });
+    // burst 1 with one token per minute: a single spent token holds every later call ~60s, so a
+    // short timeoutMs makes the un-refunded behaviour fail fast instead of hanging the suite.
+    const http = httpFor({ auth: strategy, rateLimit: { perMinute: 1, burst: 1 }, timeoutMs: 1500 });
+    const before = http.getRateLimitStatus();
+    expect(before.availableTokens).toBe(1);
+
+    const err = await thrown(http.request({ method: 'GET', path: '/companies' }));
+    expect(err).toBeInstanceOf(AuthError);
+    expect(spy.calls).toHaveLength(0);
+
+    const after = http.getRateLimitStatus();
+    expect(after.availableTokens).toBeGreaterThanOrEqual(before.availableTokens);
+    expect(after.availableTokens).toBeGreaterThanOrEqual(1);
+    expect(after.throttled).toBe(false);
+
+    // The capacity really is usable again: the next valid call is not held for the refill minute.
+    fail = false;
+    await http.request({ method: 'GET', path: '/companies' });
+    expect(spy.calls).toHaveLength(1);
+    expect(headersOf(spy)['x-api-key']).toBe('recovered-key');
+    // And a path that DID reach fetch still spends its token: the refund is pre-fetch only.
+    expect(http.getRateLimitStatus().availableTokens).toBeLessThan(1);
   });
 });
