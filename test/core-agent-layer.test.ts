@@ -519,6 +519,9 @@ describe('redact() — the one SDK redactor', () => {
       'password', 'passphrase', 'otp_secret', 'api_key', 'token', 'secret', 'authorization',
       'auth', 'basic_auth', 'credential', 'credentials', 'session',
       'x-api-key', 'client_secret', 'private_key',
+      // Pluggable auth (issue #23): `bearer` and `jwt` normalise to names neither listed nor
+      // suffix-matched, and `auth_header` normalised to `authheader` (no match at all).
+      'bearer', 'jwt', 'auth_header',
     ]);
   });
 
@@ -571,6 +574,34 @@ describe('redact() — the one SDK redactor', () => {
     for (const key of Object.keys(input)) expect(isCredentialKey(key)).toBe(true);
     // A field whose name merely CONTAINS a credential word but is not one stays readable.
     expect(isCredentialKey('keywords')).toBe(false);
+  });
+
+  it('masks the auth-header spellings added for pluggable auth', () => {
+    const out = redact({
+      bearer: 'B', jwt: 'J', auth_header: 'AH',
+      proxy_authorization: 'P', x_authorization: 'X', xapikey: 'K', hudu_api_key: 'K',
+      'x-tenant-key': 'T', keep: 'visible',
+    }) as Record<string, unknown>;
+    for (const key of ['bearer', 'jwt', 'auth_header', 'proxy_authorization', 'x_authorization', 'xapikey', 'hudu_api_key']) {
+      expect(out[key], key).toBe(REDACTED);
+      expect(isCredentialKey(key), key).toBe(true);
+    }
+    // A custom credential header is NOT credential-shaped by name; a strategy must declare it.
+    expect(out['x-tenant-key']).toBe('T');
+    expect(isCredentialKey('x-tenant-key')).toBe(false);
+    expect(redact({ 'x-tenant-key': 'T' }, ['X-Tenant-Key'])).toEqual({ 'x-tenant-key': REDACTED });
+    // No over-redaction: unrelated names stay readable.
+    expect(out.keep).toBe('visible');
+    expect(isCredentialKey('keywords')).toBe(false);
+    expect(isCredentialKey('owner')).toBe(false);
+  });
+
+  it('propagates the extra secret names through nested records and arrays', () => {
+    const out = redact(
+      { wrapper: { 'x-tenant-key': 'T', list: [{ 'x-tenant-key': 'T' }] } },
+      ['x-tenant-key'],
+    ) as Record<string, unknown>;
+    expect(out.wrapper).toEqual({ 'x-tenant-key': REDACTED, list: [{ 'x-tenant-key': REDACTED }] });
   });
 
   it('recurses through nested records and arrays, and passes non-plain values through', () => {

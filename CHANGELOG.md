@@ -5,6 +5,59 @@ All notable changes to **node-hudu** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] — 2026-09-15
+
+**Additive: pluggable auth strategies (issue #23).** No **existing** method signature changed and no
+return shape changed; the one signature that grew is `HuduClient`'s constructor, which gained an
+optional second parameter (the shared transport state that `withAuth()` passes so scopes share one
+rate budget). `API_KEY_HEADER`, `buildAuthHeaders` and `withAuth` are unchanged and still exported.
+
+### Added
+
+- **`AuthStrategy`** (`{ name, headers(ctx), secretHeaders? }`) with three built-ins: `ApiKeyAuth`
+  (the historical `x-api-key` header), `BearerTokenAuth` (`Authorization: Bearer <token>`, for a
+  Hudu-fronting bearer proxy) and `HeaderAuth` (any header set). The types `AuthContext` and
+  `AuthHeaders` are exported from the package root.
+- **`HuduConfig.auth`** as an alternative to `apiKey`. Exactly one of the two must be supplied;
+  supplying both, neither, or a non-strategy `auth` throws `CONFIG_ERROR` before any request, so a
+  request is never sent without a credential. `ResolvedConfig.auth` is always present, and
+  `ResolvedConfig.apiKey` is `''` when a strategy is used.
+- **`client.withAuth(strategyOrToken)`** — a scoped `HuduClient` that shares the parent's rate-limit
+  bucket, queue, logger and audit hook and differs only in its credential. A remote multi-user MCP
+  server can now resolve the end user's credential per request instead of holding one process-wide
+  key. A bare string is an API key; pass `new BearerTokenAuth(token)` for a bearer token.
+- **`RequestOptions.auth`** — a per-request credential override for callers that drive `HttpClient`
+  (and `download()`) directly.
+- **`AuthError`** (`AUTH_ERROR`, category `auth`, not retryable): the credential could not be resolved,
+  so no request was sent. Distinct from `UnauthorizedError` (the server rejected a credential that was
+  sent).
+- **An async-capable `headers(ctx)` hook**, resolved at most once per attempt, so a retry after
+  backoff can pick up a rotated credential.
+- **`examples/mcp-server-http.ts`** — a remote, multi-user MCP server reference: verify the caller's
+  bearer token, then scope the shared client to that caller's own per-request credential.
+
+### Changed
+
+- The transport builds its headers **inside** the retry loop instead of reusing one object built
+  before it. Precedence is unchanged (strategy headers < caller `headers` < `Accept` <
+  `Content-Type`), but duplicate header names that differ only in case now **collapse to one value**:
+  a caller that passed e.g. `{ accept: 'text/plain', Accept: 'application/json' }` used to get both
+  values combined into a single header (`accept: "text/plain, application/json"`) and now gets the one
+  winning value (`accept: "application/json"`). Name each header once, in its canonical casing.
+- Redaction is extended: the key names `bearer`, `jwt` and `auth_header` are masked, and the suffix
+  rules now also cover any `…authorization` / `…apikey` spelling. `redact()` and `isCredentialKey()`
+  take an optional extra-name list so a strategy's declared secret headers are masked too.
+- `HuduConfig.apiKey` is now optional **in the type only** (it must be present unless `auth` is set);
+  `ResolvedConfig.apiKey` stays a required `string`. No **existing** method signature changed; the
+  only addition is the optional second `HuduClient` constructor parameter noted above.
+
+### Notes
+
+- Backwards compatible: `apiKey` still works and still produces the same `x-api-key` request. The
+  release is a minor bump because everything it adds is additive.
+- Hudu's API document defines only `APIKeyHeader`. `BearerTokenAuth` targets a bearer-accepting proxy
+  in front of Hudu; the SDK never performs an OAuth flow.
+
 ## [0.3.0] — 2026-09-13
 
 **The SDK is now a deterministic execution layer for agents, and still a conventional typed client.**

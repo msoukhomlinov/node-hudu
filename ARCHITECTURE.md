@@ -51,7 +51,7 @@ src/
   client.ts                # HuduClient — top-level facade; wires all resources
   config.ts                # HuduConfig, HuduClientOptions, validation, defaults
   http.ts                  # HttpClient — fetch transport, URL/query building, envelope unwrap helpers
-  auth.ts                  # x-api-key header construction / injection
+  auth.ts                  # auth strategies + x-api-key header construction / injection
   errors.ts                # HuduError hierarchy + errorFromStatus factory
   pagination.ts            # Page<T>, paginate(), paginateItems(), collectAll(), toArray()
   logger.ts                # Logger interface + NoopLogger
@@ -137,8 +137,8 @@ test/
   client.test.ts           # HuduClient construction + wiring
   http.test.ts             # transport, envelopes, error mapping, retries
   pagination.test.ts       # paginate / paginateItems / collectAll
-  config.test.ts           # baseUrl/apiKey/rateLimit validation
-  auth.test.ts             # x-api-key header
+  config.test.ts           # baseUrl/apiKey|auth/rateLimit validation
+  auth.test.ts             # auth strategies, header shape, scope isolation
   errors.test.ts           # error hierarchy
   resources/
     companies.test.ts
@@ -197,8 +197,9 @@ import { HuduClient } from 'node-hudu';
 const hudu = new HuduClient({
   baseUrl: 'https://hudu.example.com',   // origin only — no path, no trailing slash
   apiKey: process.env.HUDU_API_KEY!,
+  // OR an auth strategy — exactly one of apiKey / auth:
+  // auth: new BearerTokenAuth(token),
   // optional:
-  // userAgent: 'my-mcp-server/1.2.0',
   // timeoutMs: 30_000,
   // maxRetries: 3,
   // logger: console,
@@ -216,6 +217,13 @@ import type { CompaniesListParams } from 'node-hudu';
 
 // Errors
 import { HuduError, NotFoundError, RateLimitError } from 'node-hudu';
+
+// Auth strategies (issue #23): the built-ins, or any object with { name, headers(ctx) }
+import { ApiKeyAuth, BearerTokenAuth, HeaderAuth } from 'node-hudu';
+
+// A per-request credential for the same transport state (advanced): a real HuduClient whose only
+// difference is its credential. A bare string means an API key, never a bearer token.
+const scoped = hudu.withAuth(new ApiKeyAuth(endUserKey));
 
 // Standalone resource construction (advanced)
 import { CompaniesResource, HttpClient } from 'node-hudu';
@@ -255,8 +263,10 @@ the primary barrel always re-exports everything.
 export interface HuduConfig {
   /** Origin only, e.g. 'https://hudu.example.com'. No path, no trailing slash. */
   baseUrl: string;
-  /** Hudu API key (scoped via Hudu Admin → Basic Information → API Keys). */
-  apiKey: string;
+  /** Hudu API key (scoped via Hudu Admin → Basic Information → API Keys). Required unless `auth`. */
+  apiKey?: string;
+  /** Pluggable credential source (issue #23): `ApiKeyAuth`, `BearerTokenAuth`, `HeaderAuth`, or own. */
+  auth?: AuthStrategy;
   /** defaults to '/api/v1' — the swagger basePath. */
   basePath?: string;
   /** HTTP timeout in ms. default 30_000. */
@@ -282,9 +292,15 @@ export interface RateLimitConfig {
 ### Validation rules (run in the `HuduClient` constructor)
 1. `baseUrl` must parse as an `http:`/`https:` URL; trailing `/` is stripped. Throwing a
    `HuduConfigError` (subclass of `HuduError`) on failure.
-2. `apiKey` must be a non-empty string; whitespace trimmed.
+2. Exactly ONE of `apiKey` / `auth` must be supplied. `apiKey`, when given, must be a non-empty
+   string (whitespace trimmed); a blank key counts as absent, so a blank key plus an `auth` strategy
+   is accepted while a blank key alone is refused. Supplying both, neither, a non-string `apiKey`,
+   or an `auth` that is not an `AuthStrategy` throws `HuduConfigError` (`CONFIG_ERROR`) before any
+   request. A built-in strategy constructor refuses a blank credential.
+   `resolveConfig` always returns a strategy: `new ApiKeyAuth(apiKey)` for a key client, the caller's
+   strategy otherwise (`ResolvedConfig.apiKey` is then `''`).
 3. `basePath` must start with `/`; defaults to `/api/v1`.
-4. `timeoutMs` and `maxRetries` must be non-negative integers.
+4. `timeoutMs` must be a positive integer (0 is rejected); `maxRetries` must be a non-negative integer.
 5. `rateLimit.perMinute` must be a positive integer (default 300). If the API returns 429
    and `maxRetries > 0`, the client honours `Retry-After` / `X-RateLimit-Reset` headers and
    backs off, regardless of the optional client-side limiter.
@@ -384,7 +400,11 @@ export interface RequestOptions {
 ### Behaviour
 1. **URL**: `${baseUrl}${basePath}${path}` with `query` appended via `URLSearchParams`.
    `null`/`undefined`/empty-string query values are omitted (clean request sanitisation).
-2. **Auth**: `auth.ts` injects `{ 'x-api-key': apiKey }` (merged with `headers`).
+2. **Auth**: the resolved `AuthStrategy` produces the credential headers — `ApiKeyAuth` (the
+   default) injects `{ 'x-api-key': apiKey }`, `BearerTokenAuth` injects `Authorization: Bearer`, and
+   `HeaderAuth` injects a fixed map. Precedence: strategy headers < caller `headers` < `Accept` <
+   `Content-Type`. `headers(ctx)` is resolved once per ATTEMPT, inside the retry loop, so a retry
+   after backoff can pick up a rotated credential; a dry run resolves nothing.
 3. **Timeout**: a whole-call deadline of `timeoutMs` bounds the ENTIRE request (connection,
    all retry attempts, backoff, and the rate-limit token wait). It is not a per-attempt
    timeout — callers configure the total budget for the call, so a slow-but-OK server or a
@@ -466,10 +486,40 @@ createReturns, paginated).
 export const API_KEY_HEADER = 'x-api-key';
 export function buildAuthHeaders(apiKey: string): Record<string, string>;
 export function withAuth(headers: Record<string,string> | undefined, apiKey: string): Record<string,string>;
+
+export type AuthHeaders = Record<string, string>;
+export interface AuthContext {
+  readonly method: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  readonly path: string;      // after basePath, e.g. '/companies/42'
+  readonly url: string;       // absolute, query string stripped
+  readonly correlationId: string;
+  readonly attempt: number;
+}
+export interface AuthStrategy {
+  readonly name: string;
+  headers(ctx: AuthContext): AuthHeaders | Promise<AuthHeaders>;
+  readonly secretHeaders?: readonly string[];
+}
+export class ApiKeyAuth implements AuthStrategy { constructor(apiKey: string); }
+export class BearerTokenAuth implements AuthStrategy { constructor(token: string); }
+export class HeaderAuth implements AuthStrategy {
+  constructor(headers: Record<string, string>, options?: { name?: string; secretHeaders?: readonly string[] });
+}
 ```
 
-- The only auth mechanism is the `x-api-key` header (`securityDefinitions.APIKeyHeader`).
-- Never log or echo the key; the logger redacts it.
+- The default mechanism is the `x-api-key` header (`securityDefinitions.APIKeyHeader`). A pluggable
+  `AuthStrategy` may produce any header set instead: `ApiKeyAuth` (default), `BearerTokenAuth`
+  (a Hudu-fronting proxy), `HeaderAuth`, or a caller's own `{ name, headers(ctx) }`.
+- `resolveConfig` accepts EXACTLY ONE of `apiKey` / `auth` and fails closed (`CONFIG_ERROR`)
+  otherwise; `ResolvedConfig.auth` is always present and is the only field the transport reads.
+- `headers(ctx)` is called at most once per ATTEMPT, never for a dry run, and never at construction.
+  The whole-call `timeoutMs` bounds it: a resolver that misses the budget fails with `AUTH_ERROR`
+  and no request is sent.
+- `client.withAuth(strategyOrToken)` returns a real `HuduClient` that shares the parent's
+  `TransportState` (one token bucket), logger and audit hook, and differs only in its credential.
+  A bare string is an API key.
+- Never log or echo the key or token; the logger redacts credential-shaped names, and a strategy's
+  `secretHeaders` extend that set for audit events.
 
 ---
 
@@ -836,9 +886,14 @@ export interface Logger {
 export const NoopLogger: Logger = {};
 ```
 - `HuduClient` and `HttpClient` accept an optional `Logger`. If not provided, `NoopLogger`.
-- `HttpClient` logs at `debug` per request (method, path, status, duration) and at `warn`
-  on retry/429. **API keys are redacted** (the auth header is never logged; the URL is
-  logged without query values that could carry sensitive data).
+- `HttpClient` logs at `debug` per request — the **method and the URL only** (no status, no duration;
+  the transport logs before the fetch, so no status exists yet) — and at `warn` on retry/429.
+  **Credential-shaped fields are masked** (no header value is ever logged; the URL is logged without
+  query values that could carry sensitive data). Masking matches key NAMES — including
+  `bearer`, `jwt`, `auth_header`, and any `…authorization` / `…apikey` spelling — and takes an
+  optional extra-name list so a strategy's `secretHeaders` are masked in audit events too. It is not
+  a value scrubber: a token embedded in free text is not detected, which is why the transport never
+  interpolates a strategy's error text.
 
 ---
 
@@ -862,16 +917,18 @@ export const NoopLogger: Logger = {};
 ## 16. Testing strategy
 
 - **HTTP layer (`http.test.ts`)**: with a mocked global `fetch` — URL construction,
-  `x-api-key` header, envelope pass-through, `204` → `undefined`, error mapping per status,
+  credential headers (default `x-api-key` and a strategy), envelope pass-through, `204` → `undefined`,
+  error mapping per status,
   retry/backoff on 429 with `Retry-After`, `AbortSignal` timeout, query sanitisation.
 - **Pagination (`pagination.test.ts`)**: multi-page walk, early stop on short page,
   paginated vs non-paginated resources, `collectAll` equivalence.
 - **Config/validation (`config.test.ts`)**: bad URLs, empty key, negative rate limit.
-- **Auth (`auth.test.ts`)**: header shape, redaction on log.
+- **Auth (`auth.test.ts`)**: header shape per strategy, credential isolation between scopes, the
+  fail-closed paths (`CONFIG_ERROR` / `AUTH_ERROR`), and redaction on log.
 - **Per-resource (`resources/*.test.ts`)**: use `test/__fixtures__/` JSON captured from
   `api-docs.json` (wrapped list, wrapped single, raw create, wrapped create, empty success)
   to assert each method returns the **normalised** plain type.
-- **Coverage gate** (vitest config): lines ≥ 97%, functions ≥ 94%, branches ≥ 83%, statements ≥ 97% (policy target 98% — gated a few points below measured: lines/stmts 98.36%, funcs 96.97%, branches 85.83%).
+- **Coverage gate** (vitest config): lines ≥ 97%, functions ≥ 94%, branches ≥ 83%, statements ≥ 97% (policy target 98% — gated a few points below measured). Measured on branch `feat/auth-strategy-23` (issue #23): lines 98.46%, statements 97.31%, functions 99.41%, branches 91.10% — all four gates pass.
 
 ---
 
@@ -892,7 +949,9 @@ export const NoopLogger: Logger = {};
 
 ## 18. Non-goals / explicit out-of-scope
 
-- No OAuth/cookie auth (API-key header only).
+- No OAuth FLOW and no cookie auth: the SDK produces request headers only and never exchanges a grant
+  or a refresh token. A deployment that fronts Hudu with a bearer-accepting proxy is supported through
+  `BearerTokenAuth`; Hudu's own document defines `APIKeyHeader` alone.
 - No automatic retry of `POST` (except where the endpoint is explicitly idempotent and the
   method documents it as retry-safe).
 - No binary/image decoding for MCP; `download`/`upload` methods return `Blob`/`File`

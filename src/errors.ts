@@ -262,6 +262,25 @@ export class HuduConfigError extends HuduError {
   }
 }
 
+/**
+ * A credential could not be resolved for a request (issue #23). Fail closed: no request was sent.
+ * Distinct from `UnauthorizedError` (the server rejected a credential that WAS sent).
+ */
+export class AuthError extends HuduError {
+  constructor(message: string, options?: HuduErrorOptions) {
+    super(message, {
+      ...options,
+      code: 'AUTH_ERROR',
+      // Explicit: categoryForStatus() defaults a status-less code to 'validation'.
+      category: 'auth',
+      retryable: false,
+      suggestedAction:
+        options?.suggestedAction ??
+        'Fix the auth strategy: headers(ctx) must return at least one non-empty header.',
+    });
+  }
+}
+
 export class HuduNetworkError extends HuduError {
   constructor(message: string, url?: string, options?: { category?: ErrorCategory; retryable?: boolean }) {
     // Category/retryability derive from the NETWORK_ERROR code (network, retryable);

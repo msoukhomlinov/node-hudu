@@ -1,8 +1,10 @@
 /**
  * HuduClient — top-level facade wiring all resource clients.
  */
+import { ApiKeyAuth, isAuthStrategy, type AuthStrategy } from './auth.js';
 import { resolveConfig, type HuduConfig, type ResolvedConfig } from './config.js';
-import { HttpClient, type RateLimitStatus } from './http.js';
+import { HuduConfigError } from './errors.js';
+import { HttpClient, type RateLimitStatus, type TransportState } from './http.js';
 import { Operations } from './operations/index.js';
 import {
   ActivityLogsResource, ApiInfoResource, ArticlesResource, AssetLayoutsResource,
@@ -63,9 +65,23 @@ export class HuduClient {
   readonly config: ResolvedConfig;
   private readonly http: HttpClient;
 
-  constructor(config: HuduConfig) {
-    this.config = resolveConfig(config);
-    this.http = new HttpClient(this.config);
+  /**
+   * @param config Public configuration. Validated with `resolveConfig` unless `internal` is given.
+   * @param internal INTERNAL, not part of the public API (issue #23): a pre-resolved config plus the
+   * transport state to share. Used by `withAuth()` so a scoped client reuses the parent's rate-limit
+   * bucket, queue, logger and audit hook instead of re-deriving them.
+   */
+  constructor(
+    config: HuduConfig,
+    internal?: { readonly config: ResolvedConfig; readonly state: TransportState },
+  ) {
+    if (internal) {
+      this.config = internal.config;
+      this.http = new HttpClient(internal.config, internal.state);
+    } else {
+      this.config = resolveConfig(config);
+      this.http = new HttpClient(this.config);
+    }
 
     this.companies = new CompaniesResource(this.http);
     this.articles = new ArticlesResource(this.http);
@@ -115,5 +131,27 @@ export class HuduClient {
    */
   getRateLimitStatus(): RateLimitStatus {
     return this.http.getRateLimitStatus();
+  }
+
+  /**
+   * A client that shares this client's transport state (rate-limit bucket, queue, logger, audit
+   * hook, timeouts, retries) and differs only in its credential. Cheap enough for a per-request
+   * scope: a full client costs ~4 µs, so a per-request scope is a negligible fraction of a network
+   * round trip.
+   *
+   * A bare string is an **API key** (`ApiKeyAuth`), preserving the SDK's historical wire shape —
+   * never a bearer token. For a bearer token, pass one explicitly:
+   * `client.withAuth(new BearerTokenAuth(token))`.
+   *
+   * Throws `HuduConfigError` (code `CONFIG_ERROR`) for an empty string or a non-strategy object;
+   * issues no request.
+   */
+  withAuth(strategyOrToken: AuthStrategy | string): HuduClient {
+    const auth: unknown = typeof strategyOrToken === 'string' ? new ApiKeyAuth(strategyOrToken) : strategyOrToken;
+    if (!isAuthStrategy(auth)) {
+      throw new HuduConfigError('withAuth requires an AuthStrategy or a non-empty apiKey string');
+    }
+    const config: ResolvedConfig = { ...this.config, apiKey: '', auth };
+    return new HuduClient(config as unknown as HuduConfig, { config, state: this.http.state });
   }
 }

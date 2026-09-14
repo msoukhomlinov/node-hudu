@@ -10,10 +10,11 @@ export { HttpClient } from './http.js';
 export { unwrapByKey, unwrapList } from './http.js';
 export type { RequestOptions, DryRunRequest } from './http.js';
 
-export { buildAuthHeaders, withAuth, API_KEY_HEADER } from './auth.js';
+export { buildAuthHeaders, withAuth, API_KEY_HEADER, ApiKeyAuth, BearerTokenAuth, HeaderAuth } from './auth.js';
+export type { AuthStrategy, AuthContext, AuthHeaders } from './auth.js';
 
 export {
-  HuduError, HuduConfigError, HuduNetworkError, BadRequestError, UnauthorizedError,
+  HuduError, HuduConfigError, HuduNetworkError, AuthError, BadRequestError, UnauthorizedError,
   ForbiddenError, NotFoundError, MethodNotAllowedError, NotAcceptableError,
   UnprocessableEntityError, RateLimitError, ServerError, errorFromStatus, isHuduError,
   // Agent-execution-layer additions (additive: no existing code value changed).

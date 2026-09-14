@@ -250,6 +250,7 @@ carries a machine-readable `code` and, when available, the raw `status`, `url`, 
 | Error class | HTTP status | `code` |
 |-------------|-------------|--------|
 | `HuduConfigError` | — (config validation) | `CONFIG_ERROR` |
+| `AuthError` | — (credential could not be resolved; not retryable) | `AUTH_ERROR` |
 | `HuduNetworkError` | — (transport/timeout) | `NETWORK_ERROR` |
 | `BadRequestError` | 400 | `BAD_REQUEST` |
 | `UnauthorizedError` | 401 | `UNAUTHORIZED` |
@@ -291,7 +292,8 @@ import { isHuduError } from 'node-hudu';
 ```ts
 const hudu = new HuduClient({
   baseUrl: 'https://hudu.example.com',   // REQUIRED: origin only
-  apiKey: 'YOUR_API_KEY',                // REQUIRED: non-empty string
+  apiKey: 'YOUR_API_KEY',                // REQUIRED unless `auth` is set: non-empty string
+  // auth: new BearerTokenAuth(token),    // alternative to apiKey - EXACTLY ONE of the two
   basePath: '/api/v1',                   // optional, default '/api/v1'
   timeoutMs: 30_000,                     // optional, default 30000
   maxRetries: 3,                         // optional, default 3 (0 disables)
@@ -303,12 +305,102 @@ const hudu = new HuduClient({
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `baseUrl` | `string` | — (**required**) | Origin only (`https://…`); no path or trailing slash. |
-| `apiKey` | `string` | — (**required**) | Hudu API key; sent as the `x-api-key` header. |
+| `apiKey` | `string` | — (**required unless `auth` is set**) | Hudu API key; sent as the `x-api-key` header. Trimmed; a blank key is refused. |
+| `auth` | `AuthStrategy` | — (**required unless `apiKey` is set**) | Credential source. `new ApiKeyAuth(key)`, `new BearerTokenAuth(token)`, `new HeaderAuth(headers)`, or your own `{ name, headers(ctx) }`. Supply exactly one of `apiKey`/`auth`. |
 | `basePath` | `string` | `'/api/v1'` | The Swagger base path; override only for custom installs. |
 | `timeoutMs` | `number` | `30000` | Max time for the ENTIRE request call (network request, retries, backoff, and rate-limit wait) in ms. |
 | `maxRetries` | `number` | `3` | Retry budget for idempotent requests on 429/5xx (`0` disables). |
 | `logger` | `Logger` | no-op | Optional request/log sink; API keys are always redacted. |
 | `rateLimit` | `RateLimitConfig` | off | Optional client-side token bucket (`perMinute` default 300, `burst` defaults to `perMinute`). |
+
+---
+
+## Per-request credentials
+
+A client takes **exactly one** credential source: `apiKey` (the default, sent as `x-api-key`) or an
+`auth` strategy. Supplying both, neither, or a malformed strategy throws `CONFIG_ERROR` during
+construction — a request is never sent without a credential.
+
+**Header precedence.** Every request merges headers in one fixed order, and a **later writer wins**:
+
+```
+strategy headers  <  caller-supplied `headers`  <  `Accept`  <  `Content-Type`
+```
+
+So a caller-supplied `headers` value overrides the credential the strategy produced — it can suppress
+the credential entirely. Never forward untrusted headers into `headers`. Header names are
+case-insensitive, so duplicate names that differ only in case collapse to ONE value (the later
+writer's value, keeping its own spelling); the earlier duplicate is dropped, not combined.
+
+```ts
+import { HuduClient, ApiKeyAuth, BearerTokenAuth, HeaderAuth } from 'node-hudu';
+
+// The default: apiKey becomes an ApiKeyAuth, so nothing changes for existing code.
+const byKey = new HuduClient({ baseUrl, apiKey: process.env.HUDU_API_KEY! });
+
+// A strategy instead of apiKey:
+const byBearer = new HuduClient({
+  baseUrl,
+  auth: new BearerTokenAuth(process.env.HUDU_PROXY_TOKEN!),
+});
+
+const byHeader = new HuduClient({
+  baseUrl,
+  auth: new HeaderAuth({ 'x-tenant-key': tenantKey }),
+});
+
+// Any object with a name and a headers(ctx) method is a strategy. headers() may be async, and it is
+// called at most once per ATTEMPT (so a retry after backoff can pick up a rotated credential):
+const rotated = new HuduClient({
+  baseUrl,
+  auth: {
+    name: 'vault',
+    async headers(ctx) {
+      return { 'x-api-key': await vault.read('hudu', ctx.correlationId) };
+    },
+  },
+});
+```
+
+### Scoped clients — one client, many credentials
+
+`client.withAuth(strategyOrToken)` returns a real `HuduClient` that shares the parent's transport
+state — the rate-limit bucket, the queue, the logger, the audit hook, the timeouts — and differs only
+in its credential. It is cheap enough to build per request, which is what a remote, multi-user MCP
+server needs: one process-wide client, and one scope per caller.
+
+```ts
+import { HuduClient, ApiKeyAuth, BearerTokenAuth } from 'node-hudu';
+
+const hudu = new HuduClient({ baseUrl, apiKey: process.env.HUDU_API_KEY! });
+
+// Per request, in your server's own auth layer:
+const scoped = hudu.withAuth(new ApiKeyAuth(endUserApiKey));
+const companies = await scoped.companies.listAll();
+
+// A bare string is an API KEY (the SDK's historical wire shape) — never a bearer token:
+const same = hudu.withAuth(endUserApiKey);
+
+// For a bearer token, say so explicitly:
+const proxied = hudu.withAuth(new BearerTokenAuth(sessionToken));
+```
+
+Scopes are isolated by construction: two scopes in flight carry their own credential, and nothing is
+mutated on the parent — `withAuth(a).withAuth(b)` sends `b`. Because the scopes share one token
+bucket, a fan-out through several scopes still honours the single rate limit.
+
+`withAuth` throws `CONFIG_ERROR` for an empty string or a non-strategy; `download()` and every
+resource method use the scope's strategy with no extra wiring. If a credential cannot be produced for
+an attempt — the strategy throws, returns blank headers, or does not resolve inside the call's
+remaining `timeoutMs` — the call fails with `AuthError` (`AUTH_ERROR`, category `auth`, not retried)
+and **no request is sent**. That is distinct from `UnauthorizedError` (401): there the server rejected
+a credential that was sent. Redaction is unchanged in spirit: the logger masks credential-shaped
+names, and a strategy may declare extra secret header names (`secretHeaders`) to extend it for audit
+events.
+
+> A runnable reference for the per-request case is
+> [`examples/mcp-server-http.ts`](examples/mcp-server-http.ts) — a remote, multi-user MCP server that
+> verifies its caller's bearer token, then scopes the shared client to that caller's own credential.
 
 ---
 
