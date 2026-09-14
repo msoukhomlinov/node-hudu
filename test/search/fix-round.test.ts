@@ -403,6 +403,43 @@ describe('F-L7 — a failed background build is named, not swallowed', () => {
   });
 });
 
+describe('full-walk transparency — a caller can tell an incremental warm from a full walk', () => {
+  it('reports lastFullAt and fullWalkDue from the generation that produced the hits', async () => {
+    const { harness: h, deps } = harness({ articles: [1, 2, 3, 4].map((id) => article(id, `zebra ${id}`, 'alpha body')), pageSize: 10 });
+    const engine = new KnowledgeSearchEngine(deps, {
+      pageSize: 10,
+      maxIndexPages: 10,
+      maxDocsScored: 2000,
+      maxResponseBytes: BYTES.small,
+      ttlMs: 30,
+      fullRefreshEvery: 1,
+    });
+
+    // Nothing has run yet: no full walk, and one is due.
+    expect(engine.status().lastFullAt).toBeNull();
+    expect(engine.status().fullWalkDue).toBe(true);
+
+    const full = await engine.search('zebra', { refresh: true });
+    expect(full.meta.index.lastFullAt).toBeDefined();
+    expect(full.meta.index.fullWalkDue).toBe(false);
+    expect(full.meta.index.staleness).toBe('fresh');
+
+    // An incremental warm alone cannot clear `fullWalkDue`: it never sees the whole collection, so a
+    // deletion stays invisible. Waiting past ttlMs * fullRefreshEvery makes the answer say so, even
+    // though `staleness` still reads `fresh` right after the build.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    h.corpus.articles = h.corpus.articles.filter((row) => row.id !== 4);
+    const incremental = await engine.search('zebra', { tier: 'index' });
+    expect(incremental.meta.index.staleness).toBe('fresh');
+    expect(incremental.meta.index.fullWalkDue).toBe(true);
+
+    // The full walk is what makes the index see the deletion, and it clears the flag.
+    const refreshed = await engine.search('zebra', { refresh: true });
+    expect(refreshed.meta.index.fullWalkDue).toBe(false);
+    expect(refreshed.meta.index.docs.articles?.indexed).toBe(3);
+  });
+});
+
 describe('F-L3 — the partial REASON belongs to the build, the partial STATE to the index', () => {
   it('stops repeating the truncated-walk reason once a build completes', async () => {
     const { deps } = harness({ articles: [1, 2, 3, 4, 5, 6].map((id) => article(id, `zebra ${id}`, 'alpha body')) });

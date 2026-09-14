@@ -223,8 +223,10 @@ export class AssetsResource extends BaseResource<Asset> {
    * the plain overload accepts `{ include: [...] }` too and would otherwise shadow this one.
    */
   list(companyId: number, params: CompanyAssetsListParams & { include: AssetIncludeGroup[] }): AsyncIterable<AssetWithIncludes>;
+  /** A widened array (`string[]`, or a value the compiler cannot narrow): the runtime fetches whatever valid groups it holds, so the union is the honest type (see `list`). */
+  list(companyId: number, params: CompanyAssetsListParams & { include: readonly string[] }): AsyncIterable<Asset | AssetWithIncludes>;
   list(companyId: number, params?: CompanyAssetsListParams): AsyncIterable<Asset>;
-  list(companyId: number, params?: CompanyAssetsListParams & { include?: AssetIncludeGroup[] }): AsyncIterable<Asset | AssetWithIncludes> {
+  list(companyId: number, params?: CompanyAssetsListParams & { include?: readonly string[] }): AsyncIterable<Asset | AssetWithIncludes> {
     requireCompanyId(companyId, 'assets.list');
     const groups = validateIncludeGroups(params?.include, 'assets.list');
     const vendor = this.vendorParams(params);
@@ -234,8 +236,10 @@ export class AssetsResource extends BaseResource<Asset> {
 
   /** `include` attaches the named relation groups to each asset (each group = its own fetch); keep before the plain overload (see `list`). */
   async listAll(companyId: number, params: CompanyAssetsListParams & { include: AssetIncludeGroup[] }): Promise<AssetWithIncludes[]>;
+  /** A widened array (`string[]`, or a value the compiler cannot narrow): the runtime fetches whatever valid groups it holds, so the union is the honest type (see `list`). */
+  async listAll(companyId: number, params: CompanyAssetsListParams & { include: readonly string[] }): Promise<Asset[] | AssetWithIncludes[]>;
   async listAll(companyId: number, params?: CompanyAssetsListParams): Promise<Asset[]>;
-  async listAll(companyId: number, params?: CompanyAssetsListParams & { include?: AssetIncludeGroup[] }): Promise<Asset[] | AssetWithIncludes[]> {
+  async listAll(companyId: number, params?: CompanyAssetsListParams & { include?: readonly string[] }): Promise<Asset[] | AssetWithIncludes[]> {
     requireCompanyId(companyId, 'assets.listAll');
     const groups = validateIncludeGroups(params?.include, 'assets.listAll');
     const vendor = this.vendorParams(params);
@@ -246,8 +250,10 @@ export class AssetsResource extends BaseResource<Asset> {
 
   /** `include` attaches the named relation groups to each asset in each page; keep before the plain overload (see `list`). */
   listPages(companyId: number, params: CompanyAssetsListParams & { include: AssetIncludeGroup[] }): AsyncIterable<Page<AssetWithIncludes>>;
+  /** A widened array (`string[]`, or a value the compiler cannot narrow): the runtime fetches whatever valid groups it holds, so the union is the honest type (see `list`). */
+  listPages(companyId: number, params: CompanyAssetsListParams & { include: readonly string[] }): AsyncIterable<Page<Asset> | Page<AssetWithIncludes>>;
   listPages(companyId: number, params?: CompanyAssetsListParams): AsyncIterable<Page<Asset>>;
-  listPages(companyId: number, params?: CompanyAssetsListParams & { include?: AssetIncludeGroup[] }): AsyncIterable<Page<Asset> | Page<AssetWithIncludes>> {
+  listPages(companyId: number, params?: CompanyAssetsListParams & { include?: readonly string[] }): AsyncIterable<Page<Asset> | Page<AssetWithIncludes>> {
     requireCompanyId(companyId, 'assets.listPages');
     const groups = validateIncludeGroups(params?.include, 'assets.listPages');
     const vendor = this.vendorParams(params);
@@ -393,8 +399,10 @@ export class AssetsResource extends BaseResource<Asset> {
 
   /** `include` attaches the named relation groups to each asset (each group = its own fetch); keep before the plain overload (see `list`). */
   async listAllAcrossCompanies(params: AccountAssetsListParams & { include: AssetIncludeGroup[] }): Promise<AssetWithIncludes[]>;
+  /** A widened array (`string[]`, or a value the compiler cannot narrow): the runtime fetches whatever valid groups it holds, so the union is the honest type (see `list`). */
+  async listAllAcrossCompanies(params: AccountAssetsListParams & { include: readonly string[] }): Promise<Asset[] | AssetWithIncludes[]>;
   async listAllAcrossCompanies(params?: AccountAssetsListParams): Promise<Asset[]>;
-  async listAllAcrossCompanies(params?: AccountAssetsListParams & { include?: AssetIncludeGroup[] }): Promise<Asset[] | AssetWithIncludes[]> {
+  async listAllAcrossCompanies(params?: AccountAssetsListParams & { include?: readonly string[] }): Promise<Asset[] | AssetWithIncludes[]> {
     // The account-wide list accepts a `company_id` narrowing; a supplied one is
     // validated like a company-scoped path segment so a caller bug is named here.
     if (params !== undefined && 'company_id' in params) {
@@ -409,9 +417,11 @@ export class AssetsResource extends BaseResource<Asset> {
 
   /** `include` attaches the named relation groups to each asset (each group = its own fetch); keep before the plain overload (see `list`). */
   listAcrossCompanies(params: AccountAssetsListParams & { include: AssetIncludeGroup[] }): AsyncIterable<AssetWithIncludes>;
+  /** A widened array (`string[]`, or a value the compiler cannot narrow): the runtime fetches whatever valid groups it holds, so the union is the honest type (see `list`). */
+  listAcrossCompanies(params: AccountAssetsListParams & { include: readonly string[] }): AsyncIterable<Asset | AssetWithIncludes>;
   /** Stream account-wide assets across pages (GET /assets). */
   listAcrossCompanies(params?: AccountAssetsListParams): AsyncIterable<Asset>;
-  listAcrossCompanies(params?: AccountAssetsListParams & { include?: AssetIncludeGroup[] }): AsyncIterable<Asset | AssetWithIncludes> {
+  listAcrossCompanies(params?: AccountAssetsListParams & { include?: readonly string[] }): AsyncIterable<Asset | AssetWithIncludes> {
     const groups = validateIncludeGroups(params?.include, 'assets.listAcrossCompanies');
     const vendor = this.vendorParams(params);
     const base = paginateItems<Asset>((page, pageSize) => this.fetchAccountPage(vendor, page, pageSize), this.accountPaginationOpts(vendor));
@@ -420,9 +430,11 @@ export class AssetsResource extends BaseResource<Asset> {
 
   /** `include` attaches the named relation groups to each asset in each page; keep before the plain overload (see `list`). */
   listAcrossCompaniesPages(params: AccountAssetsListParams & { include: AssetIncludeGroup[] }): AsyncIterable<Page<AssetWithIncludes>>;
+  /** A widened array (`string[]`, or a value the compiler cannot narrow): the runtime fetches whatever valid groups it holds, so the union is the honest type (see `list`). */
+  listAcrossCompaniesPages(params: AccountAssetsListParams & { include: readonly string[] }): AsyncIterable<Page<Asset> | Page<AssetWithIncludes>>;
   /** Iterate account-wide asset pages (GET /assets). */
   listAcrossCompaniesPages(params?: AccountAssetsListParams): AsyncIterable<Page<Asset>>;
-  listAcrossCompaniesPages(params?: AccountAssetsListParams & { include?: AssetIncludeGroup[] }): AsyncIterable<Page<Asset> | Page<AssetWithIncludes>> {
+  listAcrossCompaniesPages(params?: AccountAssetsListParams & { include?: readonly string[] }): AsyncIterable<Page<Asset> | Page<AssetWithIncludes>> {
     const groups = validateIncludeGroups(params?.include, 'assets.listAcrossCompaniesPages');
     const vendor = this.vendorParams(params);
     const base = paginate<Asset>((page, pageSize) => this.fetchAccountPage(vendor, page, pageSize), this.accountPaginationOpts(vendor));
@@ -496,11 +508,15 @@ export class AssetsResource extends BaseResource<Asset> {
    */
   async search(query: string, opts: { expand: true; include: AssetIncludeGroup[]; limit?: number; company_id?: number; primary_serial?: string }): Promise<AssetWithIncludes[]>;
   /** `include` attaches the named relation groups to each compact summary (each group = its own fetch). */
+  /** A widened array: see `list`. */
+  async search(query: string, opts: { expand: true; include: readonly string[]; limit?: number; company_id?: number; primary_serial?: string }): Promise<Asset[] | AssetWithIncludes[]>;
   async search(query: string, opts: { include: AssetIncludeGroup[]; limit?: number; company_id?: number; primary_serial?: string }): Promise<AssetSummaryWithIncludes[]>;
+  /** A widened array: see `list`. */
+  async search(query: string, opts: { include: readonly string[]; limit?: number; company_id?: number; primary_serial?: string }): Promise<AssetSummaryWithIncludes[] | AssetWithIncludes[] | AssetSummary[] | Asset[]>;
   /** `expand: true` returns the full records. */
   async search(query: string, opts: { expand: true; limit?: number; company_id?: number; primary_serial?: string }): Promise<Asset[]>;
   async search(query: string, opts?: AssetSearchOptions & { include?: AssetIncludeGroup[] }): Promise<AssetSummary[] | Asset[] | AssetSummaryWithIncludes[] | AssetWithIncludes[]>;
-  async search(query: string, opts?: AssetSearchOptions & { include?: AssetIncludeGroup[] }): Promise<AssetSummary[] | Asset[] | AssetSummaryWithIncludes[] | AssetWithIncludes[]> {
+  async search(query: string, opts?: AssetSearchOptions & { include?: readonly string[] }): Promise<AssetSummary[] | Asset[] | AssetSummaryWithIncludes[] | AssetWithIncludes[]> {
     const size = helperLimit(opts?.limit);
     if (typeof query !== 'string' || query.trim().length === 0) {
       throw new HuduConfigError('assets.search requires a non-empty query');

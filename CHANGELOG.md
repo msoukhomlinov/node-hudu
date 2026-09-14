@@ -78,8 +78,24 @@ error code changed meaning. `test/public-surface.test.ts` proves that against th
   into `npm test` (`test/negative-fixture.test.ts`, which runs `scripts/check-negative-fixture.mjs`
   and asserts the gate exits non-zero on the fixture with minimum rule-based failure counts).
 
+### Added — search transparency and include-group pins (post-PR-22 follow-ups)
+
+- `meta.index.lastFullAt` / `meta.index.fullWalkDue` (and the same two fields on `status()`) let a caller
+  tell an incremental warm from a full re-walk: `staleness` alone cannot, because any build resets the
+  age. `fullWalkDue` reuses the engine's own predicate, so a caller reads the judgement the automatic
+  path acts on.
+- The relation include-groups are now pinned on both halves of the contract: `src/type-assertions.ts`
+  (compile-time assertions, checked by `tsc --noEmit`, so a loosened inference fails the gate) and the
+  `include-groups` rule in `check-capabilities` (an include-bearing operation must publish the four group
+  names and its include-expanded output variant).
+
 ### Fixed
 
+- A WIDENED `include` array (`string[]`, or any value the compiler cannot narrow to the group names) no
+  longer infers the plain shape on the asset list methods. `ListParams`' index signature let the plain
+  overload match, so the type said `Asset` while the runtime fetched the includes the array held; the
+  widened case now resolves to the honest union (`Asset[] | AssetWithIncludes[]`), and `assets.search`
+  accepts such an array where it previously failed to compile.
 - The cross-resource helpers' `resources` parameter (`operations.resolveAny`,
   `operations.searchAcrossResources`) now projects as a string enum of the eight searchable
   resources instead of an unresolvable object item that the invoke validator refused in both

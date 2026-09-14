@@ -144,6 +144,12 @@ export interface KnowledgeIndexMeta {
    * newer content.
    */
   indexChangedSinceScore: boolean;
+  /** When the last FULL re-walk completed, or absent when none has (a capped or incremental index has
+   * never seen the whole collection, so deletions in it are invisible). */
+  lastFullAt?: string;
+  /** Whether a full re-walk is due now (`lastFullAt` older than `ttlMs * fullRefreshEvery`, or none
+   * yet). `staleness` says the data is old; this says whether the index has recently seen EVERYTHING. */
+  fullWalkDue: boolean;
 }
 
 /** The bound that shortened this answer. */

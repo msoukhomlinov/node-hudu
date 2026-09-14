@@ -140,6 +140,12 @@ export interface EngineStatus {
   docs: Record<string, KnowledgeIndexDocStat>;
   watermarks: Record<string, string | null>;
   requestsLastBuild: number;
+  /** When the last FULL walk completed (ISO), or null when none has. A caller can tell a full walk
+   * from an incremental warm with this — `staleness` alone cannot, because any build resets the age. */
+  lastFullAt: string | null;
+  /** Whether a full re-walk is due now: with `lastFullAt`, the answer to "has the index seen the whole
+   * corpus recently, deletions included?". */
+  fullWalkDue: boolean;
   /**
    * The last BACKGROUND build failure, or null. The automatic path cannot throw at its caller, so
    * the failure is reported here (and in `meta.errors`) instead of being swallowed; the next
@@ -164,6 +170,8 @@ interface ScoredGeneration {
   builtAt: number | null;
   /** The index's content version when this generation was scored (see `KnowledgeIndex.version`). */
   indexVersion: number;
+  /** When the last FULL walk completed, for this generation (null = none has completed yet). */
+  lastFullAt: number | null;
   partial: boolean;
   buildTruncated: boolean;
 }
@@ -285,6 +293,8 @@ export class KnowledgeSearchEngine {
       docs: this.docStats(this.index.docs),
       watermarks: { ...this.watermarks },
       requestsLastBuild: this.requestsLastBuild,
+      lastFullAt: this.lastFullAt === null ? null : new Date(this.lastFullAt).toISOString(),
+      fullWalkDue: this.isFullWalkDue(this.lastFullAt),
       lastBuildError: this.buildError === null ? null : { ...this.buildError },
     };
   }
@@ -319,10 +329,14 @@ export class KnowledgeSearchEngine {
       }
       return;
     }
-    // The attempt bound was reached: the caller asked for a full re-walk and this answer is built on
-    // a completed build that may be incremental. The CALLER's own holder is flagged, so the notice
-    // reaches exactly the request that was downgraded (a shared counter would need an argument about
-    // concurrent callers to say the same thing).
+    // SAFETY NET, not a routine path: this is reached only if `MAX_WARM_ATTEMPTS` successive in-flight
+    // builds were all incremental. It is unreached by construction today — `building` is assigned before
+    // any await and the starting caller registers its continuation first, so a `full` caller that just
+    // awaited a build finds none in flight and runs its own walk on attempt 1 (staged interleavings
+    // never exhausted the bound). The requirement it serves ("`refresh: true` gets a full walk or an
+    // explicit note") therefore holds WITHOUT it; the notice exists so that a future change which makes
+    // the bound reachable cannot silently downgrade a refresh. The CALLER's own holder is flagged, so a
+    // concurrent search can never consume another call's notice.
     if (wantFull && opts.downgraded !== undefined) opts.downgraded.value = true;
   }
 
@@ -1071,6 +1085,7 @@ export class KnowledgeSearchEngine {
       truncatedDocs: this.truncatedDocs,
       builtAt: this.builtAt,
       indexVersion: this.index.version,
+      lastFullAt: this.lastFullAt,
       partial: this.partial,
       buildTruncated: this.lastBuildTruncated,
     };
@@ -1091,6 +1106,8 @@ export class KnowledgeSearchEngine {
         staleness: status.staleness,
         docs: status.docs,
         indexChangedSinceScore: false,
+        ...(status.lastFullAt !== null ? { lastFullAt: status.lastFullAt } : {}),
+        fullWalkDue: status.fullWalkDue,
       };
     }
     const ageMs = generation.builtAt === null ? null : Math.max(0, this.now() - generation.builtAt);
@@ -1103,6 +1120,8 @@ export class KnowledgeSearchEngine {
       staleness: ageMs === null ? 'unknown' : ageMs > this.config.ttlMs ? 'stale' : 'fresh',
       docs: generation.stats,
       indexChangedSinceScore: this.index.version !== generation.indexVersion,
+      ...(generation.lastFullAt !== null ? { lastFullAt: new Date(generation.lastFullAt).toISOString() } : {}),
+      fullWalkDue: this.isFullWalkDue(generation.lastFullAt),
     };
   }
 
@@ -1120,10 +1139,19 @@ export class KnowledgeSearchEngine {
     return 'Answered from Hudu search alone (title and custom-field values): article body terms were NOT searched. Call again once the index is warm, or pass tier "index".';
   }
 
-  /** Full re-walk decision: deletes are invisible to `updated_at`, so this is required periodically. */
+  /**
+   * Whether a full re-walk is due as of `lastFullAt`: deletes are invisible to `updated_at`, so this is
+   * required periodically. One predicate for both the automatic path (`needsFullRefresh`) and what an
+   * answer reports (`fullWalkDue`), so a caller reads the same judgement the engine acts on.
+   */
+  private isFullWalkDue(lastFullAt: number | null): boolean {
+    if (lastFullAt === null) return true;
+    return this.now() - lastFullAt > this.config.ttlMs * this.config.fullRefreshEvery;
+  }
+
+  /** Full re-walk decision (see `isFullWalkDue`). */
   needsFullRefresh(): boolean {
-    if (this.lastFullAt === null) return true;
-    return this.now() - this.lastFullAt > this.config.ttlMs * this.config.fullRefreshEvery;
+    return this.isFullWalkDue(this.lastFullAt);
   }
 }
 
