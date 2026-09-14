@@ -277,6 +277,41 @@ describe('F-L1 (revision) — an in-place re-upsert cannot change a snapshot the
   });
 });
 
+describe('index metadata describes the generation its hits came from', () => {
+  it('does not contradict its own snippet when a build lands during the vendor await', async () => {
+    const { harness: h, deps } = harness({ articles: [1, 2].map((id) => article(id, `zebra ${id}`, 'platypus body')) });
+    const engine = new KnowledgeSearchEngine(deps, {
+      pageSize: 10,
+      maxIndexPages: 10,
+      bounds: { maxDocBytes: 256 * 1024, maxIndexTextBytes: 400, maxDocs: 100 },
+      maxDocsScored: 2000,
+      maxResponseBytes: BYTES.small,
+    });
+    await engine.search('zebra', { refresh: true }); // gen-1: both bodies are indexed
+
+    h.vendorGate.arm();
+    const racy = engine.search('platypus', { tier: 'auto' });
+    // A build lands while the racy search is parked, and its arrival pushes the text budget over the
+    // cap, so the LIVE index evicts the bodies the racy search already scored.
+    h.corpus.articles = [
+      ...h.corpus.articles,
+      ...Array.from({ length: 6 }, (_v, i) => article(10 + i, `zebra extra ${i}`, 'platypus body '.repeat(8))),
+    ];
+    const rebuild = engine.search('zebra', { refresh: true });
+    await rebuild;
+    h.vendorGate.open();
+    const result = await racy;
+
+    const hit = result.hits.find((candidate) => candidate.id === 1);
+    expect(hit?.snippet?.text ?? '').toContain('platypus'); // the scored generation's body
+    // Reporting the LIVE index here would say "no bodies indexed" beside that snippet.
+    expect(result.meta.index.docs.articles?.bodiesIndexed).toBeGreaterThan(0);
+    expect(result.meta.reasons).not.toContain('body-evicted');
+    // The answer still says the index has moved on since it scored.
+    expect(result.meta.index.rebuiltAfterScore).toBe(true);
+  });
+});
+
 describe('eviction — reported with its own signal, never as the byte cap', () => {
   it('counts the evicted bodies and tells the caller that retrying will not help', async () => {
     const { harness: h, deps } = harness({});

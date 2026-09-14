@@ -163,7 +163,11 @@ export class KnowledgeIndex {
    * every reader consistent.
    *
    * MEMORY: a live reader pins the documents of the generation it scored, so peak held text is the
-   * index account (≤ `maxIndexTextBytes`) plus ONE generation per in-flight search — the previous
+   * index account plus ONE generation per in-flight search. The account itself is normally at or
+   * below `maxIndexTextBytes`; when NO document remains whose text can be released (every remaining
+   * long text is one the account cannot free) the loop stops with the account still above the bound,
+   * because there is nothing left to evict — the bound is a limit on what eviction may take, not a
+   * promise that unreleasable text disappears — the previous
    * revision of whatever that search scored, released when it calls `endRead` (the engine does that
    * in a `finally`, so a reader's lifetime is one search call). Those pinned generations are
    * deliberately NOT charged to the text budget: they cannot be freed while the reader lives, so
@@ -445,6 +449,19 @@ export class KnowledgeIndex {
   touch(docIndex: number): void {
     this.clock += 1;
     this.accessClock.set(docIndex, this.clock);
+  }
+
+  /**
+   * Note that a document was read, addressed by KEY.
+   *
+   * A coordinate belongs to the generation it was scored in: after a rebuild reorders or caps the
+   * array, touching that number would mark a DIFFERENT document as recently used, and the next
+   * eviction would then drop the body of the document the caller actually received. A document that
+   * is no longer in the index is simply not touched.
+   */
+  touchDocument(resource: string, id: number): void {
+    const docIndex = this.byKey.get(`${resource}:${id}`);
+    if (docIndex !== undefined) this.touch(docIndex);
   }
 
   private holdText(doc: SearchDoc): void {

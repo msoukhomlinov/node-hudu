@@ -148,6 +148,26 @@ export interface EngineStatus {
   lastBuildError: { code: string; message: string } | null;
 }
 
+/**
+ * The document generation a search scored against, plus the facts that describe IT.
+ *
+ * A build can complete during the vendor await, so the live index may describe different data than the
+ * hits came from. Every value here is captured at score time and reported by the answer, so a response
+ * cannot say "no bodies are indexed" beside a snippet taken from one.
+ */
+interface ScoredGeneration {
+  docs: readonly SearchDoc[];
+  stats: Record<string, KnowledgeIndexDocStat>;
+  bodiesIndexed: number;
+  bodiesEvicted: number;
+  truncatedDocs: number;
+  builtAt: number | null;
+  /** Which build produced this generation: a COUNTER, so a same-millisecond rebuild is still visible. */
+  buildSeq: number;
+  partial: boolean;
+  buildTruncated: boolean;
+}
+
 interface ScoredRow {
   docIndex: number;
   score: number;
@@ -232,6 +252,8 @@ export class KnowledgeSearchEngine {
   private readonly config: EngineConfig;
   private readonly now: () => number;
   private builtAt: number | null = null;
+  /** Completed builds, monotonically: identifies a generation without relying on clock resolution. */
+  private buildSeq = 0;
   private lastFullAt: number | null = null;
   private building: Promise<void> | null = null;
   /** Whether the in-flight build (if any) re-walks everything — a `full` caller must not dedup onto an incremental. */
@@ -262,7 +284,7 @@ export class KnowledgeSearchEngine {
       builtAt: this.builtAt === null ? null : new Date(this.builtAt).toISOString(),
       ageMs,
       staleness: ageMs === null ? 'unknown' : ageMs > this.config.ttlMs ? 'stale' : 'fresh',
-      docs: this.docStats(),
+      docs: this.docStats(this.index.docs),
       watermarks: { ...this.watermarks },
       requestsLastBuild: this.requestsLastBuild,
       lastBuildError: this.buildError === null ? null : { ...this.buildError },
@@ -364,33 +386,35 @@ export class KnowledgeSearchEngine {
     // The scored rows carry `docIndex` coordinates, and the vendor tier below is awaited between
     // scoring and hydration: capture the document ARRAY the rows were scored against, so a build
     // that completes during that await can never re-point a coordinate at another document.
-    let scoredDocs: readonly SearchDoc[] = [];
-    if (useIndex) {
-      indexUsed = true;
-      const scored = this.scoreIndex(terms, { exactOnly, maxDocsScored: this.config.maxDocsScored });
-      scoredDocs = scored.docs;
-      candidatesScored = scored.candidatesScored;
-      if (scored.capped) {
-        reasons.push('candidate-cap');
-        truncation = {
-          reason: 'candidate-cap',
-          detail: `${scored.candidatesScored} candidate documents exceeded maxDocsScored=${this.config.maxDocsScored}`,
-          candidatesScored: scored.candidatesScored,
-        };
-      }
-      for (const row of scored.rows) scoredRows.push(row);
-    }
-
-    if (terms.length === 0) {
-      reasons.push('no-scoreable-term');
-    }
-
+    let generation: ScoredGeneration | null = null;
     let hits: { hits: KnowledgeSearchHit[]; truncation: KnowledgeSearchTruncation | undefined; candidatesScored: number };
+    // The latch try starts BEFORE scoring: `scoreIndex` calls `beginRead`, and a throw inside the
+    // synchronous scan must release the reader exactly like a throw during hydration.
     try {
+      if (useIndex) {
+        indexUsed = true;
+        const scored = this.scoreIndex(terms, { exactOnly, maxDocsScored: this.config.maxDocsScored });
+        generation = scored.generation;
+        candidatesScored = scored.candidatesScored;
+        if (scored.capped) {
+          reasons.push('candidate-cap');
+          truncation = {
+            reason: 'candidate-cap',
+            detail: `${scored.candidatesScored} candidate documents exceeded maxDocsScored=${this.config.maxDocsScored}`,
+            candidatesScored: scored.candidatesScored,
+          };
+        }
+        for (const row of scored.rows) scoredRows.push(row);
+      }
+
+      if (terms.length === 0) {
+        reasons.push('no-scoreable-term');
+      }
+
       const vendorRows = await this.runVendor(query, scope, terms, limit, errors, requests, vendorMs, exactOnly);
       scanned = candidatesScored + vendorRows.length;
       for (const row of vendorRows) vendorScored.push(row);
-      hits = this.hydrate(scoredRows, scoredDocs, vendorScored, {
+      hits = this.hydrate(scoredRows, generation?.docs ?? [], vendorScored, {
         terms,
         limit,
         snippetChars,
@@ -417,7 +441,7 @@ export class KnowledgeSearchEngine {
       });
     }
 
-    const bodiesIndexed = this.bodiesIndexed();
+    const bodiesIndexed = generation?.bodiesIndexed ?? this.bodiesIndexed();
     const bodyCapable = indexUsed && bodiesIndexed > 0;
     let degraded: KnowledgeSearchDegraded | null = null;
     if (!indexUsed) {
@@ -427,7 +451,7 @@ export class KnowledgeSearchEngine {
           : { reason: 'vendor-only', advice: this.vendorOnlyAdvice() };
       reasons.push(degraded.reason === 'vendor-only' ? 'vendor-only' : 'body-not-indexed');
     } else if (!bodyCapable) {
-      const evicted = this.bodiesEvicted();
+      const evicted = generation?.bodiesEvicted ?? 0;
       // The index exists but holds no body text: when the TEXT BUDGET evicted it, waiting cannot
       // help, so the advice names the real cause and the bound that would restore it.
       degraded = {
@@ -436,14 +460,14 @@ export class KnowledgeSearchEngine {
       };
       reasons.push(evicted > 0 ? 'body-evicted' : 'body-not-indexed');
     }
-    if (this.lastBuildTruncated) reasons.push('index-partial');
-    if (this.bodiesEvicted() > 0) reasons.push('body-evicted');
+    if (generation?.buildTruncated ?? this.lastBuildTruncated) reasons.push('index-partial');
+    if ((generation?.bodiesEvicted ?? 0) > 0) reasons.push('body-evicted');
     if (downgraded.value) {
       // `refresh: true` promises a full re-walk, so a caller must be told when contention stopped it
       // from being one: the index may still hold a record the vendor has deleted.
       reasons.push('refresh-downgraded');
     }
-    if (this.truncatedDocs > 0) reasons.push('body-truncated');
+    if ((generation?.truncatedDocs ?? this.truncatedDocs) > 0) reasons.push('body-truncated');
 
     const uniqueReasons = [...new Set(reasons)];
     const complete = uniqueReasons.length === 0;
@@ -459,14 +483,17 @@ export class KnowledgeSearchEngine {
       complete,
       reasons: uniqueReasons,
       ...(truncation ? { truncation } : {}),
-      index: this.indexMeta(),
+      index: this.indexMeta(generation),
       degraded,
       errors,
       failed: errors,
       timings: { vendorMs: vendorMs.value, localMs, requests: requests.count },
       scoreScope: indexUsed ? 'cross-resource' : 'per-resource',
       bytes: 0,
-      indexAge: this.builtAt === null ? null : Math.max(0, this.now() - this.builtAt),
+      indexAge: (() => {
+        const builtAt = generation === null ? this.builtAt : generation.builtAt;
+        return builtAt === null ? null : Math.max(0, this.now() - builtAt);
+      })(),
     };
     const result: KnowledgeSearchResult = { hits: hits.hits, meta };
     this.enforceResponseBudget(result, {
@@ -535,7 +562,7 @@ export class KnowledgeSearchEngine {
   private scoreIndex(
     terms: readonly string[],
     opts: { exactOnly: boolean; maxDocsScored: number },
-  ): { rows: ScoredRow[]; candidatesScored: number; capped: boolean; docs: readonly SearchDoc[] } {
+  ): { rows: ScoredRow[]; candidatesScored: number; capped: boolean; generation: ScoredGeneration } {
     this.index.ensureFinalized();
     // Scoring is synchronous, so this snapshot and the postings it was derived from are consistent
     // for the whole scan; the caller keeps it for hydration and releases it with `endRead` (see
@@ -590,9 +617,10 @@ export class KnowledgeSearchEngine {
     }
     const all = [...rows.values()];
     const candidatesScored = all.length;
-    if (candidatesScored <= opts.maxDocsScored) return { rows: all, candidatesScored, capped: false, docs };
+    const generation = this.captureGeneration(docs);
+    if (candidatesScored <= opts.maxDocsScored) return { rows: all, candidatesScored, capped: false, generation };
     all.sort((a, b) => b.score - a.score);
-    return { rows: all.slice(0, opts.maxDocsScored), candidatesScored, capped: true, docs };
+    return { rows: all.slice(0, opts.maxDocsScored), candidatesScored, capped: true, generation };
   }
 
   private expansionsFor(
@@ -668,7 +696,8 @@ export class KnowledgeSearchEngine {
       const coverage = row.terms.length / queryTerms;
       const score = row.score * (0.5 + 0.5 * coverage) * prior;
       if (ctx.minScore !== undefined && score < ctx.minScore) continue;
-      this.index.touch(row.docIndex);
+      // By KEY, never by the snapshot coordinate: the live array may have been rebuilt under it.
+      this.index.touchDocument(doc.resource, doc.id);
       const vendor = vendorByKey.get(`${doc.resource}:${doc.id}`);
       const hit: KnowledgeSearchHit = {
         resource: doc.resource as KnowledgeResource,
@@ -958,6 +987,7 @@ export class KnowledgeSearchEngine {
     this.index.finalize();
     this.requestsLastBuild = requests.count;
     this.builtAt = this.now();
+    this.buildSeq += 1;
   }
 
   /**
@@ -1001,22 +1031,17 @@ export class KnowledgeSearchEngine {
     return this.index.docs.filter((doc) => doc.fields.body !== undefined).length;
   }
 
-  /** Documents whose body text was evicted under the text budget, so body terms cannot reach them. */
-  private bodiesEvicted(): number {
-    let evicted = 0;
-    for (const doc of this.index.docs) if (this.index.evictedDocs.has(doc)) evicted += 1;
-    return evicted;
-  }
-
-  private docStats(): Record<string, KnowledgeIndexDocStat> {
+  private docStats(docs: readonly SearchDoc[]): Record<string, KnowledgeIndexDocStat> {
     const out: Record<string, KnowledgeIndexDocStat> = {};
     const blank = (resource: string): KnowledgeIndexDocStat => ({
       indexed: 0, bodiesIndexed: 0, bodiesTruncated: 0, bodiesEvicted: 0,
       totalKnown: this.totalKnown[resource] ?? null,
     });
-    for (const doc of this.index.docs) {
+    for (const doc of docs) {
       const stat = out[doc.resource] ?? (out[doc.resource] = blank(doc.resource));
       stat.indexed += 1;
+      // A body that was cut at `maxDocBytes` and yielded no text is indexed WITHOUT a body field, so
+      // the two counters describe different things and legitimately overlap.
       if (doc.fields.body !== undefined) stat.bodiesIndexed += 1;
       if (doc.longTruncated) stat.bodiesTruncated += 1;
       if (this.index.evictedDocs.has(doc)) stat.bodiesEvicted += 1;
@@ -1027,14 +1052,55 @@ export class KnowledgeSearchEngine {
     return out;
   }
 
-  private indexMeta(): KnowledgeIndexMeta {
-    const status = this.status();
+  /** Capture everything the answer must report about the generation its hits came from. */
+  private captureGeneration(docs: readonly SearchDoc[]): ScoredGeneration {
+    const stats = this.docStats(docs);
+    let bodiesIndexed = 0;
+    let bodiesEvicted = 0;
+    for (const stat of Object.values(stats)) {
+      bodiesIndexed += stat.bodiesIndexed;
+      bodiesEvicted += stat.bodiesEvicted;
+    }
     return {
-      state: status.state,
-      ...(status.builtAt !== null ? { builtAt: status.builtAt } : {}),
-      ...(status.ageMs !== null ? { ageMs: status.ageMs } : {}),
-      staleness: status.staleness,
-      docs: status.docs,
+      docs,
+      stats,
+      bodiesIndexed,
+      bodiesEvicted,
+      truncatedDocs: this.truncatedDocs,
+      builtAt: this.builtAt,
+      buildSeq: this.buildSeq,
+      partial: this.partial,
+      buildTruncated: this.lastBuildTruncated,
+    };
+  }
+
+  /**
+   * The index block of an answer. With a scored generation it describes THAT generation (the data the
+   * hits came from), plus `rebuiltAfterScore` when the index has moved on since; without one (the
+   * vendor tier) it describes the live index, which is all the answer knows.
+   */
+  private indexMeta(generation: ScoredGeneration | null): KnowledgeIndexMeta {
+    if (generation === null) {
+      const status = this.status();
+      return {
+        state: status.state,
+        ...(status.builtAt !== null ? { builtAt: status.builtAt } : {}),
+        ...(status.ageMs !== null ? { ageMs: status.ageMs } : {}),
+        staleness: status.staleness,
+        docs: status.docs,
+        rebuiltAfterScore: false,
+      };
+    }
+    const ageMs = generation.builtAt === null ? null : Math.max(0, this.now() - generation.builtAt);
+    const state: KnowledgeIndexMeta['state'] =
+      generation.builtAt === null ? 'cold' : generation.partial ? 'partial' : 'warm';
+    return {
+      state,
+      ...(generation.builtAt !== null ? { builtAt: new Date(generation.builtAt).toISOString() } : {}),
+      ...(ageMs !== null ? { ageMs } : {}),
+      staleness: ageMs === null ? 'unknown' : ageMs > this.config.ttlMs ? 'stale' : 'fresh',
+      docs: generation.stats,
+      rebuiltAfterScore: this.buildSeq !== generation.buildSeq,
     };
   }
 

@@ -111,7 +111,8 @@ export interface KnowledgeIndexDocStat {
   indexed: number;
   /**
    * Documents whose body text is indexed — INCLUDING bodies that were cut at `maxDocBytes`, so this
-   * count and `bodiesTruncated` overlap (a cut body is indexed AND truncated).
+   * count and `bodiesTruncated` overlap (a cut body is indexed AND truncated). They do not coincide:
+   * a body cut down to nothing is truncated without being indexed.
    */
   bodiesIndexed: number;
   /** Documents whose raw input was cut at the byte cap (`maxDocBytes`): raise that cap to see more. */
@@ -124,13 +125,24 @@ export interface KnowledgeIndexDocStat {
   totalKnown: number | null;
 }
 
-/** The index's own state, so a caller can tell a fresh answer from a stale one. */
+/**
+ * The index's own state, so a caller can tell a fresh answer from a stale one.
+ *
+ * With a scored generation (`scoreScope: 'cross-resource'`) every figure here describes the generation
+ * the hits came from, so an answer cannot report metadata that contradicts its own hits.
+ */
 export interface KnowledgeIndexMeta {
   state: 'cold' | 'warm' | 'partial' | 'refreshing';
   builtAt?: string;
   ageMs?: number;
   staleness: 'fresh' | 'stale' | 'unknown';
   docs: Record<string, KnowledgeIndexDocStat>;
+  /**
+   * True when a build completed after this answer scored its rows, so the index has moved on since:
+   * the figures above still describe the generation the hits came from, and a later query will use
+   * the newer one.
+   */
+  rebuiltAfterScore: boolean;
 }
 
 /** The bound that shortened this answer. */
