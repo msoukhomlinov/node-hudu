@@ -14,7 +14,7 @@ import type {
 import type { Matcher, MatcherUpdate } from '../types/index.js';
 import type { MatcherIdentifier } from '../types/matcher.js';
 import {
-  decideResolution, helperLimit, identifierError,
+  ambiguityProbeLimit, decideResolution, helperLimit, identifierError,
   refuseExpectedUpdatedAtOutsideUpdate, requirePositiveId,
 } from './agent-layer-helpers.js';
 
@@ -130,7 +130,7 @@ export class MatchersResource extends BaseResource<Matcher> {
     await this.boundedScan<Matcher>(this.pageFetcher(filter), {
       match: (record) => {
         if (record.sync_id === syncId) matches.push(record);
-        return matches.length >= limit;
+        return matches.length >= ambiguityProbeLimit(limit);
       },
       label: (record) => record.name,
       idOf: (record) => record.id,
@@ -183,8 +183,9 @@ export class MatchersResource extends BaseResource<Matcher> {
     }
     const matches: Matcher[] = [];
     // An id is unique, so that kind stops at its first match; sync_id/identifier can
-    // legitimately match several, so they collect up to `limit` before deciding.
-    const stopAfter = id !== undefined ? 1 : limit;
+    // legitimately match several, so they collect up to `limit` (never below the
+    // ambiguity probe) before deciding.
+    const stopAfter = id !== undefined ? 1 : ambiguityProbeLimit(limit);
     const scan = await this.boundedScan<Matcher>(this.pageFetcher(filter), {
       match: (record) => {
         if (decide(record)) matches.push(record);

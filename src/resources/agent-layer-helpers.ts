@@ -33,6 +33,21 @@ export function helperLimit(limit: number | undefined, method: string): number {
   return value;
 }
 
+/** A uniqueness decision needs at least two matches: one cannot distinguish "unique" from "first of several" (policy §6). */
+export const AMBIGUITY_PROBE_SIZE = 2;
+
+/**
+ * Stop size for a resolving collector's `boundedScan` match callback (policy §6): the scan
+ * stops once `limit` matches are collected, but NEVER below `AMBIGUITY_PROBE_SIZE`, because
+ * the ambiguity decision must not depend on how many records the caller asked to see. With
+ * `limit: 1` the collector still collects a second match, so a duplicate throws
+ * RESOLUTION_AMBIGUOUS instead of resolving the first duplicate as unique; the caller's
+ * `limit` applies only to what the helper RETURNS (a list helper slices AFTER the decision).
+ */
+export function ambiguityProbeLimit(limit: number): number {
+  return Math.max(limit, AMBIGUITY_PROBE_SIZE);
+}
+
 /**
  * Structured refusal of an identifier kind the vendor cannot filter on, naming the
  * kinds that ARE accepted (policy §6). Guessing an identifier kind is how an SDK

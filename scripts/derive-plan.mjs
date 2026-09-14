@@ -353,7 +353,7 @@ for (const r of RES_ORDER) {
     workflowResource: prev?.workflowResource ?? false,
     group: GROUP_OF[r],
     // What the vendor's `?search=` filter ACTUALLY covers on this resource's list endpoint (probed
-    // live, `.run/design/search/mcp-surface.md`). null = the resource declares no search vendor
+    // live). null = the resource declares no search vendor
     // filter, so `?search=` is ignored by the vendor and page 1 comes back unfiltered. Declared
     // here so the generated `mode:"resources"` table can never drift from the plan.
     searchCovers: prev?.searchCovers ?? SEARCH_COVERS[r] ?? null,

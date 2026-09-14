@@ -58,6 +58,16 @@
 //                            every group), unlike related-dangling
 //   pagination                a record's pagination is absent, or claims nonPaginated AND mode "page"
 //   inputSchema-name          an inputSchema field object omits the `name` key CapabilityField declares
+//   inputSchema-unresolved-item  a published inputSchema node is a NAMED unresolvable object: an
+//                            `items` projection that carries a typeName (the generator keeps the
+//                            item's name ONLY when resolution failed — resolvable and inline items
+//                            project detail-less by design), or any node the generator marked
+//                            resolved:false. A bare {"type":"object"} item without a name is the
+//                            detail-drop of a resolvable/inline type and is tolerated; platform
+//                            binary names (Blob/File/Buffer/...) are excluded, mirroring the
+//                            generator's opaqueSchemaNodes policy. Covers inputSchema only: the
+//                            pre-dispatch validator contract is the input surface, and generic
+//                            output shapes (typeName R) are out of scope
 //   test-title               a row at "tested": no test with that exact title in the named file
 //   implemented-tests        a row at "implemented": empty tests array
 //   test-row                 a tests[] entry without id/file/title
@@ -592,6 +602,29 @@ if (registry) {
     for (const [fieldName, fieldNode] of Object.entries(rec.inputSchema ?? {})) {
       walkFields(fieldNode, `CAPABILITY_REGISTRY['${name}'].inputSchema`, fieldName);
     }
+    // A NAMED unresolvable object must never be published in a public inputSchema (F5/SEC-1):
+    // the invoke validator would refuse exactly the shape the schema tells a caller to pass.
+    // Two visible markers: (1) an `items` node that carries a typeName — the generator's item
+    // projection keeps a name only when resolution failed, so a named object item IS an
+    // unresolvable-and-named emission; (2) any node the generator marked resolved:false.
+    // Platform binary names are excluded, mirroring the generator's own opaqueSchemaNodes policy.
+    const UNRESOLVED_PLATFORM_OPAQUE = new Set(['Blob', 'File', 'Buffer', 'ArrayBuffer', 'ReadableStream', 'Uint8Array', 'Date']);
+    const walkUnresolved = (node, jsonPath, key) => {
+      if (!node || typeof node !== 'object') return;
+      const named = typeof node.typeName === 'string' && node.typeName.length > 0
+        && !node.typeName.startsWith('{') && !node.typeName.startsWith('(');
+      const platformOpaque = named && UNRESOLVED_PLATFORM_OPAQUE.has(node.typeName);
+      const marked = node.resolved === false;
+      const unresolvedItem = key === 'items' && node.type === 'object' && named && !platformOpaque;
+      if (unresolvedItem || marked) {
+        fail('inputSchema-unresolved-item', `${jsonPath}.${key}`,
+          `${name}: a published inputSchema ${key === 'items' ? 'item' : 'node'} is a named unresolvable object (typeName=${JSON.stringify(node.typeName ?? null)}) — the generator could not resolve it, so the invoke validator would refuse the shape the schema advertises`);
+      }
+      for (const [k, v] of Object.entries(node)) if (v && typeof v === 'object') walkUnresolved(v, jsonPath, k);
+    };
+    for (const [fieldName, fieldNode] of Object.entries(rec.inputSchema ?? {})) {
+      walkUnresolved(fieldNode, `CAPABILITY_REGISTRY['${name}'].inputSchema`, fieldName);
+    }
     const outSchema = rec.outputSchema && typeof rec.outputSchema === 'object' ? rec.outputSchema : {};
     const claimsDrops = 'drops' in outSchema || 'dropsUnresolved' in outSchema;
     if (rec.compact) {
@@ -860,7 +893,6 @@ if (catalogData) {
 //                            this method" over plan+registry prose; this one asks "can a CLIENT call
 //                            this tool/operation" and also covers the projection's own text. Neither
 //                            subsumes the other, and a name can pass one and fail the other.
-//                            Evidence, counts and the injection proof: `.run/live/impl-remaining-batch.md`.
 const TOOL_NAME_REF = /\bhudu_[a-z0-9_]+\b/g;
 const REF_PATTERN_TAIL = new Set(['<', '*', '_']);
 if (catalogData) {
@@ -940,10 +972,10 @@ if (catalogData) {
 
 
 // ---------------------------------------------------------------- the one search tool's contract
-// Three rules for `hudu_search` (design `.run/design/search/single-search-tool.md` 5.3). They are
+// Three rules for `hudu_search` (single-search-tool design, section 5.3). They are
 // mechanical, they read the SAME artifacts the tool is built from (the plan, the projected schema,
 // the generated catalog), and each of them was proven non-vacuous by injecting the violation it
-// names and watching this checker exit 1 (see `.run/live/impl-search-tool.md`).
+// names and watching this checker exit 1.
 const searchManifestRel = path.relative(ROOT, MANIFEST_PATH);
 const planSearchRows = operations.filter((r) => r.search === 'search');
 const planSearchSet = new Set(

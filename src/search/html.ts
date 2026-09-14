@@ -2,7 +2,8 @@
  * HTML -> clean plain text for the search pipeline.
  *
  * INTERNAL module: deliberately NOT re-exported from the package root (that would
- * change the public surface). Design of record: `.run/design/search/html-and-snippets.md` S2.
+ * change the public surface). Design of record: `html-and-snippets.md` S2 (search design doc,
+ * kept outside this repo).
  *
  * The scanner is a single O(n) character pass and never uses a tag-stripping regex.
  * Measured against real Hudu markup, `<[^>]*>` stripping is wrong in four ways:

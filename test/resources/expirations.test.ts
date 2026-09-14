@@ -355,10 +355,13 @@ describe('ExpirationsResource — resolution edge cases', () => {
 describe('ExpirationsResource — bounded candidate collection', () => {
   afterEach(() => clearFetch());
 
-  it('stops at the first collected candidate when limit is 1', async () => {
+  it('never resolves a duplicate expiration as unique, whatever limit the caller passes', async () => {
     const spy = routed({ '/api/v1/expirations': expirationPages([expiration(), expiration({ id: 2 })]) });
-    const res = await makeClient().expirations.resolve({ resource_type: 'Asset', resource_id: 77 }, { limit: 1 });
-    expect(res).toMatchObject({ id: 1 });
+    // Both records match the filter: `limit` bounds the RESULT, never the uniqueness decision, so
+    // a single collected candidate can no longer be reported as the unique match.
+    const err = await rejection(makeClient().expirations.resolve({ resource_type: 'Asset', resource_id: 77 }, { limit: 1 }));
+    expect(err.code).toBe('RESOLUTION_AMBIGUOUS');
+    expect(err.resourceIds).toEqual([1, 2]);
     expect(spy.calls).toHaveLength(1);
   });
 });

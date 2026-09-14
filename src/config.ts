@@ -22,7 +22,8 @@ export interface ResolutionConfig {
 }
 
 /** Bounds and freshness of the in-memory knowledge search index (design of record:
- * `.run/design/search/engine-design.md` S1.2/S1.3/S5). Every bound is reported when it bites. */
+ * `engine-design.md` S1.2/S1.3/S5, the search design doc, kept outside this repo). Every bound is
+ * reported when it bites. */
 export interface SearchConfig {
   /** Raw HTML cap per article, in bytes; a longer body is cut and flagged. Default 262144 (256 KB). */
   maxDocBytes?: number;
@@ -49,7 +50,13 @@ export interface SearchConfig {
 export interface HuduConfig {
   /** Origin only, e.g. 'https://hudu.example.com'. No path, no trailing slash. */
   baseUrl: string;
-  /** Hudu API key. */
+  /**
+   * Hudu API key.
+   *
+   * Leading/trailing whitespace is TRIMMED (a key copied from a dashboard or a `.env` file often
+   * carries some). A key that is only whitespace is refused with `CONFIG_ERROR` rather than sent as
+   * an empty header — the failure is closed, never a request without credentials.
+   */
   apiKey: string;
   /** Defaults to '/api/v1' — the swagger basePath. */
   basePath?: string;

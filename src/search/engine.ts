@@ -1,9 +1,10 @@
 /**
  * The knowledge search engine behind `operations.searchKnowledge`.
  *
- * Design of record: `.run/design/search/engine-design.md` (tiers S1.4, matching S2, scoring S3,
- * output S4) and `.run/design/search/PROPOSAL.md` S2-S4, S14.2. INTERNAL module: the SDK's public
- * surface gains one operation (`searchKnowledge`), nothing here is exported from the root barrel.
+ * Design of record: `engine-design.md` (tiers S1.4, matching S2, scoring S3, output S4) and
+ * `PROPOSAL.md` S2-S4, S14.2 — search design docs, kept outside this repo. INTERNAL module: the
+ * SDK's public surface gains one operation (`searchKnowledge`), nothing here is exported from the
+ * root barrel.
  *
  * Tiers, exactly as designed:
  *   T0 vendor-only      - the vendor fan-out, no local re-rank (reachable when a query has no
@@ -17,7 +18,7 @@
  * `degraded: { reason: 'body-not-indexed' }` rather than a bare empty list: Hudu's own `search`
  * never matches article body content, so a silent empty answer would be a lie by omission.
  */
-import { HuduConfigError } from '../errors.js';
+import { HuduConfigError, HuduError } from '../errors.js';
 import type { Page } from '../pagination.js';
 import type {
   KnowledgeIndexDocStat,
@@ -51,6 +52,13 @@ import { compactOfQuery, editDistanceAtMost, pluralVariants, splitQueryTerms, to
 
 const K1 = 1.2;
 const B = 0.75;
+
+/**
+ * How many times `warm` re-checks for a build that satisfies a `full` request before proceeding:
+ * awaiting an in-flight incremental build must never be reported as a completed full re-walk, but
+ * a continuous stream of concurrent callers must not spin there forever either.
+ */
+const MAX_WARM_ATTEMPTS = 5;
 
 /** Resource prior: articles first, assets second, everything else behind them. */
 const RESOURCE_PRIOR: Record<string, number> = { articles: 1.0, assets: 0.9 };
@@ -132,6 +140,12 @@ export interface EngineStatus {
   docs: Record<string, KnowledgeIndexDocStat>;
   watermarks: Record<string, string | null>;
   requestsLastBuild: number;
+  /**
+   * The last BACKGROUND build failure, or null. The automatic path cannot throw at its caller, so
+   * the failure is reported here (and in `meta.errors`) instead of being swallowed; the next
+   * successful build clears it.
+   */
+  lastBuildError: { code: string; message: string } | null;
 }
 
 interface ScoredRow {
@@ -220,8 +234,13 @@ export class KnowledgeSearchEngine {
   private builtAt: number | null = null;
   private lastFullAt: number | null = null;
   private building: Promise<void> | null = null;
+  /** Whether the in-flight build (if any) re-walks everything — a `full` caller must not dedup onto an incremental. */
+  private buildingFull = false;
+  /** The last background-build failure, surfaced instead of swallowed. Cleared by the next success. */
+  private buildError: { code: string; message: string } | null = null;
   private partial = false;
-  private pagesTruncated = false;
+  /** True when the MOST RECENT build truncated: reported for that answer, while `partial` is the index's own state. */
+  private lastBuildTruncated = false;
   private truncatedDocs = 0;
   private readonly watermarks: Record<string, string | null> = { articles: null, assets: null };
   private readonly totalKnown: Record<string, number | null> = { articles: null, assets: null };
@@ -246,6 +265,7 @@ export class KnowledgeSearchEngine {
       docs: this.docStats(),
       watermarks: { ...this.watermarks },
       requestsLastBuild: this.requestsLastBuild,
+      lastBuildError: this.buildError === null ? null : { ...this.buildError },
     };
   }
 
@@ -254,24 +274,48 @@ export class KnowledgeSearchEngine {
    * walk — the ONLY honest way to notice a deletion, because `updated_at` cannot see one.
    */
   async warm(opts: { full?: boolean } = {}): Promise<void> {
-    const existing = this.building;
-    if (existing !== null) {
-      await existing;
+    const wantFull = opts.full === true;
+    // Dedup, but never DOWNGRADE: awaiting an in-flight incremental build does not satisfy a
+    // caller that asked for a full re-walk (only a full walk can notice a deletion). A bounded
+    // number of attempts keeps a stream of concurrent callers from spinning here forever; past
+    // the bound the answer proceeds on the last completed build, and `meta.index.staleness`
+    // still reports its real age.
+    for (let attempt = 0; attempt < MAX_WARM_ATTEMPTS; attempt += 1) {
+      const existing = this.building;
+      if (existing !== null) {
+        const inFlightFull = this.buildingFull;
+        await existing;
+        if (!wantFull || inFlightFull) return;
+        continue;
+      }
+      const run = this.build(wantFull);
+      this.building = run;
+      this.buildingFull = wantFull;
+      try {
+        await run;
+      } finally {
+        this.building = null;
+        this.buildingFull = false;
+      }
       return;
-    }
-    const run = this.build(opts.full === true);
-    this.building = run;
-    try {
-      await run;
-    } finally {
-      this.building = null;
     }
   }
 
   /** Start a warm build without waiting for it (the cold-client path must not block a tool call). */
   private startBackgroundWarm(): void {
     if (this.building !== null) return;
-    void this.warm({ full: false }).catch(() => undefined);
+    // The automatic path is the ONLY one that keeps deletions out of the index over a long
+    // session: `updated_at` cannot see a deletion, so a periodic FULL re-walk is required, and
+    // this is where it has to be scheduled.
+    const full = this.needsFullRefresh();
+    void this.warm({ full }).catch((error: unknown) => {
+      // The caller is a tool call that must not block, so the failure is RECORDED, never dropped:
+      // `status().lastBuildError` and `meta.errors` name it for the next answer.
+      this.buildError = {
+        code: errorCode(error),
+        message: error instanceof Error ? error.message : String(error),
+      };
+    });
   }
 
   /** The whole search: tier selection, scoring, snippets, and the honesty metadata. */
@@ -308,9 +352,14 @@ export class KnowledgeSearchEngine {
     }
 
     const useIndex = tier !== 'vendor' && this.builtAt !== null;
+    // The scored rows carry `docIndex` coordinates, and the vendor tier below is awaited between
+    // scoring and hydration: capture the document ARRAY the rows were scored against, so a build
+    // that completes during that await can never re-point a coordinate at another document.
+    let scoredDocs: readonly SearchDoc[] = [];
     if (useIndex) {
       indexUsed = true;
       const scored = this.scoreIndex(terms, { exactOnly, maxDocsScored: this.config.maxDocsScored });
+      scoredDocs = scored.docs;
       candidatesScored = scored.candidatesScored;
       if (scored.capped) {
         reasons.push('candidate-cap');
@@ -331,7 +380,7 @@ export class KnowledgeSearchEngine {
     scanned = candidatesScored + vendorRows.length;
     for (const row of vendorRows) vendorScored.push(row);
 
-    const hits = this.hydrate(scoredRows, vendorScored, {
+    const hits = this.hydrate(scoredRows, scoredDocs, vendorScored, {
       terms,
       limit,
       snippetChars,
@@ -344,6 +393,15 @@ export class KnowledgeSearchEngine {
       truncation,
     });
     truncation = hits.truncation;
+    if (this.buildError !== null) {
+      // Symmetry with the explicit path (which throws): a failed automatic build is announced in
+      // the answer rather than leaving the caller to infer it from a cold index.
+      errors.push({
+        resource: 'index',
+        code: this.buildError.code,
+        message: `background index build failed: ${this.buildError.message}`,
+      });
+    }
 
     const bodiesIndexed = this.bodiesIndexed();
     const bodyCapable = indexUsed && bodiesIndexed > 0;
@@ -358,7 +416,7 @@ export class KnowledgeSearchEngine {
       degraded = { reason: 'body-not-indexed', advice: this.bodyNotIndexedAdvice() };
       reasons.push('body-not-indexed');
     }
-    if (this.pagesTruncated) reasons.push('index-partial');
+    if (this.lastBuildTruncated) reasons.push('index-partial');
     if (this.truncatedDocs > 0) reasons.push('body-truncated');
 
     const uniqueReasons = [...new Set(reasons)];
@@ -385,7 +443,11 @@ export class KnowledgeSearchEngine {
       indexAge: this.builtAt === null ? null : Math.max(0, this.now() - this.builtAt),
     };
     const result: KnowledgeSearchResult = { hits: hits.hits, meta };
-    meta.bytes = utf8Bytes(JSON.stringify(result));
+    this.enforceResponseBudget(result, {
+      reasons: uniqueReasons,
+      truncation,
+      candidatesScored: hits.candidatesScored,
+    });
     return result;
   }
 
@@ -447,8 +509,11 @@ export class KnowledgeSearchEngine {
   private scoreIndex(
     terms: readonly string[],
     opts: { exactOnly: boolean; maxDocsScored: number },
-  ): { rows: ScoredRow[]; candidatesScored: number; capped: boolean } {
+  ): { rows: ScoredRow[]; candidatesScored: number; capped: boolean; docs: readonly SearchDoc[] } {
     this.index.ensureFinalized();
+    // Scoring is synchronous, so this reference and the postings it was derived from are
+    // consistent for the whole scan; the caller keeps it for hydration (see `search`).
+    const docs = this.index.docs;
     const rows = new Map<number, ScoredRow>();
     const compactQuery = opts.exactOnly ? null : compactOfQuery(terms);
     for (const term of terms) {
@@ -498,9 +563,9 @@ export class KnowledgeSearchEngine {
     }
     const all = [...rows.values()];
     const candidatesScored = all.length;
-    if (candidatesScored <= opts.maxDocsScored) return { rows: all, candidatesScored, capped: false };
+    if (candidatesScored <= opts.maxDocsScored) return { rows: all, candidatesScored, capped: false, docs };
     all.sort((a, b) => b.score - a.score);
-    return { rows: all.slice(0, opts.maxDocsScored), candidatesScored, capped: true };
+    return { rows: all.slice(0, opts.maxDocsScored), candidatesScored, capped: true, docs };
   }
 
   private expansionsFor(
@@ -530,6 +595,7 @@ export class KnowledgeSearchEngine {
 
   private hydrate(
     indexRows: readonly ScoredRow[],
+    indexDocs: readonly SearchDoc[],
     vendorRows: readonly VendorScored[],
     ctx: {
       terms: readonly string[];
@@ -543,7 +609,7 @@ export class KnowledgeSearchEngine {
       reasons: string[];
       truncation: KnowledgeSearchTruncation | undefined;
     },
-  ): { hits: KnowledgeSearchHit[]; truncation: KnowledgeSearchTruncation | undefined } {
+  ): { hits: KnowledgeSearchHit[]; truncation: KnowledgeSearchTruncation | undefined; candidatesScored: number } {
     const candidates: KnowledgeSearchHit[] = [];
     const byKey = new Map<string, number>();
     const vendorByKey = new Map<string, VendorScored>();
@@ -551,7 +617,22 @@ export class KnowledgeSearchEngine {
     const queryTerms = Math.max(1, ctx.terms.length);
 
     for (const row of indexRows) {
-      const doc = this.index.docs[row.docIndex] as SearchDoc;
+      const doc = indexDocs[row.docIndex];
+      // The snapshot makes an out-of-range coordinate impossible; if one ever appears the caller
+      // gets a typed, retryable error naming the condition, never a raw TypeError from a property
+      // read on `undefined`.
+      if (doc === undefined) {
+        throw new HuduError(
+          `knowledge index generation changed while the search was in flight: candidate ${row.docIndex} is ` +
+            `outside the scored generation of ${indexDocs.length} document(s); retry the search.`,
+          {
+            code: 'INDEX_GENERATION_MISMATCH',
+            category: 'server',
+            retryable: true,
+            suggestedAction: 'Retry the search; the index was rebuilt while this search was in flight.',
+          },
+        );
+      }
       if (!ctx.scope.includes(doc.resource as KnowledgeResource)) continue;
       if (ctx.companyId !== undefined && doc.company_id !== ctx.companyId) continue;
       if (ctx.updatedSince !== undefined && doc.updated_at < ctx.updatedSince) continue;
@@ -639,8 +720,6 @@ export class KnowledgeSearchEngine {
 
     const best = ranked[0]?.score ?? 0;
     const kept: KnowledgeSearchHit[] = [];
-    let bytes = JSON.stringify({ hits: [], meta: { bytes: 0 } }).length;
-    let truncation = ctx.truncation;
     let stopped = false;
     for (const hit of ranked) {
       if (kept.length >= ctx.limit) {
@@ -648,21 +727,64 @@ export class KnowledgeSearchEngine {
         break;
       }
       hit.relevance = best > 0 ? hit.score / best : 0;
-      const size = JSON.stringify(hit).length;
-      if (kept.length > 0 && bytes + size > this.config.maxResponseBytes) {
-        stopped = true;
-        truncation = {
-          reason: 'result-limit',
-          detail: `response stopped at maxResponseBytes=${this.config.maxResponseBytes}`,
-          candidatesScored: ranked.length,
-        };
-        break;
-      }
-      bytes += size;
       kept.push(hit);
     }
     if (stopped) ctx.reasons.push('result-limit');
-    return { hits: kept, truncation };
+    // The byte budget is NOT applied here: the honest unit is the UTF-8 size of the COMPLETE
+    // response the caller receives, real meta included, and the meta does not exist yet. `search`
+    // enforces it on the assembled result (see `enforceResponseBudget`).
+    return { hits: kept, truncation: ctx.truncation, candidatesScored: ranked.length };
+  }
+
+  /**
+   * Enforce `maxResponseBytes` on the complete serialised response, measured in UTF-8 BYTES.
+   *
+   * Two defects are closed here at once: the budget used to be accumulated from
+   * `JSON.stringify(hit).length` (UTF-16 code units, so a CJK payload could roughly double the
+   * budget unflagged) and it seeded the count with a placeholder `{ hits: [], meta: { bytes: 0 } }`
+   * instead of the real meta. Both let an oversized response through with `truncation` unset.
+   *
+   * Hits are dropped from the tail until the response fits; the FIRST hit is always kept, even
+   * alone over budget, because an empty answer would hide the match — that case is flagged.
+   */
+  private enforceResponseBudget(
+    result: KnowledgeSearchResult,
+    opts: { reasons: string[]; truncation: KnowledgeSearchTruncation | undefined; candidatesScored: number },
+  ): void {
+    const meta = result.meta;
+    // `meta.bytes` is part of the response it measures, so the size is found by iteration
+    // (it converges in one step in practice).
+    const sizeOf = (): number => {
+      let size = meta.bytes;
+      for (let pass = 0; pass < 4; pass += 1) {
+        meta.bytes = size;
+        const next = utf8Bytes(JSON.stringify(result));
+        if (next === size) return size;
+        size = next;
+      }
+      meta.bytes = size;
+      return size;
+    };
+    let size = sizeOf();
+    if (size <= this.config.maxResponseBytes) return;
+    if (opts.truncation === undefined) {
+      opts.truncation = {
+        reason: 'result-limit',
+        detail: `response stopped at maxResponseBytes=${this.config.maxResponseBytes}`,
+        candidatesScored: opts.candidatesScored,
+      };
+    }
+    // The flag is set BEFORE the last size is taken, so the reported `meta.bytes` counts the
+    // truncation notice as well.
+    meta.truncation = opts.truncation;
+    opts.reasons.push('result-limit');
+    meta.reasons = [...new Set(opts.reasons)];
+    meta.complete = meta.reasons.length === 0;
+    while (result.hits.length > 1 && size > this.config.maxResponseBytes) {
+      result.hits.pop();
+      meta.returned = result.hits.length;
+      size = sizeOf();
+    }
   }
 
   private snippetFor(
@@ -761,21 +883,35 @@ export class KnowledgeSearchEngine {
     if (assets.truncated) assetTotal = null;
     else assetTotal = full ? assetDocs : null;
 
+    const truncated = articles.truncated || assets.truncated;
     if (full) {
-      this.index.retain(keys);
-      this.partial = articles.truncated || assets.truncated;
+      // Delete-by-absence is sound ONLY for a resource whose walk COMPLETED: a capped walk that
+      // never reached the older records of a resource would otherwise purge documents that are
+      // still in the vendor corpus (the walk's absence proves nothing about them).
+      const walkedFully = new Set<string>();
+      if (!articles.truncated) walkedFully.add('articles');
+      if (!assets.truncated) walkedFully.add('assets');
+      this.index.retain(keys, walkedFully);
+      // A full walk that completes re-establishes the index's completeness; a truncated one
+      // leaves it partial until the next completed full walk (scheduled by `needsFullRefresh`).
+      this.partial = truncated;
       this.totalKnown.articles = articleTotal;
       this.totalKnown.assets = assetTotal;
       this.lastFullAt = this.now();
     } else {
-      this.partial = this.partial || articles.truncated || assets.truncated;
+      // An incremental walk cannot PROVE completeness (records it never fetched stay unknown), so
+      // it may raise `partial` but never lower it.
+      if (truncated) this.partial = true;
       const knownArticles = this.totalKnown.articles;
       const knownAssets = this.totalKnown.assets;
       this.totalKnown.articles = knownArticles === null || knownArticles === undefined ? null : knownArticles + articleDocs;
       this.totalKnown.assets = knownAssets === null || knownAssets === undefined ? null : knownAssets + assetDocs;
     }
     this.truncatedDocs = this.index.docs.filter((doc) => doc.longTruncated).length;
-    this.pagesTruncated = this.partial;
+    // Reported per answer: the reason belongs to THIS build's walk. The index-level state
+    // (`partial`) carries the longer-lived fact and is what `meta.index.state` reports.
+    this.lastBuildTruncated = truncated;
+    this.buildError = null;
     this.watermarks.articles = articleMax;
     this.watermarks.assets = assetMax;
     this.index.capDocs();

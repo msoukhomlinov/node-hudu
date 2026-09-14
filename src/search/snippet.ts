@@ -2,7 +2,8 @@
  * Snippet builder: verbatim slices with absolute UTF-16 spans.
  *
  * INTERNAL module: deliberately NOT re-exported from the package root (that would
- * change the public surface). Design of record: `.run/design/search/html-and-snippets.md` S3.
+ * change the public surface). Design of record: `html-and-snippets.md` S3 (search design doc,
+ * kept outside this repo).
  *
  * The honesty contract, stated once and tested in `test/search/snippet.test.ts`:
  *

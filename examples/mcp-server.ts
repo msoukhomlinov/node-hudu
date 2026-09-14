@@ -17,7 +17,8 @@
  * - Errors surface `HuduError.code` (NOT_FOUND, RESOLUTION_AMBIGUOUS, POLICY_DENIED, …) so a
  *   model can self-correct instead of retrying blindly.
  *
- * PROGRESSIVE DISCLOSURE (`.run/design/search/progressive-disclosure.md`): this is a REFERENCE
+ * PROGRESSIVE DISCLOSURE (design doc `progressive-disclosure.md`, kept outside this repo): this
+ * is a REFERENCE
  * CONSUMER, and the tool list it registers is the generated CORE profile — the curated manifest
  * projects 139 tools, of which a client must carry all 139 on every turn. The CORE set (rule in
  * `scripts/project-mcp-tools.mjs`, generated into `examples/tool-catalog.generated.ts`) is the
@@ -185,7 +186,7 @@ const HITS_OUTPUT = z.object({
 
 /**
  * `hudu_search` returns ONE shape per mode, each echoing the mode that ran, so a response can never
- * be misread as another mode's (design `.run/design/search/single-search-tool.md` 1.4 R4).
+ * be misread as another mode's (design doc `single-search-tool.md` 1.4 R4, kept outside this repo).
  */
 const SEARCH_OUTPUT = z.union([
   z.object({ mode: z.literal('search'), query: z.string(), hits: z.array(z.unknown()), meta: z.unknown() }),
@@ -381,7 +382,7 @@ const handle = serveStdio(() => {
   // ---------------------------------------------------------------------------------------
   // hudu_search — ONE self-describing search tool with three modes (search | help | resources).
   //
-  // Mode discipline by construction, not by hope (`.run/design/search/single-search-tool.md` 1.4):
+  // Mode discipline by construction, not by hope (design doc `single-search-tool.md` 1.4, kept outside this repo):
   //   - `mode` is optional and defaults to "search": the hot path is unchanged and no field is
   //     conditionally required;
   //   - a missing `query` in search mode is a CONFIG_ERROR that NAMES mode:"help" - it never

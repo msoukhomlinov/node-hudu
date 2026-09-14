@@ -25,14 +25,26 @@ export const REDACTED = '[REDACTED]';
 /**
  * Credential-shaped keys redacted by `redact` (case-insensitive). Keys ending in
  * `_token`, `_secret` or `_password` are also redacted.
+ *
+ * The set covers the credential NAMES, not the suffix patterns alone: a field named
+ * `passphrase`, `credential(s)`, `auth`, `basic_auth` or `session` carries a secret and would
+ * otherwise pass through to an audit event or a log line unmasked (found by a security review of
+ * the audit surface; whether the vendor's own API uses these names is not what makes the redactor
+ * correct — the caller's payload can).
  */
 export const REDACTED_KEYS = [
   'password',
+  'passphrase',
   'otp_secret',
   'api_key',
   'token',
   'secret',
   'authorization',
+  'auth',
+  'basic_auth',
+  'credential',
+  'credentials',
+  'session',
   'x-api-key',
   'client_secret',
   'private_key',

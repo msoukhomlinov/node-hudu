@@ -74,7 +74,46 @@ error code changed meaning. `test/public-surface.test.ts` proves that against th
   with `--group`, `--ship` and `--plan`), `npm run mcp:project` (registry → MCP manifest), and
   `npm run public-surface` (capture the exported surface).
 - `capabilities.plan.json` is the single authored source; the registry, the JSON, the schema and the MCP
-  manifest are generated. A committed negative fixture proves the gate actually fails.
+  manifest are generated. A committed negative fixture proves the gate actually fails, and it is wired
+  into `npm test` (`test/negative-fixture.test.ts`, which runs `scripts/check-negative-fixture.mjs`
+  and asserts the gate exits non-zero on the fixture with minimum rule-based failure counts).
+
+### Fixed
+
+- The cross-resource helpers' `resources` parameter (`operations.resolveAny`,
+  `operations.searchAcrossResources`) now projects as a string enum of the eight searchable
+  resources instead of an unresolvable object item that the invoke validator refused in both
+  directions. The gate gained the `inputSchema-unresolved-item` rule, which fails on any named
+  unresolvable input-schema emission; `label_types`' wrapped-literal-union items
+  (`applicable_record_types`) project as string enums for the same reason.
+- The MCP manifest, the override reasons and the script comments no longer cite the deleted
+  run-state directory (the former `.run` working tree); the manifest was regenerated from the
+  cleaned overrides.
+- A search that scores index rows and then awaits the vendor tier answers from that exact document
+  generation: a rebuild completing during the await can no longer re-point a scored row at another
+  document, nor crash hydration with a raw `TypeError`.
+- A capped full re-walk keeps the documents it never reached: delete-by-absence applies only to a
+  resource whose walk actually completed.
+- `resolve(..., { limit: 1 })` no longer returns the first duplicate as a unique match. The
+  uniqueness decision collects at least two candidates in all six affected resources (and in
+  `matchers.resolve`'s sync-id path); `limit` bounds the returned list, not the decision.
+- The knowledge index releases an evicted document's text as ONE unit (`longText` plus the field
+  string that holds the same string) and keeps only its token snapshot, so body recall survives the
+  eviction, `bodiesIndexed` counts text the index really holds, and the eviction bookkeeping no
+  longer pins documents that `retain`/`capDocs` removed.
+- The automatic warm path consults `needsFullRefresh()`, so a deletion is noticed within
+  `indexTtlMs * fullRefreshEvery` without an explicit `refresh: true`, and `partial` is cleared by a
+  completed full walk instead of latching.
+- `refresh: true` is never served by an in-flight incremental build: the requested full re-walk runs
+  after it (an incremental cannot see a deletion).
+- The response budget is measured in UTF-8 BYTES of the complete serialised response, and an
+  overshoot is flagged (`truncation.reason: 'result-limit'`) even when one hit alone exceeds it.
+- A failed background index build is named in `meta.errors` and `status().lastBuildError` instead of
+  being swallowed by the automatic path.
+- Error surfaces no longer echo a request's query string (`HuduError.url` and its message carry the
+  path only); the audit redactor covers `passphrase`, `credential(s)`, `auth`, `basic_auth` and
+  `session`; the invoke validator refuses non-finite numbers instead of serialising them as `null`;
+  and `HuduConfig.apiKey` documents the trim it applies.
 
 ### Notes
 

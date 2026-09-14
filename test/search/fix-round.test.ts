@@ -1,0 +1,294 @@
+/**
+ * Regression pins for the PR-22 fix round (engine + store).
+ *
+ * Every case here FAILS on the pre-fix code and passes after it: each one is the reproduction a
+ * verification sim proved (see the review run), reduced to a deterministic unit case so a revert
+ * cannot stay green. The engine is driven through fake deps so a bound, a watermark window or a
+ * failing vendor path is staged exactly.
+ */
+import { describe, it, expect } from 'vitest';
+import { KnowledgeSearchEngine, type EngineDeps } from '../../src/search/engine.js';
+import type { Page } from '../../src/pagination.js';
+import type { KnowledgeResource } from '../../src/types/search_knowledge.js';
+
+type Row = Record<string, unknown>;
+
+/** `updated_at` ascends with the id, so a walk's first page is the freshest documents. */
+function article(id: number, name: string, content = ''): Row {
+  return {
+    id,
+    name,
+    slug: `a${id}`,
+    url: `https://hudu.example.com/articles/${id}`,
+    company_id: 1,
+    updated_at: `2026-01-0${id}T00:00:00.000Z`,
+    content: `<p>${content}</p>`,
+  };
+}
+
+/** An iterable whose first read rejects, so a build fails the way a failing endpoint does. */
+function failingPages(): AsyncIterable<Page<Row>> {
+  return {
+    [Symbol.asyncIterator]: () => ({ next: () => Promise.reject(new Error('vendor boom')) }),
+  };
+}
+
+function paged(rows: Row[], pageSize: number): Page<Row>[] {
+  const pages: Page<Row>[] = [];
+  for (let i = 0; i < rows.length; i += pageSize) {
+    pages.push({ items: rows.slice(i, i + pageSize), page: pages.length + 1, page_size: pageSize, hasMore: i + pageSize < rows.length });
+  }
+  if (pages.length === 0) pages.push({ items: [], page: 1, page_size: pageSize, hasMore: false });
+  return pages;
+}
+
+async function* iterate(pages: Page<Row>[]): AsyncIterable<Page<Row>> {
+  for (const page of pages) yield page;
+}
+
+/** A latch with tickets: a caller arms it with the number of operations it should hold. */
+interface Latch {
+  tickets: number;
+  promise: Promise<void>;
+  arm: (tickets?: number) => void;
+  open: () => void;
+}
+
+function latch(): Latch {
+  let release: () => void = () => undefined;
+  const out: Latch = {
+    tickets: 0,
+    promise: Promise.resolve(),
+    arm: (tickets = 1) => {
+      let resolve: () => void = () => undefined;
+      out.promise = new Promise<void>((r) => (resolve = r));
+      out.tickets = tickets;
+      release = resolve;
+    },
+    open: () => {
+      out.tickets = 0;
+      release();
+    },
+  };
+  return out;
+}
+
+interface Harness {
+  corpus: { articles: Row[] };
+  /** Holds the VENDOR tier (a parked search) without holding anything else. */
+  vendorGate: Latch;
+  /** Holds the first LIST page fetch (a parked index build) without holding anything else. */
+  listGate: Latch;
+  /** When true, the list endpoint fails, so a background build rejects. */
+  failList: { value: boolean };
+}
+
+function harness(options: { articles?: Row[]; pageSize?: number } = {}): { harness: Harness; deps: EngineDeps } {
+  const state: Harness = {
+    corpus: { articles: options.articles ?? [] },
+    vendorGate: latch(),
+    listGate: latch(),
+    failList: { value: false },
+  };
+  const pageSize = options.pageSize ?? 2;
+  const rowsFor = (params: { page_size: number; updated_at?: string }): Row[] => {
+    const watermark = params.updated_at === undefined ? undefined : params.updated_at.replace(/,$/, '');
+    // Newest first (the engine's own documented index order), then the watermark window a vendor
+    // `updated_at` filter would apply (inclusive lower bound).
+    const sorted = [...state.corpus.articles].sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)));
+    return watermark === undefined ? sorted : sorted.filter((row) => String(row.updated_at) >= watermark);
+  };
+  const listPages = (params: { page_size: number; updated_at?: string }): AsyncIterable<Page<Row>> => {
+    const size = params.page_size ?? pageSize;
+    const rows = rowsFor({ page_size: size, ...(params.updated_at ? { updated_at: params.updated_at } : {}) });
+    return (async function* gated(): AsyncIterable<Page<Row>> {
+      if (state.listGate.tickets > 0) {
+        state.listGate.tickets -= 1;
+        await state.listGate.promise;
+      }
+      yield* iterate(paged(rows, size));
+    })();
+  };
+  const deps: EngineDeps = {
+    listArticlePages: (params) => {
+      if (state.failList.value) return failingPages();
+      return listPages(params);
+    },
+    listAssetPages: () => iterate(paged([], pageSize)),
+    vendorSearch: async (resource: KnowledgeResource, query: string) => {
+      if (state.vendorGate.tickets > 0) {
+        state.vendorGate.tickets -= 1;
+        await state.vendorGate.promise;
+      }
+      const terms = query.toLowerCase().split(/\s+/).filter((term) => term.length > 0);
+      return rowsFor({ page_size: 100 })
+        .filter((row) => terms.some((term) => String(row.name).toLowerCase().includes(term)))
+        .map((row) => ({ id: Number(row.id), label: String(row.name), item: row }));
+    },
+  };
+  return { harness: state, deps };
+}
+
+const BYTES: Record<string, number> = { small: 100000 };
+
+describe('F1 — a CAPPED full walk must not purge documents it never reached', () => {
+  it('keeps the documents outside the page cap', async () => {
+    const { harness: h, deps } = harness({ articles: [1, 2, 3, 4].map((id) => article(id, `zebra ${id}`, 'alpha body')) });
+    const engine = new KnowledgeSearchEngine(deps, { pageSize: 2, maxIndexPages: 3, maxDocsScored: 2000, maxResponseBytes: BYTES.small });
+
+    // 4 documents in 2 pages, cap 3: a COMPLETE full walk establishes the whole index.
+    const first = await engine.search('zebra', { refresh: true });
+    expect(first.meta.index.docs.articles?.indexed).toBe(4);
+
+    // Four fresher documents arrive. The capped walk reads 3 pages (6 rows, newest first) and so
+    // never reaches documents 1 and 2 at all.
+    h.corpus.articles = [1, 2, 3, 4, 5, 6, 7, 8].map((id) => article(id, `zebra ${id}`, 'alpha body'));
+    const capped = await engine.search('zebra', { refresh: true });
+
+    // Absence from a CAPPED walk is not a deletion: documents 1 and 2 must survive it.
+    expect(capped.meta.index.docs.articles?.indexed).toBe(8);
+    expect(capped.meta.index.state).toBe('partial');
+    const stillThere = await engine.search('zebra one', { tier: 'index' });
+    expect(stillThere.hits.some((hit) => hit.id === 1)).toBe(true);
+  });
+});
+
+describe('F4 — the automatic path runs the full re-walk when one is due', () => {
+  it('purges a deleted document through a background warm', async () => {
+    const { harness: h, deps } = harness({ articles: [1, 2, 3, 4].map((id) => article(id, `zebra ${id}`, 'alpha body')), pageSize: 10 });
+    const engine = new KnowledgeSearchEngine(deps, { pageSize: 10, maxIndexPages: 10, maxDocs: 100, ttlMs: 20, fullRefreshEvery: 1, maxDocsScored: 2000, maxResponseBytes: BYTES.small });
+
+    await engine.search('zebra', { refresh: true });
+    h.corpus.articles = h.corpus.articles.filter((row) => row.id !== 4);
+    await new Promise((resolve) => setTimeout(resolve, 60)); // past ttlMs * fullRefreshEvery
+
+    // tier 'auto' on a stale index starts a background warm: that warm is where the due full
+    // re-walk has to happen, because `updated_at` cannot see a deletion.
+    await engine.search('zebra', { tier: 'auto' });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const after = await engine.search('zebra four', { tier: 'index' });
+
+    expect(after.hits.some((hit) => hit.id === 4)).toBe(false);
+    expect(after.meta.index.docs.articles?.indexed).toBe(3);
+  });
+});
+
+describe('F-L2 — a refresh is never served by an in-flight INCREMENTAL build', () => {
+  it('runs the full re-walk after awaiting the incremental one', async () => {
+    const { harness: h, deps } = harness({ articles: [1, 2, 3, 4].map((id) => article(id, `zebra ${id}`, 'alpha body')), pageSize: 10 });
+    const engine = new KnowledgeSearchEngine(deps, { pageSize: 10, maxIndexPages: 10, maxDocs: 100, maxDocsScored: 2000, maxResponseBytes: BYTES.small });
+    await engine.search('zebra', { refresh: true });
+
+    h.corpus.articles = h.corpus.articles.filter((row) => row.id !== 4);
+    h.listGate.arm();
+    // An incremental build is in flight and BLOCKED on the first list page.
+    const incremental = engine.search('zebra', { tier: 'index' });
+    const refresh = engine.search('zebra', { refresh: true });
+    h.listGate.open();
+    await Promise.all([incremental, refresh]);
+
+    // An incremental cannot see a deletion: only the requested full walk can, and it must run.
+    const after = await engine.search('zebra four', { tier: 'index' });
+    expect(after.hits.some((hit) => hit.id === 4)).toBe(false);
+  });
+});
+
+describe('F-L1 — a rebuild during the vendor await cannot re-point a scored row', () => {
+  it('answers from the scored generation instead of a phantom document', async () => {
+    const { harness: h, deps } = harness({ articles: [1, 2, 3, 4, 5].map((id) => article(id, `alpha ${id}`, 'alpha body')) });
+    const engine = new KnowledgeSearchEngine(deps, {
+      pageSize: 2,
+      maxIndexPages: 10,
+      // The document CAP lives in the index bounds (it is the store's bound, not a search knob).
+      bounds: { maxDocBytes: 256 * 1024, maxIndexTextBytes: 64 * 1024 * 1024, maxDocs: 5 },
+      maxDocsScored: 2000,
+      maxResponseBytes: BYTES.small,
+    });
+    await engine.search('alpha', { refresh: true });
+
+    // A fresher document that does NOT contain the first query term arrives, so a rebuild reorders
+    // and caps the document array while the racy search is parked in the vendor tier.
+    h.corpus.articles = [
+      ...h.corpus.articles,
+      { ...article(6, 'zebra only six', ''), updated_at: '2026-06-01T00:00:00.000Z' },
+    ];
+    h.vendorGate.arm();
+    const racy = engine.search('alpha zebra', { tier: 'auto' });
+    const rebuild = engine.search('zebra', { refresh: true });
+    await rebuild;
+    h.vendorGate.open();
+    const result = await racy;
+
+    // The whole defect was that row coordinates stayed valid only by luck: the answer must resolve
+    // (no raw TypeError) and no hit may attribute another document's matched terms to a document
+    // that never contained them.
+    for (const hit of result.hits) {
+      if (hit.id === 6) expect(hit.match.terms).not.toContain('alpha');
+    }
+    expect(result.hits.some((hit) => hit.id === 1)).toBe(true);
+  });
+});
+
+describe('F6 — the response budget counts UTF-8 BYTES of the whole response', () => {
+  it('flags a multi-byte payload that overshoots the budget', async () => {
+    const budget = 8192;
+    const { harness: h, deps } = harness({});
+    const engine = new KnowledgeSearchEngine(deps, { pageSize: 2, maxIndexPages: 2, maxDocs: 100, maxDocsScored: 2000, maxResponseBytes: budget });
+    const cjk = '日'.repeat(500);
+    h.corpus.articles = Array.from({ length: 8 }, (_v, index) => article(index + 1, `zebra ${cjk}-${index}`, ''));
+    const result = await engine.search('zebra', { tier: 'vendor', scope: ['articles'], limit: 25 });
+
+    expect(result.meta.bytes).toBeGreaterThan(0);
+    expect(result.meta.truncation?.reason).toBe('result-limit');
+    expect(result.meta.reasons).toContain('result-limit');
+    expect(result.meta.complete).toBe(false);
+    expect(result.meta.returned).toBe(result.hits.length);
+  });
+
+  it('leaves an ASCII payload of the same shape inside the budget unflagged', async () => {
+    const budget = 8192;
+    const { harness: h, deps } = harness({});
+    const engine = new KnowledgeSearchEngine(deps, { pageSize: 2, maxIndexPages: 2, maxDocs: 100, maxDocsScored: 2000, maxResponseBytes: budget });
+    h.corpus.articles = Array.from({ length: 8 }, (_v, index) => ({
+      ...article(index + 1, `zebra ${'a'.repeat(500)}-${index}`, ''),
+    }));
+    const result = await engine.search('zebra', { tier: 'vendor', scope: ['articles'], limit: 25 });
+
+    // One byte per character, so the same shape fits: the budget must pass it, not truncate it.
+    expect(result.meta.bytes).toBeLessThanOrEqual(budget);
+    expect(result.meta.truncation).toBeUndefined();
+  });
+});
+
+describe('F-L7 — a failed background build is named, not swallowed', () => {
+  it('surfaces the failure in status() and in meta.errors', async () => {
+    const { harness: h, deps } = harness({ articles: [article(1, 'zebra one', 'alpha')] });
+    const engine = new KnowledgeSearchEngine(deps, { pageSize: 2, maxIndexPages: 2, maxDocs: 100, ttlMs: 1, maxDocsScored: 2000, maxResponseBytes: BYTES.small });
+    h.failList.value = true;
+
+    await engine.search('zebra', { tier: 'auto' });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    const after = await engine.search('zebra', { tier: 'vendor' });
+    expect(engine.status().lastBuildError?.message).toContain('vendor boom');
+    expect(after.meta.errors.some((entry) => entry.resource === 'index' && entry.message.includes('vendor boom'))).toBe(true);
+  });
+});
+
+describe('F-L3 — the partial REASON belongs to the build, the partial STATE to the index', () => {
+  it('stops repeating the truncated-walk reason once a build completes', async () => {
+    const { deps } = harness({ articles: [1, 2, 3, 4, 5, 6].map((id) => article(id, `zebra ${id}`, 'alpha body')) });
+    const engine = new KnowledgeSearchEngine(deps, { pageSize: 2, maxIndexPages: 2, maxDocs: 100, maxDocsScored: 2000, maxResponseBytes: BYTES.small });
+
+    // Cap = 4 rows: the full walk truncates, and THAT answer says so.
+    const truncated = await engine.search('zebra', { refresh: true });
+    expect(truncated.meta.reasons).toContain('index-partial');
+    expect(truncated.meta.index.state).toBe('partial');
+
+    // The next build is an incremental that drains in one page: it did not truncate, so the answer
+    // does not repeat the reason, while the index keeps the honest `partial` state.
+    const incremental = await engine.search('zebra', { tier: 'index' });
+    expect(incremental.meta.reasons).not.toContain('index-partial');
+    expect(incremental.meta.index.state).toBe('partial');
+  });
+});

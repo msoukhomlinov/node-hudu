@@ -4424,7 +4424,7 @@
     "tool": "hudu_operations_searchKnowledge",
     "field": "name",
     "newValue": "hudu_search",
-    "reason": "Naming: one self-describing search tool. It is not a knowledge-base reader in two of its three modes (help, resources), so `hudu_search` is the shortest name true for all three; the backing operation stays operations.searchKnowledge (design: .run/design/search/single-search-tool.md 1.1)."
+    "reason": "Naming: one self-describing search tool. It is not a knowledge-base reader in two of its three modes (help, resources), so `hudu_search` is the shortest name true for all three; the backing operation stays operations.searchKnowledge (single-search-tool design, section 1.1)."
   },
   {
     "tool": "hudu_search",
@@ -4436,91 +4436,91 @@
     "tool": "hudu_search_articles",
     "field": "exclude",
     "newValue": true,
-    "reason": "Redundant outcome: hudu_search({mode:\"search\", resources:[...]}) performs this search (or these eight), with body-aware ranking, snippets, company_id scoping and per-resource error isolation - see the migration table in .run/design/search/single-search-tool.md 4.1. Retiring the tool never removes the capability: the backing operation stays callable in the SDK and reachable through hudu_invoke."
+    "reason": "Redundant outcome: hudu_search({mode:\"search\", resources:[...]}) performs this search (or these eight), with body-aware ranking, snippets, company_id scoping and per-resource error isolation (migration table, single-search-tool design section 4.1). Retiring the tool never removes the capability: the backing operation stays callable in the SDK and reachable through hudu_invoke."
   },
   {
     "tool": "hudu_search_assets",
     "field": "exclude",
     "newValue": true,
-    "reason": "Redundant outcome: hudu_search({mode:\"search\", resources:[...]}) performs this search (or these eight), with body-aware ranking, snippets, company_id scoping and per-resource error isolation - see the migration table in .run/design/search/single-search-tool.md 4.1. Retiring the tool never removes the capability: the backing operation stays callable in the SDK and reachable through hudu_invoke."
+    "reason": "Redundant outcome: hudu_search({mode:\"search\", resources:[...]}) performs this search (or these eight), with body-aware ranking, snippets, company_id scoping and per-resource error isolation (migration table, single-search-tool design section 4.1). Retiring the tool never removes the capability: the backing operation stays callable in the SDK and reachable through hudu_invoke."
   },
   {
     "tool": "hudu_search_companies",
     "field": "exclude",
     "newValue": true,
-    "reason": "Redundant outcome: hudu_search({mode:\"search\", resources:[...]}) performs this search (or these eight), with body-aware ranking, snippets, company_id scoping and per-resource error isolation - see the migration table in .run/design/search/single-search-tool.md 4.1. Retiring the tool never removes the capability: the backing operation stays callable in the SDK and reachable through hudu_invoke."
+    "reason": "Redundant outcome: hudu_search({mode:\"search\", resources:[...]}) performs this search (or these eight), with body-aware ranking, snippets, company_id scoping and per-resource error isolation (migration table, single-search-tool design section 4.1). Retiring the tool never removes the capability: the backing operation stays callable in the SDK and reachable through hudu_invoke."
   },
   {
     "tool": "hudu_search_users",
     "field": "exclude",
     "newValue": true,
-    "reason": "Redundant outcome: hudu_search({mode:\"search\", resources:[...]}) performs this search (or these eight), with body-aware ranking, snippets, company_id scoping and per-resource error isolation - see the migration table in .run/design/search/single-search-tool.md 4.1. Retiring the tool never removes the capability: the backing operation stays callable in the SDK and reachable through hudu_invoke."
+    "reason": "Redundant outcome: hudu_search({mode:\"search\", resources:[...]}) performs this search (or these eight), with body-aware ranking, snippets, company_id scoping and per-resource error isolation (migration table, single-search-tool design section 4.1). Retiring the tool never removes the capability: the backing operation stays callable in the SDK and reachable through hudu_invoke."
   },
   {
     "tool": "hudu_search_groups",
     "field": "exclude",
     "newValue": true,
-    "reason": "Redundant outcome: hudu_search({mode:\"search\", resources:[...]}) performs this search (or these eight), with body-aware ranking, snippets, company_id scoping and per-resource error isolation - see the migration table in .run/design/search/single-search-tool.md 4.1. Retiring the tool never removes the capability: the backing operation stays callable in the SDK and reachable through hudu_invoke."
+    "reason": "Redundant outcome: hudu_search({mode:\"search\", resources:[...]}) performs this search (or these eight), with body-aware ranking, snippets, company_id scoping and per-resource error isolation (migration table, single-search-tool design section 4.1). Retiring the tool never removes the capability: the backing operation stays callable in the SDK and reachable through hudu_invoke."
   },
   {
     "tool": "hudu_search_websites",
     "field": "exclude",
     "newValue": true,
-    "reason": "Redundant outcome: hudu_search({mode:\"search\", resources:[...]}) performs this search (or these eight), with body-aware ranking, snippets, company_id scoping and per-resource error isolation - see the migration table in .run/design/search/single-search-tool.md 4.1. Retiring the tool never removes the capability: the backing operation stays callable in the SDK and reachable through hudu_invoke."
+    "reason": "Redundant outcome: hudu_search({mode:\"search\", resources:[...]}) performs this search (or these eight), with body-aware ranking, snippets, company_id scoping and per-resource error isolation (migration table, single-search-tool design section 4.1). Retiring the tool never removes the capability: the backing operation stays callable in the SDK and reachable through hudu_invoke."
   },
   {
     "tool": "hudu_search_asset_passwords",
     "field": "exclude",
     "newValue": true,
-    "reason": "Redundant outcome: hudu_search({mode:\"search\", resources:[...]}) performs this search (or these eight), with body-aware ranking, snippets, company_id scoping and per-resource error isolation - see the migration table in .run/design/search/single-search-tool.md 4.1. Retiring the tool never removes the capability: the backing operation stays callable in the SDK and reachable through hudu_invoke."
+    "reason": "Redundant outcome: hudu_search({mode:\"search\", resources:[...]}) performs this search (or these eight), with body-aware ranking, snippets, company_id scoping and per-resource error isolation (migration table, single-search-tool design section 4.1). Retiring the tool never removes the capability: the backing operation stays callable in the SDK and reachable through hudu_invoke."
   },
   {
     "tool": "hudu_search_password_folders",
     "field": "exclude",
     "newValue": true,
-    "reason": "Redundant outcome: hudu_search({mode:\"search\", resources:[...]}) performs this search (or these eight), with body-aware ranking, snippets, company_id scoping and per-resource error isolation - see the migration table in .run/design/search/single-search-tool.md 4.1. Retiring the tool never removes the capability: the backing operation stays callable in the SDK and reachable through hudu_invoke."
+    "reason": "Redundant outcome: hudu_search({mode:\"search\", resources:[...]}) performs this search (or these eight), with body-aware ranking, snippets, company_id scoping and per-resource error isolation (migration table, single-search-tool design section 4.1). Retiring the tool never removes the capability: the backing operation stays callable in the SDK and reachable through hudu_invoke."
   },
   {
     "tool": "hudu_search_across_resources",
     "field": "exclude",
     "newValue": true,
-    "reason": "Redundant outcome: hudu_search({mode:\"search\", resources:[...]}) performs this search (or these eight), with body-aware ranking, snippets, company_id scoping and per-resource error isolation - see the migration table in .run/design/search/single-search-tool.md 4.1. Retiring the tool never removes the capability: the backing operation stays callable in the SDK and reachable through hudu_invoke."
+    "reason": "Redundant outcome: hudu_search({mode:\"search\", resources:[...]}) performs this search (or these eight), with body-aware ranking, snippets, company_id scoping and per-resource error isolation (migration table, single-search-tool design section 4.1). Retiring the tool never removes the capability: the backing operation stays callable in the SDK and reachable through hudu_invoke."
   },
   {
     "tool": "hudu_find_activity_logs_by_resource",
     "field": "name",
     "newValue": "hudu_list_activity_logs_for_resource",
-    "reason": "Naming: this is NOT an identity lookup - it lists the records attached to one record, while `find_*` promises exactly one record (identity lookups: hudu_find_articles_by_slug, hudu_find_assets_by_serial, ...). `list_*_for_*` says what it does. The operation name is unchanged in the SDK (.run/design/search/single-search-tool.md 4.1)."
+    "reason": "Naming: this is NOT an identity lookup - it lists the records attached to one record, while `find_*` promises exactly one record (identity lookups: hudu_find_articles_by_slug, hudu_find_assets_by_serial, ...). `list_*_for_*` says what it does. The operation name is unchanged in the SDK (single-search-tool design, section 4.1)."
   },
   {
     "tool": "hudu_find_expirations_by_resource",
     "field": "name",
     "newValue": "hudu_list_expirations_for_resource",
-    "reason": "Naming: this is NOT an identity lookup - it lists the records attached to one record, while `find_*` promises exactly one record (identity lookups: hudu_find_articles_by_slug, hudu_find_assets_by_serial, ...). `list_*_for_*` says what it does. The operation name is unchanged in the SDK (.run/design/search/single-search-tool.md 4.1)."
+    "reason": "Naming: this is NOT an identity lookup - it lists the records attached to one record, while `find_*` promises exactly one record (identity lookups: hudu_find_articles_by_slug, hudu_find_assets_by_serial, ...). `list_*_for_*` says what it does. The operation name is unchanged in the SDK (single-search-tool design, section 4.1)."
   },
   {
     "tool": "hudu_find_flags_by_flagable",
     "field": "name",
     "newValue": "hudu_list_flags_for_record",
-    "reason": "Naming: this is NOT an identity lookup - it lists the records attached to one record, while `find_*` promises exactly one record (identity lookups: hudu_find_articles_by_slug, hudu_find_assets_by_serial, ...). `list_*_for_*` says what it does. The operation name is unchanged in the SDK (.run/design/search/single-search-tool.md 4.1)."
+    "reason": "Naming: this is NOT an identity lookup - it lists the records attached to one record, while `find_*` promises exactly one record (identity lookups: hudu_find_articles_by_slug, hudu_find_assets_by_serial, ...). `list_*_for_*` says what it does. The operation name is unchanged in the SDK (single-search-tool design, section 4.1)."
   },
   {
     "tool": "hudu_find_labels_by_labelable",
     "field": "name",
     "newValue": "hudu_list_labels_for_record",
-    "reason": "Naming: this is NOT an identity lookup - it lists the records attached to one record, while `find_*` promises exactly one record (identity lookups: hudu_find_articles_by_slug, hudu_find_assets_by_serial, ...). `list_*_for_*` says what it does. The operation name is unchanged in the SDK (.run/design/search/single-search-tool.md 4.1)."
+    "reason": "Naming: this is NOT an identity lookup - it lists the records attached to one record, while `find_*` promises exactly one record (identity lookups: hudu_find_articles_by_slug, hudu_find_assets_by_serial, ...). `list_*_for_*` says what it does. The operation name is unchanged in the SDK (single-search-tool design, section 4.1)."
   },
   {
     "tool": "hudu_find_magic_dash_by_company",
     "field": "name",
     "newValue": "hudu_list_magic_dash_for_company",
-    "reason": "Naming: this is NOT an identity lookup - it lists the records attached to one record, while `find_*` promises exactly one record (identity lookups: hudu_find_articles_by_slug, hudu_find_assets_by_serial, ...). `list_*_for_*` says what it does. The operation name is unchanged in the SDK (.run/design/search/single-search-tool.md 4.1)."
+    "reason": "Naming: this is NOT an identity lookup - it lists the records attached to one record, while `find_*` promises exactly one record (identity lookups: hudu_find_articles_by_slug, hudu_find_assets_by_serial, ...). `list_*_for_*` says what it does. The operation name is unchanged in the SDK (single-search-tool design, section 4.1)."
   },
   {
     "tool": "hudu_find_relations_by_endpoints",
     "field": "name",
     "newValue": "hudu_list_relations_for_endpoints",
-    "reason": "Naming: this is NOT an identity lookup - it lists the records attached to one record, while `find_*` promises exactly one record (identity lookups: hudu_find_articles_by_slug, hudu_find_assets_by_serial, ...). `list_*_for_*` says what it does. The operation name is unchanged in the SDK (.run/design/search/single-search-tool.md 4.1)."
+    "reason": "Naming: this is NOT an identity lookup - it lists the records attached to one record, while `find_*` promises exactly one record (identity lookups: hudu_find_articles_by_slug, hudu_find_assets_by_serial, ...). `list_*_for_*` says what it does. The operation name is unchanged in the SDK (single-search-tool design, section 4.1)."
   },
   {
     "tool": "hudu_search",

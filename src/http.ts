@@ -229,11 +229,26 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * transport error and wrapped.
  */
 function catchBodyError(err: unknown, method: string, url: string, timeoutMs: number): never {
+  const safe = pathOnlyUrl(url);
   if (err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError')) {
-    throw new HuduNetworkError(`Request timed out after ${timeoutMs}ms: ${method} ${url}`, url, TIMEOUT);
+    throw new HuduNetworkError(`Request timed out after ${timeoutMs}ms: ${method} ${safe}`, safe, TIMEOUT);
   }
   const detail = err instanceof Error ? err.message : String(err);
-  throw new HuduNetworkError(`Network error while reading response body: ${detail}`, url);
+  throw new HuduNetworkError(`Network error while reading response body: ${detail}`, safe);
+}
+
+/**
+ * The URL form that may reach a CALLER-VISIBLE error surface: scheme + host + path, never the query
+ * string. A query string carries the caller's own data (search terms, asset filters, identifiers),
+ * and an error message or `HuduError.url` is exactly the kind of value that lands in a log, an agent
+ * transcript or a bug report. The transport's debug line (C14) is path-only for the same reason;
+ * this extends that rule to every error this module raises.
+ */
+function pathOnlyUrl(url: string): string {
+  const query = url.indexOf('?');
+  if (query >= 0) return url.slice(0, query);
+  const hash = url.indexOf('#');
+  return hash >= 0 ? url.slice(0, hash) : url;
 }
 
 interface TokenBucket {
@@ -444,7 +459,8 @@ export class HttpClient {
 
       const remaining = deadline - Date.now();
       if (remaining <= 0) {
-        throw new HuduNetworkError(`Request timed out after ${this.config.timeoutMs}ms: ${method} ${url}`, url, TIMEOUT);
+        const safe = pathOnlyUrl(url);
+        throw new HuduNetworkError(`Request timed out after ${this.config.timeoutMs}ms: ${method} ${safe}`, safe, TIMEOUT);
       }
 
       const init: RequestInit = {
@@ -470,10 +486,11 @@ export class HttpClient {
       try {
         response = await fetch(url, init);
       } catch (err) {
+        const safe = pathOnlyUrl(url);
         if (err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError')) {
-          throw new HuduNetworkError(`Request timed out after ${this.config.timeoutMs}ms: ${method} ${url}`, url, TIMEOUT);
+          throw new HuduNetworkError(`Request timed out after ${this.config.timeoutMs}ms: ${method} ${safe}`, safe, TIMEOUT);
         }
-        throw new HuduNetworkError(`Network error: ${err instanceof Error ? err.message : String(err)}`, url);
+        throw new HuduNetworkError(`Network error: ${err instanceof Error ? err.message : String(err)}`, safe);
       }
 
       // B9: a manual-redirect endpoint flows through the same transport (rate
@@ -508,9 +525,9 @@ export class HttpClient {
         const is429 = response.status === 429;
         if (is429) {
           const retryAfter = retryAfterSeconds(response.headers.get('retry-after'));
-          throw new RateLimitError(`Rate limited (HTTP 429)`, url, parseBody(text), retryAfter);
+          throw new RateLimitError(`Rate limited (HTTP 429)`, pathOnlyUrl(url), parseBody(text), retryAfter);
         }
-        throw errorFromStatus(response.status, parseBody(text), url);
+        throw errorFromStatus(response.status, parseBody(text), pathOnlyUrl(url));
       }
 
       // Binary branch: return the body as a real Blob instead of text+parseBody.

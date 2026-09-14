@@ -217,22 +217,47 @@ for (const f of [...resourceFiles, ...operationFiles]) {
 
 // ---------------------------------------------------------------- schema derivation
 const PRIMITIVES = new Set(['string', 'number', 'boolean', 'unknown', 'any', 'void', 'null']);
+// The item projection keeps only {type, enum?} — resolvable and inline object items are
+// intentionally detail-less (the historical reduction the registry is byte-diffed on). ONE
+// exception: an item whose type the generator could not resolve keeps its NAME. A named
+// unresolvable item is then visible — and gate-failable by inputSchema-unresolved-item —
+// instead of a bare {"type":"object"} nobody can explain. `resolved` itself is not part of
+// the inputSchema vocabulary the invoke validator audits, so the name is the marker.
+function projectItems(it) {
+  const items = { type: it.type, ...(it.enum ? { enum: it.enum } : {}) };
+  if (it.type === 'object' && it.resolved === false && typeof it.typeName === 'string') items.typeName = it.typeName;
+  return items;
+}
 function jsonType(typeText) {
-  const t = typeText.replace(/\s+/g, ' ');
+  let t = typeText.replace(/\s+/g, ' ');
+  // A single pair of wrapping parens carries no type information: `("A" | "B")` is the same type
+  // as "A" | "B", but the wrapped form defeats every branch below and falls to the unresolved
+  // fallback (label_types' `("Article" | ...)` union items). Strip the wrap and re-enter the
+  // branches; only the OUTER pair is stripped, so `Record<("A"|"B"), T>` members are untouched.
+  if (/^\(.*\)$/.test(t)) t = t.slice(1, -1).trim();
   // A single string literal has no top-level `|`; a union of literals (`'a' | 'b'`) must fall
   // through to the union branch so each member is surfaced, not the whole text as one value.
   const m = /^['"`]([^'"`|]*)['"`]$/.exec(t);
   if (m) return { type: 'string', enum: [m[1]] };
   if (t === 'true' || t === 'false') return { type: 'boolean', enum: [t === 'true'] };
+  // `keyof X` — the property keys of a resolvable shape are a string enum (the only JSON form a
+  // string key can take). `SearchableResource = keyof SearchableSummaryMap` is the case that
+  // motivated this branch: without it the alias reaches the unresolved fallback and every
+  // array-of-it item projects to a bare {"type":"object"} the invoke validator refuses in both
+  // directions (F5/SEC-1). An unresolvable target falls through to the unresolved fallback,
+  // where the marker stays visible to the gate.
+  const keyof = /^keyof\s+(.+)$/.exec(t);
+  if (keyof) {
+    const keys = resolveProps(keyof[1]);
+    if (keys && keys.length) return { type: 'string', enum: keys.map((p) => p.name) };
+  }
   if (t.endsWith('[]')) {
     const inner = t.slice(0, -2);
-    const it = jsonType(inner);
-    return { type: 'array', items: { type: it.type, ...(it.enum ? { enum: it.enum } : {}) } };
+    return { type: 'array', items: projectItems(jsonType(inner)) };
   }
   const arr = /^Array<(.+)>$/.exec(t);
   if (arr) {
-    const it = jsonType(arr[1]);
-    return { type: 'array', items: { type: it.type, ...(it.enum ? { enum: it.enum } : {}) } };
+    return { type: 'array', items: projectItems(jsonType(arr[1])) };
   }
   const rec = /^Record<(.+),\s*(.+)>$/.exec(t);
   if (rec) return { type: 'object', additionalProperties: { type: jsonType(rec[2]).type }, keyType: jsonType(rec[1]).type };

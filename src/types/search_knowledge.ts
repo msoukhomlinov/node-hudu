@@ -1,9 +1,9 @@
 /**
  * Result shapes of `operations.searchKnowledge` (the knowledge search engine).
  *
- * Design of record: `.run/design/search/engine-design.md` S4/S5 and
- * `.run/design/search/PROPOSAL.md` S2-S4. One writer per shape: the engine, the capability
- * registry row and the MCP projection all read these declarations.
+ * Design of record: `engine-design.md` S4/S5 and `PROPOSAL.md` S2-S4 (search design docs, kept
+ * outside this repo). One writer per shape: the engine, the capability registry row and the MCP
+ * projection all read these declarations.
  *
  * HONESTY IS THE POINT of this shape:
  *   - `meta.reasons[]` names every bound that bit; `meta.complete` is false whenever any did;

@@ -9,7 +9,7 @@ import type { ProcedureTask, ProcedureTaskCreate, ProcedureTaskUpdate } from '..
 import type { ProcedureTaskSummary } from '../types/procedure_task.js';
 import { HuduConfigError } from '../errors.js';
 import {
-  decideResolution, helperLimit, identifierError,
+  ambiguityProbeLimit, decideResolution, helperLimit, identifierError,
   refuseExpectedUpdatedAtOutsideUpdate, requirePositiveId,
 } from './agent-layer-helpers.js';
 
@@ -199,7 +199,7 @@ export class ProcedureTasksResource extends BaseResource<ProcedureTask> {
     const scan = await this.boundedScan<ProcedureTask>(this.pageFetcher(filter), {
       match: (record) => {
         if (record.name === name) matches.push(record);
-        return matches.length >= limit;
+        return matches.length >= ambiguityProbeLimit(limit);
       },
       label: (record) => record.name,
       idOf: (record) => record.id,
