@@ -95,6 +95,11 @@
 //   core-workflow-coverage   CORE misses a group-A read entry, a META tool, or a cross-resource helper
 //   core-budget              the CORE tools/list payload exceeds its budget (~8k tokens)
 //   emission-missing         capabilities.json / capabilities.schema.json / src/capabilities.ts absent
+//   include-groups           an operation whose SDK surface accepts relation include-groups does not
+//                            publish them (or the four group names) in its input schema, or publishes
+//                            `include` without the include-expanded output variants it advertises
+//                            (`itemVariants` for the list-shaped calls, `includeVariants` for
+//                            `assets.search`)
 //
 // Warnings (never failures): a public source method in neither the plan nor the registry
 // (unplanned surface), a record with purpose:null, a destructive row without requiresApproval,
@@ -1126,6 +1131,70 @@ if (searchModeTable !== null) {
     if (text.indexOf(owners[0]) === -1) {
       fail('mode-honours-fields', `${searchManifestRel} (hudu_search.inputSchema.${field.name}.description)`,
         `"${field.name}" is honoured by mode "${owners[0]}" alone, but its description never names that mode — a caller cannot tell when the field applies`);
+    }
+  }
+}
+
+
+// ---------------------------------------------------------------- include-group schema content
+// The relation include-groups (assets) are declared in the SDK's overloads AND published in the
+// registry: an operation that accepts `include` must say so, naming the four groups, and a
+// list-shaped one must advertise the include-expanded record shape as an output variant. A revert
+// that drops either half leaves callers (and the MCP projection, which is generated FROM this
+// registry) with no way to request includes, so the contract is asserted here.
+// The REGISTRY models endpoint-shaped operations, so it carries the three that accept groups
+// (`assets.list`, `assets.listAcrossCompanies`, `assets.search`). The helper-tier forms
+// (`listAll`/`listPages`/`listAllAcrossCompanies`/`listAcrossCompaniesPages`) are not registry records
+// by design — they are client-side collectors — and their include surface is pinned by the compile-time
+// assertions in `src/type-assertions.ts` instead.
+const INCLUDE_GROUPS = ['layout', 'expirations', 'relations', 'photos'];
+// `expanded` names the output half this operation publishes: a list-shaped call advertises the
+// include-expanded record variants (`itemVariants`), while `assets.search` carries its own
+// `includeVariants` collection (summaries and full records). Both are checked — an operation that
+// advertises `include` while its expanded shapes silently disappear is the same lie as one that never
+// published the parameter.
+const INCLUDE_OPERATIONS = [
+  {
+    name: 'assets.list',
+    at: (rec) => rec.inputSchema && rec.inputSchema.params && rec.inputSchema.params.fields,
+    expanded: ['AssetWithIncludes'],
+    readVariants: (rec) => ((rec.outputSchema && rec.outputSchema.itemVariants) || []).map((v) => v && v.typeName),
+  },
+  {
+    name: 'assets.listAcrossCompanies',
+    at: (rec) => rec.inputSchema && [rec.inputSchema.include],
+    expanded: ['AssetWithIncludes'],
+    readVariants: (rec) => ((rec.outputSchema && rec.outputSchema.itemVariants) || []).map((v) => v && v.typeName),
+  },
+  {
+    name: 'assets.search',
+    at: (rec) => rec.inputSchema && rec.inputSchema.opts && rec.inputSchema.opts.fields,
+    expanded: ['AssetSummaryWithIncludes', 'AssetWithIncludes'],
+    readVariants: (rec) => ((rec.outputSchema && rec.outputSchema.includeVariants) || []).map((v) => v && v.typeName),
+  },
+];
+for (const spec of INCLUDE_OPERATIONS) {
+  if (!registry) break;
+  const rec = registry.get(spec.name);
+  const where = `CAPABILITY_REGISTRY['${spec.name}']`;
+  if (rec === undefined) {
+    fail('include-groups', where, `${spec.name}: the operation that accepts include groups is not in the registry`);
+    continue;
+  }
+  const fields = spec.at(rec);
+  const include = Array.isArray(fields) ? fields.find((f) => f && f.name === 'include') : undefined;
+  if (include === undefined) {
+    fail('include-groups', `${where}.inputSchema`, `${spec.name}: accepts include groups in the SDK but publishes no \`include\` input, so its tool schema cannot express them`);
+    continue;
+  }
+  const enumValues = include.items && Array.isArray(include.items.enum) ? include.items.enum : null;
+  if (enumValues === null || enumValues.length !== INCLUDE_GROUPS.length || !INCLUDE_GROUPS.every((g) => enumValues.includes(g))) {
+    fail('include-groups', `${where}.inputSchema.include`, `${spec.name}: include must publish the ${INCLUDE_GROUPS.length} group names ${INCLUDE_GROUPS.join(', ')}; got ${JSON.stringify(enumValues)}`);
+  }
+  const publishedVariants = spec.readVariants(rec);
+  for (const expected of spec.expanded) {
+    if (!publishedVariants.includes(expected)) {
+      fail('include-groups', `${where}.outputSchema`, `${spec.name}: publishes \`include\` but not the expanded output variant "${expected}" (got ${JSON.stringify(publishedVariants)}), so a caller cannot see what the groups add`);
     }
   }
 }

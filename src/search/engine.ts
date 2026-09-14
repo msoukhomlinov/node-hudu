@@ -140,6 +140,16 @@ export interface EngineStatus {
   docs: Record<string, KnowledgeIndexDocStat>;
   watermarks: Record<string, string | null>;
   requestsLastBuild: number;
+  /** When the last full walk finished (ISO, truncated walks included), or null when none has. A caller
+   * can tell a full walk from an incremental warm with this — `staleness` alone cannot, because any
+   * build resets the age. */
+  lastFullAt: string | null;
+  /** When the last COMPLETE (untruncated) full walk finished, or null when none has: the only walk that
+   * has seen the whole collection, so the only one that can see a deletion. */
+  lastCompleteFullAt: string | null;
+  /** Whether a complete full walk is due now: the answer to "may the index be missing records, or hold
+   * deletions it never noticed?" — measured from `lastCompleteFullAt`, never from a truncated walk. */
+  fullWalkDue: boolean;
   /**
    * The last BACKGROUND build failure, or null. The automatic path cannot throw at its caller, so
    * the failure is reported here (and in `meta.errors`) instead of being swallowed; the next
@@ -164,6 +174,10 @@ interface ScoredGeneration {
   builtAt: number | null;
   /** The index's content version when this generation was scored (see `KnowledgeIndex.version`). */
   indexVersion: number;
+  /** When the last full walk (truncated or not) finished, for this generation. */
+  lastFullAt: number | null;
+  /** When the last COMPLETE full walk finished, for this generation (null = none has ever). */
+  lastCompleteFullAt: number | null;
   partial: boolean;
   buildTruncated: boolean;
 }
@@ -253,6 +267,13 @@ export class KnowledgeSearchEngine {
   private readonly now: () => number;
   private builtAt: number | null = null;
   private lastFullAt: number | null = null;
+  /**
+   * When the last COMPLETE (untruncated) full walk finished — the only walk that has seen the whole
+   * collection, deletions included. Kept apart from `lastFullAt` (the scheduler's clock) because a
+   * capped corpus can make every full walk truncated, and the two questions differ: "when should we
+   * re-walk?" versus "has the index really seen everything recently?".
+   */
+  private lastCompleteFullAt: number | null = null;
   private building: Promise<void> | null = null;
   /** Whether the in-flight build (if any) re-walks everything — a `full` caller must not dedup onto an incremental. */
   private buildingFull = false;
@@ -285,6 +306,9 @@ export class KnowledgeSearchEngine {
       docs: this.docStats(this.index.docs),
       watermarks: { ...this.watermarks },
       requestsLastBuild: this.requestsLastBuild,
+      lastFullAt: this.lastFullAt === null ? null : new Date(this.lastFullAt).toISOString(),
+      lastCompleteFullAt: this.lastCompleteFullAt === null ? null : new Date(this.lastCompleteFullAt).toISOString(),
+      fullWalkDue: this.isCompleteWalkDue(this.lastCompleteFullAt),
       lastBuildError: this.buildError === null ? null : { ...this.buildError },
     };
   }
@@ -319,10 +343,14 @@ export class KnowledgeSearchEngine {
       }
       return;
     }
-    // The attempt bound was reached: the caller asked for a full re-walk and this answer is built on
-    // a completed build that may be incremental. The CALLER's own holder is flagged, so the notice
-    // reaches exactly the request that was downgraded (a shared counter would need an argument about
-    // concurrent callers to say the same thing).
+    // SAFETY NET, not a routine path: this is reached only if `MAX_WARM_ATTEMPTS` successive in-flight
+    // builds were all incremental. It is unreached by construction today — `building` is assigned before
+    // any await and the starting caller registers its continuation first, so a `full` caller that just
+    // awaited a build finds none in flight and runs its own walk on attempt 1 (staged interleavings
+    // never exhausted the bound). The requirement it serves ("`refresh: true` gets a full walk or an
+    // explicit note") therefore holds WITHOUT it; the notice exists so that a future change which makes
+    // the bound reachable cannot silently downgrade a refresh. The CALLER's own holder is flagged, so a
+    // concurrent search can never consume another call's notice.
     if (wantFull && opts.downgraded !== undefined) opts.downgraded.value = true;
   }
 
@@ -912,6 +940,13 @@ export class KnowledgeSearchEngine {
   // ---------------------------------------------------------------- index build
 
   private async build(full: boolean): Promise<void> {
+    // The trailing comma on the watermark is LOAD-BEARING, and its meaning is verified against the
+    // vendor rather than assumed: on the live tenant (2026-09-14) `updated_at=<value>` returned 0 of 4
+    // articles while `updated_at=<value>,` returned all 4, including the record whose `updated_at`
+    // EQUALS the value. The plain form is therefore a STRICT lower bound and the comma makes it
+    // INCLUSIVE. That is what lets an incremental walk re-fetch a record sitting exactly on the
+    // watermark instead of losing it, and it bounds the capped-walk purge window: a boundary document
+    // dropped by a truncated walk is re-fetched on the next build (`indexTtlMs`).
     const sinceWatermark = full ? undefined : (this.watermarks.articles ?? undefined);
     const assetWatermark = full ? undefined : (this.watermarks.assets ?? undefined);
     const requests = { count: 0 };
@@ -962,12 +997,14 @@ export class KnowledgeSearchEngine {
       if (!articles.truncated) walkedFully.add('articles');
       if (!assets.truncated) walkedFully.add('assets');
       this.index.retain(keys, walkedFully);
-      // A full walk that completes re-establishes the index's completeness; a truncated one
-      // leaves it partial until the next completed full walk (scheduled by `needsFullRefresh`).
+      // A full walk that completes re-establishes the index's completeness; a TRUNCATED one leaves it
+      // partial, and leaves the completeness clock where it was — the scheduler may wait a whole
+      // interval before walking again, so claiming "we have seen everything just now" would be false.
       this.partial = truncated;
       this.totalKnown.articles = articleTotal;
       this.totalKnown.assets = assetTotal;
       this.lastFullAt = this.now();
+      if (!truncated) this.lastCompleteFullAt = this.lastFullAt;
     } else {
       // An incremental walk cannot PROVE completeness (records it never fetched stay unknown), so
       // it may raise `partial` but never lower it.
@@ -1071,6 +1108,8 @@ export class KnowledgeSearchEngine {
       truncatedDocs: this.truncatedDocs,
       builtAt: this.builtAt,
       indexVersion: this.index.version,
+      lastFullAt: this.lastFullAt,
+      lastCompleteFullAt: this.lastCompleteFullAt,
       partial: this.partial,
       buildTruncated: this.lastBuildTruncated,
     };
@@ -1091,6 +1130,9 @@ export class KnowledgeSearchEngine {
         staleness: status.staleness,
         docs: status.docs,
         indexChangedSinceScore: false,
+        lastFullAt: status.lastFullAt,
+        lastCompleteFullAt: status.lastCompleteFullAt,
+        fullWalkDue: status.fullWalkDue,
       };
     }
     const ageMs = generation.builtAt === null ? null : Math.max(0, this.now() - generation.builtAt);
@@ -1103,6 +1145,10 @@ export class KnowledgeSearchEngine {
       staleness: ageMs === null ? 'unknown' : ageMs > this.config.ttlMs ? 'stale' : 'fresh',
       docs: generation.stats,
       indexChangedSinceScore: this.index.version !== generation.indexVersion,
+      lastFullAt: generation.lastFullAt === null ? null : new Date(generation.lastFullAt).toISOString(),
+      lastCompleteFullAt:
+        generation.lastCompleteFullAt === null ? null : new Date(generation.lastCompleteFullAt).toISOString(),
+      fullWalkDue: this.isCompleteWalkDue(generation.lastCompleteFullAt),
     };
   }
 
@@ -1120,10 +1166,27 @@ export class KnowledgeSearchEngine {
     return 'Answered from Hudu search alone (title and custom-field values): article body terms were NOT searched. Call again once the index is warm, or pass tier "index".';
   }
 
-  /** Full re-walk decision: deletes are invisible to `updated_at`, so this is required periodically. */
+  /** Age-based question shared by the two clocks below: is a timestamp older than the walk interval? */
+  private isFullWalkDue(stamp: number | null): boolean {
+    if (stamp === null) return true;
+    return this.now() - stamp > this.config.ttlMs * this.config.fullRefreshEvery;
+  }
+
+  /**
+   * The SCHEDULER's question: should we re-walk now? Measured from the last full walk ATTEMPT, so a
+   * corpus whose walk is always truncated does not re-walk on every single build.
+   */
   needsFullRefresh(): boolean {
-    if (this.lastFullAt === null) return true;
-    return this.now() - this.lastFullAt > this.config.ttlMs * this.config.fullRefreshEvery;
+    return this.isFullWalkDue(this.lastFullAt);
+  }
+
+  /**
+   * The CALLER's question, reported as `fullWalkDue`: may the index still be missing records, or hold
+   * deletions it never noticed? Measured from the last COMPLETE full walk, so a truncated walk does
+   * not answer it.
+   */
+  private isCompleteWalkDue(stamp: number | null): boolean {
+    return this.isFullWalkDue(stamp);
   }
 }
 

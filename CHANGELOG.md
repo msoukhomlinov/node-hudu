@@ -78,8 +78,36 @@ error code changed meaning. `test/public-surface.test.ts` proves that against th
   into `npm test` (`test/negative-fixture.test.ts`, which runs `scripts/check-negative-fixture.mjs`
   and asserts the gate exits non-zero on the fixture with minimum rule-based failure counts).
 
+### Added — search transparency and include-group pins (post-PR-22 follow-ups)
+
+- `meta.index.lastFullAt` / `lastCompleteFullAt` / `fullWalkDue` (and the same three fields on
+  `status()`) let a caller tell an incremental warm from a full re-walk: `staleness` alone cannot,
+  because any build resets the age. `lastFullAt` is the scheduler's clock (a full walk ran, truncated or
+  not); `lastCompleteFullAt` is the honest completeness claim (only an untruncated walk has seen the
+  whole collection), and `fullWalkDue` is measured from THAT — so a corpus whose walk is always capped
+  reports "may still be missing records" instead of claiming otherwise, while the scheduler still does
+  not re-walk on every build.
+- The relation include-groups are now pinned on both halves of the contract: `src/type-assertions.ts`
+  (compile-time assertions, checked by `tsc --noEmit`, so a loosened inference fails the gate) and the
+  `include-groups` rule in `check-capabilities` (an include-bearing operation must publish the four group
+  names and its include-expanded output variant).
+
 ### Fixed
 
+- An `include` array the compiler cannot narrow no longer infers the plain shape. Each list-shaped call
+  and `assets.search` now carry ONE generic overload whose return depends on what the compiler can prove:
+  a literal, `as const` tuple or typed `AssetIncludeGroup[]` still resolves to the expanded records; a
+  `string[]`, a readonly array, or an OPTIONAL widened property (`{ include?: string[] }`, possibly absent
+  at runtime) resolves to the union; no `include` (or an explicit `undefined`) resolves to the plain
+  records — with `search`'s `expand` still selecting summaries versus full records, and an EMPTY literal
+  array taking the plain shape because it requests no groups. A value the compiler knows as a tuple of
+  names is still VALIDATED against the four groups (a typo like `['expiration']` is a compile error naming
+  the offending name), because accepting a `string[]` must not cost the typed contract; a widened array is
+  accepted and widens the return instead. Before, a widened array matched a plain overload through
+  `ListParams`' index signature, so the type said `Asset` while the runtime fetched the includes the array
+  held, and `assets.search` refused the call outright. The union is a statement about what MAY be present,
+  not an enforcement: `AssetWithIncludes` adds only optional group fields to `Asset`, so a caller can
+  still annotate the result as the plain shape.
 - The cross-resource helpers' `resources` parameter (`operations.resolveAny`,
   `operations.searchAcrossResources`) now projects as a string enum of the eight searchable
   resources instead of an unresolvable object item that the invoke validator refused in both
