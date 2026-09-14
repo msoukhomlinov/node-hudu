@@ -241,8 +241,6 @@ export class KnowledgeSearchEngine {
   private partial = false;
   /** True when the MOST RECENT build truncated: reported for that answer, while `partial` is the index's own state. */
   private lastBuildTruncated = false;
-  /** Counts `refresh: true` requests that contention kept from being a full walk (see `warm`). */
-  private downgradeSeq = 0;
   private truncatedDocs = 0;
   private readonly watermarks: Record<string, string | null> = { articles: null, assets: null };
   private readonly totalKnown: Record<string, number | null> = { articles: null, assets: null };
@@ -275,7 +273,7 @@ export class KnowledgeSearchEngine {
    * Build or refresh the index. `full` re-walks everything and drops documents missing from the
    * walk — the ONLY honest way to notice a deletion, because `updated_at` cannot see one.
    */
-  async warm(opts: { full?: boolean } = {}): Promise<void> {
+  async warm(opts: { full?: boolean; downgraded?: { value: boolean } } = {}): Promise<void> {
     const wantFull = opts.full === true;
     // Dedup, but never DOWNGRADE: awaiting an in-flight incremental build does not satisfy a
     // caller that asked for a full re-walk (only a full walk can notice a deletion). A bounded
@@ -302,8 +300,10 @@ export class KnowledgeSearchEngine {
       return;
     }
     // The attempt bound was reached: the caller asked for a full re-walk and this answer is built on
-    // a completed build that may be incremental. Say so instead of implying the refresh happened.
-    if (wantFull) this.downgradeSeq += 1;
+    // a completed build that may be incremental. The CALLER's own holder is flagged, so the notice
+    // reaches exactly the request that was downgraded (a shared counter would need an argument about
+    // concurrent callers to say the same thing).
+    if (wantFull && opts.downgraded !== undefined) opts.downgraded.value = true;
   }
 
   /** Start a warm build without waiting for it (the cold-client path must not block a tool call). */
@@ -349,11 +349,10 @@ export class KnowledgeSearchEngine {
     const vendorMs = { value: 0 };
 
     const tier = opts.tier ?? 'auto';
-    // A downgrade is announced to the answer that ASKED for the refresh, so the sequence is captured
-    // per call rather than left as an engine-wide flag a concurrent search could consume.
-    const downgradesBefore = this.downgradeSeq;
+    // A downgrade is announced to the answer that ASKED for the refresh: the holder is this call's own.
+    const downgraded = { value: false };
     if (opts.refresh === true) {
-      await this.warm({ full: true });
+      await this.warm({ full: true, downgraded });
     } else if (tier === 'index') {
       await this.warm({ full: false });
     } else if (tier === 'auto') {
@@ -439,7 +438,7 @@ export class KnowledgeSearchEngine {
     }
     if (this.lastBuildTruncated) reasons.push('index-partial');
     if (this.bodiesEvicted() > 0) reasons.push('body-evicted');
-    if (this.downgradeSeq !== downgradesBefore) {
+    if (downgraded.value) {
       // `refresh: true` promises a full re-walk, so a caller must be told when contention stopped it
       // from being one: the index may still hold a record the vendor has deleted.
       reasons.push('refresh-downgraded');
