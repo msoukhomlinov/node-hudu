@@ -614,18 +614,26 @@ if (registry) {
     // legitimate bare object item: either the type resolved (then its fields are known) or it did
     // not (then the caller is told to pass an object the validator cannot check).
     // `.inputSchema.data` is excluded: that subtree is the vendor's RECORD payload, where a
-    // free-form object item is the vendor's own shape. Platform binary names are excluded,
-    // mirroring the generator's own opaqueSchemaNodes policy.
+    // free-form object item is the vendor's own shape (13 such items are shipped today). The
+    // exclusion costs nothing for the defect class: an UNRESOLVABLE ARRAY ITEM carries its
+    // typeName wherever it sits, so marker (1) still catches it inside `.data`; marker (3) exists
+    // for the case where the item projection regresses and drops that evidence again.
+    // Platform binary names are excluded, mirroring the generator's opaqueSchemaNodes policy.
     const UNRESOLVED_PLATFORM_OPAQUE = new Set(['Blob', 'File', 'Buffer', 'ArrayBuffer', 'ReadableStream', 'Uint8Array', 'Date']);
     const walkUnresolved = (node, jsonPath, key) => {
       if (!node || typeof node !== 'object') return;
-      const here = key === undefined || key === '' ? jsonPath : `${jsonPath}.${key}`;
+      const here = Array.isArray(node)
+        ? jsonPath
+        : key === undefined || key === '' ? jsonPath : `${jsonPath}.${key}`;
       const named = typeof node.typeName === 'string' && node.typeName.length > 0
         && !node.typeName.startsWith('{') && !node.typeName.startsWith('(');
       const platformOpaque = named && UNRESOLVED_PLATFORM_OPAQUE.has(node.typeName);
       const marked = node.resolved === false;
       const unresolvedItem = key === 'items' && node.type === 'object' && named && !platformOpaque;
-      const bareAuthoredItem = key === 'items' && node.type === 'object' && !named
+      // A bare `items`/`additionalProperties` object node outside the vendor payload: no name, no
+      // fields, no enum, no nested shape — nothing a caller or the validator can act on.
+      const bareObjectNode = (key === 'items' || key === 'additionalProperties') && node.type === 'object';
+      const bareAuthoredItem = bareObjectNode && !named
         && node.enum === undefined && node.fields === undefined && node.additionalProperties === undefined
         && !/\.inputSchema\.data(\.|$)/.test(here);
       if (unresolvedItem || marked || bareAuthoredItem) {

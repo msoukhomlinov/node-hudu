@@ -3,9 +3,15 @@
 //
 // Wires the committed negative fixture into automated execution (F-L5). The claim "a committed
 // negative fixture proves the gate actually fails" has no backing unless something RUNS the
-// fixture, so this is that something — and it is the proof vehicle for the
-// inputSchema-unresolved-item rule as well: the fixture run must fail with rule-based evidence,
-// not a crash.
+// fixture, so this is that something.
+//
+// It carries TWO negative proofs, because one fixture cannot cover both kinds of rule:
+//   1. the committed DIFFERENT-PLAN fixture must fail the plan-reading rules with rule-based
+//      evidence, not a crash;
+//   2. a DOCTORED REGISTRY (the F5 defect shape restored: a detail-less `items: {"type":"object"}`
+//      outside the vendor payload) must fail the inputSchema-unresolved-item rule specifically.
+//      The plan fixture can never exercise a registry rule, so without this the new rule could be
+//      vacuous and still look green.
 //
 // Asserts (RC != 0 AND a MINIMUM failure count — never an exact count, so legitimate rule
 // additions cannot break this):
@@ -22,6 +28,8 @@
 // is too thin (the fixture is orphaned or has lost its teeth).
 
 import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -50,9 +58,45 @@ if (!m) {
   console.log(`negative-fixture — gate failed as intended: ${failures} failure(s) in ${rules} distinct rule(s) (minimums: ${MIN_FAILURES} failures / ${MIN_RULES} rules), RC=${r.status}`);
   console.log(out.slice(m.index, m.index + 420).trim());
 }
+// ---------------------------------------------------------------- registry-shape negative proof
+// The plan fixture cannot exercise a REGISTRY rule (it is plan-only), so the rule that closes the
+// F5 class needs its own negative case: doctor a copy of the registry back to the shape the defect
+// emitted (`items: {"type": "object"}` for the cross-resource `resources` parameter, outside the
+// vendor `.data` payload) and require the gate to FAIL on it, naming the rule. Without this the
+// rule could be vacuously green forever.
+const REGISTRY_SOURCE = path.join(ROOT, 'src', 'capabilities.ts');
+const DEPLOYED_PARAM = /"name":"resources","type":"array","items":\{"type":"string","enum":\[[^\]]*\]\}/;
+const source = readFileSync(REGISTRY_SOURCE, 'utf8');
+const deployed = DEPLOYED_PARAM.exec(source);
+if (deployed === null) {
+  // The parameter changed shape: re-point this proof rather than let it pass vacuously.
+  problems.push('the cross-resource `resources` parameter is no longer the deployed string enum — re-point the registry-shape proof at its replacement');
+} else {
+  const tmpDir = mkdtempSync(path.join(tmpdir(), 'hudu-negative-registry-'));
+  const doctored = path.join(tmpDir, 'capabilities.ts');
+  writeFileSync(doctored, source.replace(deployed[0], '"name":"resources","type":"array","items":{"type":"object"}'));
+  try {
+    const rr = spawnSync(process.execPath, ['scripts/check-capabilities.mjs', '--registry', doctored], {
+      cwd: ROOT,
+      encoding: 'utf8',
+    });
+    const rout = `${rr.stdout ?? ''}\n${rr.stderr ?? ''}`;
+    if (rr.status === 0) {
+      problems.push('the gate PASSED a registry carrying the defect shape (bare items:{"type":"object"} outside .data) — inputSchema-unresolved-item has no teeth');
+    } else if (!rout.includes('inputSchema-unresolved-item')) {
+      problems.push(`the gate failed the doctored registry (RC=${rr.status}) but did not name inputSchema-unresolved-item — the refusal came from another rule`);
+    } else {
+      console.log('negative-fixture — registry shape: the gate refused the doctored registry and named inputSchema-unresolved-item');
+      console.log(rout.trim().split('\n').filter((line) => line.includes('inputSchema-unresolved-item') || line.includes('FAIL —')).slice(0, 3).join('\n'));
+    }
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
+}
+
 if (problems.length) {
   for (const p of problems) console.error(`negative-fixture: FAIL — ${p}`);
   process.exit(1);
 }
-console.log('negative-fixture — PASS — the committed drifted plan fails the gate with rule-based evidence.');
+console.log('negative-fixture — PASS — the committed drifted plan fails the gate with rule-based evidence, and the inputSchema-unresolved-item rule fails a doctored registry that carries the defect shape.');
 process.exit(0);

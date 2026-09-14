@@ -248,6 +248,35 @@ describe('F-L1 — a rebuild during the vendor await cannot re-point a scored ro
   });
 });
 
+describe('F-L1 (revision) — an in-place re-upsert cannot change a snapshot the reader holds', () => {
+  it('hydrates the revision it scored, not the one that arrived during the vendor await', async () => {
+    const { harness: h, deps } = harness({
+      articles: [1, 2, 3, 4, 5].map((id) => article(id, `alpha ${id}`, id === 1 ? 'platypus alpha body' : 'alpha body')),
+    });
+    const engine = new KnowledgeSearchEngine(deps, { pageSize: 2, maxIndexPages: 10, maxDocsScored: 2000, maxResponseBytes: BYTES.small });
+    await engine.search('alpha', { refresh: true });
+
+    h.vendorGate.arm();
+    const racy = engine.search('platypus', { tier: 'auto' });
+    // The SAME record is revised (its body no longer carries the term) while the racy search is
+    // parked in the vendor tier: a re-upsert replaces the element the reader already scored.
+    h.corpus.articles = h.corpus.articles.map((row) =>
+      row.id === 1 ? article(1, 'alpha 1', 'the body was rewritten') : row,
+    );
+    const rebuild = engine.search('platypus', { refresh: true });
+    await rebuild;
+    h.vendorGate.open();
+    const result = await racy;
+
+    const hit = result.hits.find((candidate) => candidate.id === 1);
+    expect(hit?.match.terms).toContain('platypus');
+    // The snippet is built from the document the ROW was scored against; a snapshot that let the
+    // element be replaced in place would report the revised body instead of the scored one.
+    expect(hit?.snippet?.reason).not.toBe('no-match-in-body');
+    expect(hit?.snippet?.text ?? '').toContain('platypus');
+  });
+});
+
 describe('F6 — the response budget counts UTF-8 BYTES of the whole response', () => {
   it('flags a multi-byte payload that overshoots the budget', async () => {
     const budget = 8192;

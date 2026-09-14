@@ -201,6 +201,9 @@ export function auditSchemaVocabulary(inputSchema: unknown): string[] {
 function runtimeTypeOf(value: unknown): string {
   if (value === null) return 'null';
   if (Array.isArray(value)) return 'array';
+  // A non-finite number is reported as what it IS: `typeof NaN === 'number'` would make the refusal
+  // read "expected number, got number", which names no problem at all.
+  if (typeof value === 'number' && !Number.isFinite(value)) return String(value);
   return typeof value;
 }
 

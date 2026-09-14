@@ -10,8 +10,6 @@
  */
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -28,27 +26,17 @@ describe('capability gate negative fixture', () => {
     expect(out).toContain('negative-fixture — PASS');
   });
 
-  it('the inputSchema-unresolved-item rule catches the DETAIL-LESS emission the defect produced', () => {
-    // The reproduced defect emitted `items: {"type": "object"}` — the item projection dropped both
-    // the resolution and the type name, so a rule that only looks for a name or `resolved: false`
-    // cannot see it. This proves the rule has teeth for that exact shape: an authored parameter
-    // position (outside the vendor `.data` payload) may never advertise an untyped object item.
-    const source = fs.readFileSync(path.join(root, 'src', 'capabilities.ts'), 'utf8');
-    const deployed = /"name":"resources","type":"array","items":\{"type":"string","enum":\[[^\]]*\]\}/.exec(source);
-    expect(deployed, 'the resources parameter is no longer a string enum — re-point this test').not.toBeNull();
-    const doctored = source.replace(deployed[0], '"name":"resources","type":"array","items":{"type":"object"}');
-    const tmp = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'hudu-registry-')), 'capabilities.ts');
-    fs.writeFileSync(tmp, doctored);
-    try {
-      const r = spawnSync(process.execPath, ['scripts/check-capabilities.mjs', '--registry', tmp], {
-        cwd: root,
-        encoding: 'utf8',
-      });
-      const out = `${r.stdout ?? ''}\n${r.stderr ?? ''}`;
-      expect(r.status, `the gate PASSED a registry carrying the defect shape:\n${out}`).not.toBe(0);
-      expect(out).toContain('inputSchema-unresolved-item');
-    } finally {
-      fs.rmSync(path.dirname(tmp), { recursive: true, force: true });
-    }
+  it('proves the inputSchema-unresolved-item rule has teeth for the defect shape', () => {
+    // The plan fixture cannot exercise a REGISTRY rule, so the script carries a second negative
+    // proof: it doctors a copy of the registry back to the shape the defect emitted and requires
+    // the gate to refuse it, naming the rule. Asserted from the script's own output so there is one
+    // implementation of the proof.
+    const r = spawnSync(process.execPath, ['scripts/check-negative-fixture.mjs'], {
+      cwd: root,
+      encoding: 'utf8',
+    });
+    const out = `${r.stdout ?? ''}\n${r.stderr ?? ''}`;
+    expect(r.status, `check-negative-fixture exited ${r.status}:\n${out}`).toBe(0);
+    expect(out).toContain('registry shape: the gate refused the doctored registry and named inputSchema-unresolved-item');
   });
 });

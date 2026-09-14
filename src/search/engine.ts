@@ -18,7 +18,7 @@
  * `degraded: { reason: 'body-not-indexed' }` rather than a bare empty list: Hudu's own `search`
  * never matches article body content, so a silent empty answer would be a lie by omission.
  */
-import { HuduConfigError, HuduError } from '../errors.js';
+import { HuduConfigError, HuduError, isHuduError } from '../errors.js';
 import type { Page } from '../pagination.js';
 import type {
   KnowledgeIndexDocStat,
@@ -241,6 +241,8 @@ export class KnowledgeSearchEngine {
   private partial = false;
   /** True when the MOST RECENT build truncated: reported for that answer, while `partial` is the index's own state. */
   private lastBuildTruncated = false;
+  /** Set when a `refresh: true` request could not be satisfied by a full walk within `MAX_WARM_ATTEMPTS`. */
+  private refreshDowngraded = false;
   private truncatedDocs = 0;
   private readonly watermarks: Record<string, string | null> = { articles: null, assets: null };
   private readonly totalKnown: Record<string, number | null> = { articles: null, assets: null };
@@ -299,6 +301,9 @@ export class KnowledgeSearchEngine {
       }
       return;
     }
+    // The attempt bound was reached: the caller asked for a full re-walk and this answer is built on
+    // a completed build that may be incremental. Say so instead of implying the refresh happened.
+    if (wantFull) this.refreshDowngraded = true;
   }
 
   /** Start a warm build without waiting for it (the cold-client path must not block a tool call). */
@@ -311,8 +316,10 @@ export class KnowledgeSearchEngine {
     void this.warm({ full }).catch((error: unknown) => {
       // The caller is a tool call that must not block, so the failure is RECORDED, never dropped:
       // `status().lastBuildError` and `meta.errors` name it for the next answer.
+      // `errorCode` defaults a non-Hudu value to NETWORK_ERROR, which would mislabel an internal
+      // fault (a TypeError in the walk) as a transport failure: name it for what it is.
       this.buildError = {
-        code: errorCode(error),
+        code: isHuduError(error) ? error.code : 'INDEX_BUILD_FAILED',
         message: error instanceof Error ? error.message : String(error),
       };
     });
@@ -376,22 +383,27 @@ export class KnowledgeSearchEngine {
       reasons.push('no-scoreable-term');
     }
 
-    const vendorRows = await this.runVendor(query, scope, terms, limit, errors, requests, vendorMs, exactOnly);
-    scanned = candidatesScored + vendorRows.length;
-    for (const row of vendorRows) vendorScored.push(row);
-
-    const hits = this.hydrate(scoredRows, scoredDocs, vendorScored, {
-      terms,
-      limit,
-      snippetChars,
-      scope,
-      indexUsed,
-      companyId: opts.company_id,
-      updatedSince: opts.updated_since,
-      minScore: opts.min_score,
-      reasons,
-      truncation,
-    });
+    let hits: { hits: KnowledgeSearchHit[]; truncation: KnowledgeSearchTruncation | undefined; candidatesScored: number };
+    try {
+      const vendorRows = await this.runVendor(query, scope, terms, limit, errors, requests, vendorMs, exactOnly);
+      scanned = candidatesScored + vendorRows.length;
+      for (const row of vendorRows) vendorScored.push(row);
+      hits = this.hydrate(scoredRows, scoredDocs, vendorScored, {
+        terms,
+        limit,
+        snippetChars,
+        scope,
+        indexUsed,
+        companyId: opts.company_id,
+        updatedSince: opts.updated_since,
+        minScore: opts.min_score,
+        reasons,
+        truncation,
+      });
+    } finally {
+      // The snapshot lives exactly as long as the rows that address it.
+      if (indexUsed) this.index.endRead();
+    }
     truncation = hits.truncation;
     if (this.buildError !== null) {
       // Symmetry with the explicit path (which throws): a failed automatic build is announced in
@@ -417,6 +429,12 @@ export class KnowledgeSearchEngine {
       reasons.push('body-not-indexed');
     }
     if (this.lastBuildTruncated) reasons.push('index-partial');
+    if (this.refreshDowngraded) {
+      // `refresh: true` promises a full re-walk, so a caller must be told when contention stopped it
+      // from being one: the index may still hold a record the vendor has deleted.
+      reasons.push('refresh-downgraded');
+      this.refreshDowngraded = false;
+    }
     if (this.truncatedDocs > 0) reasons.push('body-truncated');
 
     const uniqueReasons = [...new Set(reasons)];
@@ -511,9 +529,10 @@ export class KnowledgeSearchEngine {
     opts: { exactOnly: boolean; maxDocsScored: number },
   ): { rows: ScoredRow[]; candidatesScored: number; capped: boolean; docs: readonly SearchDoc[] } {
     this.index.ensureFinalized();
-    // Scoring is synchronous, so this reference and the postings it was derived from are
-    // consistent for the whole scan; the caller keeps it for hydration (see `search`).
-    const docs = this.index.docs;
+    // Scoring is synchronous, so this snapshot and the postings it was derived from are consistent
+    // for the whole scan; the caller keeps it for hydration and releases it with `endRead` (see
+    // `search`), which pins it against in-place writes until then.
+    const docs = this.index.beginRead();
     const rows = new Map<number, ScoredRow>();
     const compactQuery = opts.exactOnly ? null : compactOfQuery(terms);
     for (const term of terms) {
@@ -618,9 +637,10 @@ export class KnowledgeSearchEngine {
 
     for (const row of indexRows) {
       const doc = indexDocs[row.docIndex];
-      // The snapshot makes an out-of-range coordinate impossible; if one ever appears the caller
-      // gets a typed, retryable error naming the condition, never a raw TypeError from a property
-      // read on `undefined`.
+      // The pinned snapshot makes an out-of-range coordinate impossible, so this is an INVARIANT
+      // assertion rather than a live path (the defect it replaces was a raw TypeError from a
+      // property read on `undefined`). It stays because an unreachable invariant that names itself
+      // beats a crash a caller cannot classify.
       if (doc === undefined) {
         throw new HuduError(
           `knowledge index generation changed while the search was in flight: candidate ${row.docIndex} is ` +
@@ -752,8 +772,12 @@ export class KnowledgeSearchEngine {
     opts: { reasons: string[]; truncation: KnowledgeSearchTruncation | undefined; candidatesScored: number },
   ): void {
     const meta = result.meta;
-    // `meta.bytes` is part of the response it measures, so the size is found by iteration
-    // (it converges in one step in practice).
+    // `meta.bytes` is part of the response it measures, so the size is found by iteration: one pass
+    // can change the width of the digit string, and the next pass then reproduces it. The bound is
+    // safe by construction — a pass changes `meta.bytes` by at most a few characters of JSON — and
+    // the four-pass cap only exists so a pathological value cannot spin. Anything the bound would
+    // have caught is caught instead by the test that asserts `meta.bytes` equals the size of the
+    // final serialisation.
     const sizeOf = (): number => {
       let size = meta.bytes;
       for (let pass = 0; pass < 4; pass += 1) {
@@ -767,6 +791,8 @@ export class KnowledgeSearchEngine {
     };
     let size = sizeOf();
     if (size <= this.config.maxResponseBytes) return;
+    // A truncation already reported by the candidate cap is the FIRST thing that cut the answer, so
+    // it is kept as `truncation`; the byte cut is reported alongside it in `reasons`.
     if (opts.truncation === undefined) {
       opts.truncation = {
         reason: 'result-limit',
@@ -915,7 +941,9 @@ export class KnowledgeSearchEngine {
     this.buildError = null;
     this.watermarks.articles = articleMax;
     this.watermarks.assets = assetMax;
-    this.index.capDocs();
+    // The document cap drops the OLDEST records, so a capped index is missing records it knows the
+    // vendor has: `partial` is reported, never merely implied.
+    if (this.index.capDocs() > 0) this.partial = true;
     this.index.finalize();
     this.requestsLastBuild = requests.count;
     this.builtAt = this.now();
@@ -928,6 +956,12 @@ export class KnowledgeSearchEngine {
    * must be exact: a walk whose last read page reports `hasMore: false` has seen the whole
    * collection, whether or not that page happened to be the cap. Only a page that claims more
    * data behind it makes the walk incomplete.
+   *
+   * The strict `=== false` comparison is deliberate: every bundled producer derives `hasMore` from
+   * the page it just read (`items.length === page_size`, or `false` for a non-paginated endpoint),
+   * never from the vendor's own flag — so `false` is trustworthy. An ABSENT `hasMore` is treated as
+   * "more may follow" and stays bounded by `maxIndexPages`: the walk then reports truncated, which
+   * costs a skipped delete-detection (over-reporting) and can never purge a live document.
    */
   private async walk(
     pages: AsyncIterable<Page<Record<string, unknown>>>,

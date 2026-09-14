@@ -131,6 +131,10 @@ export class KnowledgeIndex {
    * untouched, so they stay compatible with an in-flight reader.
    */
   docs: SearchDoc[] = [];
+  /** Live snapshot readers; while one is live the array is detached before any in-place write. */
+  private readers = 0;
+  /** True when `docs` was already copied away from the readers currently holding it. */
+  private detachedForReaders = false;
   /** `resource:id` -> document index. */
   private readonly byKey = new Map<string, number>();
   private readonly postings = new Map<IndexField, Map<string, Posting>>();
@@ -146,6 +150,33 @@ export class KnowledgeIndex {
   private dirty = true;
 
   constructor(readonly bounds: IndexBounds = DEFAULT_INDEX_BOUNDS) {}
+
+  /**
+   * Hand out the current document array and keep it STABLE for the caller until `endRead`.
+   *
+   * A reader (a search that scored rows against these coordinates and may await a vendor call
+   * before hydrating them) must never see an element of its snapshot replaced by a newer revision
+   * of the same record: the row it scored described the revision it scored. While any reader is
+   * live, the next in-place write copies the array first, so one array copy per build keeps every
+   * reader consistent.
+   */
+  beginRead(): readonly SearchDoc[] {
+    this.readers += 1;
+    return this.docs;
+  }
+
+  /** Release a snapshot handed out by `beginRead`. */
+  endRead(): void {
+    this.readers = Math.max(0, this.readers - 1);
+    if (this.readers === 0) this.detachedForReaders = false;
+  }
+
+  /** Copy `docs` away from its live readers before a write that would otherwise change it in place. */
+  private detachForReaders(): void {
+    if (this.readers === 0 || this.detachedForReaders) return;
+    this.docs = [...this.docs];
+    this.detachedForReaders = true;
+  }
 
   /** Number of indexed documents. */
   get size(): number {
@@ -166,10 +197,12 @@ export class KnowledgeIndex {
   upsert(doc: SearchDoc): void {
     const key = `${doc.resource}:${doc.id}`;
     const existing = this.byKey.get(key);
+    this.detachForReaders();
     if (existing !== undefined) {
       const previous = this.docs[existing] as SearchDoc;
-      this.dropText(previous, false);
-      // The replaced object leaves the index: forget it, or the eviction bookkeeping pins it forever.
+      // The replaced object leaves the index without being touched: a reader may still hold it, and
+      // its text stays accounted for that reader's benefit until the object is collected.
+      this.releaseTextAccount(previous);
       this.evictedDocs.delete(previous);
       this.evictedTokens.delete(previous);
       this.docs[existing] = doc;
@@ -226,6 +259,9 @@ export class KnowledgeIndex {
    */
   private replaceDocs(next: readonly SearchDoc[]): void {
     this.docs = [...next];
+    // A fresh array is unshared, so the next in-place write must detach again for the readers that
+    // are still holding the PREVIOUS one.
+    this.detachedForReaders = false;
     this.byKey.clear();
     this.textBytes = 0;
     this.accessClock.clear();
@@ -411,23 +447,40 @@ export class KnowledgeIndex {
     this.ensureTextBudget();
   }
 
-  private dropText(doc: SearchDoc, evict: boolean): void {
-    if (doc.longText !== null) {
-      this.textBytes -= utf8Bytes(doc.longText);
-      if (this.textBytes < 0) this.textBytes = 0;
-      doc.longText = null;
-      if (evict) this.evictedDocs.add(doc);
-    }
-    // The long text and its field string are the SAME string: dropping only `longText` keeps the
-    // whole text reachable (the eviction frees nothing) while `bodiesIndexed` keeps counting a body
-    // the index no longer holds. Release both — after taking the document's token snapshot, which
-    // is what keeps body RECALL working without the text (see `evictedTokens`).
+  /**
+   * Return a document with its long text released, and take the released bytes out of the account.
+   *
+   * The document OBJECT a reader holds is never mutated: a snapshot must be trustworthy field by
+   * field, not only in its order, so the index stores the returned copy instead of editing the
+   * original (which a live reader may still be reading).
+   *
+   * The long text and its field string are the SAME string: dropping only `longText` keeps the
+   * whole text reachable (the eviction frees nothing) while `bodiesIndexed` keeps counting a body
+   * the index no longer holds. Release both — after taking the document's token snapshot, which is
+   * what keeps body RECALL working without the text (see `evictedTokens`).
+   */
+  private withoutText(doc: SearchDoc, evict: boolean): SearchDoc {
+    const freed = doc.longText === null ? 0 : utf8Bytes(doc.longText);
+    this.textBytes -= freed;
+    if (this.textBytes < 0) this.textBytes = 0;
+    const copy: SearchDoc = { ...doc, longText: null, fields: { ...doc.fields } };
     const longField = LONG_TEXT_FIELD[doc.longSource];
-    if (longField === undefined) return;
-    const text = doc.fields[longField];
-    if (text === undefined) return;
-    if (evict) this.evictedTokens.set(doc, { field: longField, ...tokenizeField(text) });
-    delete doc.fields[longField];
+    if (longField !== undefined) {
+      const text = copy.fields[longField];
+      if (text !== undefined) {
+        if (evict) this.evictedTokens.set(copy, { field: longField, ...tokenizeField(text) });
+        delete copy.fields[longField];
+      }
+    }
+    if (evict) this.evictedDocs.add(copy);
+    return copy;
+  }
+
+  /** Take a document that is LEAVING the index out of the text account (it is not mutated). */
+  private releaseTextAccount(doc: SearchDoc): void {
+    if (doc.longText === null) return;
+    this.textBytes -= utf8Bytes(doc.longText);
+    if (this.textBytes < 0) this.textBytes = 0;
   }
 
   /** Documents that lost their text (they keep postings, so they still rank). */
@@ -458,7 +511,8 @@ export class KnowledgeIndex {
         }
       }
       if (victim < 0) return;
-      this.dropText(this.docs[victim] as SearchDoc, true);
+      // The index keeps the TEXT-FREE COPY; the evicted object a reader may be holding keeps its text.
+      this.docs[victim] = this.withoutText(this.docs[victim] as SearchDoc, true);
     }
   }
 }
