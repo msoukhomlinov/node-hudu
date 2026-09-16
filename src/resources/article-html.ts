@@ -1,0 +1,992 @@
+/**
+ * Hudu article HTML rules — platform facts about how Hudu's editor and renderer treat
+ * article body HTML, expressed as three pure functions:
+ *
+ *   validateArticleHtml(html, opts?)      report problems, never fix anything
+ *   normalizeArticleHtml(html)            OPT-IN, mechanically-safe fixes only
+ *   diffArticleRoundTrip(sent, readBack)  spot-check what Hudu gave back
+ *
+ * No network, no I/O, no dependencies, no mutation of the input. Nothing here is ever
+ * called automatically by a write path — see the warning on `normalizeArticleHtml`.
+ *
+ * ## Scope: platform, not house style
+ *
+ * Every rule below is a property of Hudu itself (its Tiptap/ProseMirror editor schema, its
+ * published-view renderer, its container CSS). Editorial preferences — section structure,
+ * heading levels, tone, title patterns, list-nesting depth — are deliberately NOT encoded.
+ * In particular there is no nesting-depth check: Hudu's list extensions have no cap, so a
+ * depth limit would be an opinion, not a platform fact.
+ *
+ * ## Evidence
+ *
+ * The rules were captured while authoring real Hudu KB articles. Several were verified on
+ * 2026-09-16 by reading Hudu's own shipped assets rather than by guessing:
+ *
+ *   - the `hudu2-app-1` container CSS (alignment classes, callout variants, the
+ *     auto-applied table-scroll wrapper, `<kbd>` styling);
+ *   - the editor's compiled JS schema — the Tiptap node/mark extensions for callouts,
+ *     accordions (details/summary), images, task lists and tables;
+ *   - the published view's highlighting bootstrap script (which element the highlighter
+ *     actually reads the language class from).
+ *
+ * Each rule below cites its own evidence line, and the audit is declared in the public
+ * {@link ARTICLE_HTML_PROVENANCE} constant (per-rule dates in {@link ARTICLE_HTML_RULES}).
+ * These are facts about the audited build, not permanent properties of Hudu — the editor
+ * generation has changed once already, and it invalidated rules when it did.
+ *
+ * Two related facts are SDK behaviour rather than HTML, so they are documented on
+ * `ArticlesResource` instead of encoded here: reading an article body needs the full record
+ * (the compact summary drops `content`), and the `slug` filter is an exact match on the
+ * stored slug. Both were established 2026-07-25.
+ *
+ * ## Parsing approach and its failure modes
+ *
+ * The SDK is deliberately zero-dependency, so this module scans with regular expressions
+ * rather than parsing. That is sound for the shallow, tag-shaped questions asked here, and
+ * unsound in the usual ways. Known limits, all of which degrade to "say nothing" rather
+ * than to a wrong claim:
+ *
+ *   - an attribute value containing `>` (e.g. `alt="a > b"`) ends a tag match early, so a
+ *     following attribute on that tag can be missed;
+ *   - markup inside an HTML comment or an attribute value is treated as markup;
+ *   - element containment is approximated by "the text between an opening tag and its
+ *     matching closing tag", with depth counting only for the element being matched;
+ *   - a truncated element (no closing tag) is scanned to the end of the input by
+ *     `validateArticleHtml`, and is left completely untouched by `normalizeArticleHtml`.
+ *
+ * The functions therefore report what they can prove from the text and stay quiet
+ * otherwise. Treat a clean result as "no known Hudu-specific fault found", not as
+ * "this HTML is valid".
+ */
+
+/** Severity of a finding. `error`: Hudu breaks or rewrites this. `warning`: it surprises you. */
+export type ArticleHtmlSeverity = 'error' | 'warning';
+
+/**
+ * What a finding costs the reader of the published article.
+ *
+ * - `content` — semantics or information disappear: a code block's language, a callout's
+ *   node identity, an image's alt text, a link, a table row.
+ * - `presentation` — cosmetics only: an alignment class, a scroll wrapper Hudu regenerates
+ *   itself, `<kbd>` styling Hudu never had.
+ *
+ * The split is per rule and is grounded in the platform facts documented on each check —
+ * not in taste. A caller deciding whether a lossy transform is acceptable can filter on
+ * `impact === 'content'` and ignore the rest.
+ */
+export type ArticleHtmlImpact = 'content' | 'presentation';
+
+/** The element family a finding is about. Lets a caller group or filter without parsing messages. */
+export type ArticleHtmlElement =
+  | 'body'
+  | 'markup'
+  | 'code'
+  | 'callout'
+  | 'accordion'
+  | 'heading'
+  | 'img'
+  | 'link'
+  | 'table'
+  | 'taskList'
+  | 'kbd';
+
+/** What happened to the element, for round-trip findings. */
+export type ArticleHtmlChange = 'stripped' | 'escaped' | 'attribute-lost' | 'restructured' | 'malformed';
+
+/**
+ * Stable, machine-readable finding codes. Consumers branch on these; the messages are
+ * free to be reworded, the codes are not. Codes prefixed `ROUNDTRIP_` come from
+ * {@link diffArticleRoundTrip}, the rest from {@link validateArticleHtml}.
+ */
+export const ARTICLE_HTML_CODES = [
+  // Rule 1 — body content must be HTML.
+  'MARKDOWN_SYNTAX',
+  'CONTENT_NOT_HTML',
+  // Rule 2 — code block language class.
+  'CODE_LANGUAGE_CLASS_MISSING_ON_CODE',
+  'CODE_LANGUAGE_CLASS_ABSENT',
+  'CODE_LANGUAGE_CLASS_MISMATCH',
+  // Rule 3 — callouts.
+  'CALLOUT_NOT_DIV',
+  'CALLOUT_BASE_CLASS_MISSING',
+  'CALLOUT_TYPE_UNKNOWN',
+  // Rule 4 — accordions.
+  'ACCORDION_BODY_MISSING',
+  'ACCORDION_CLASS_MISSING',
+  'ACCORDION_SUMMARY_BLOCK_CONTENT',
+  // Rule 5 — alignment classes.
+  'ALIGN_CLASS_ON_HEADING',
+  'ALIGN_CLASS_ON_IMAGE',
+  // Rule 6 — table scroll wrapper.
+  'TABLE_SCROLL_WRAPPER',
+  // Rule 7 — task lists.
+  'TASK_LIST_NOT_INTERACTIVE',
+  'TASK_ITEM_MALFORMED',
+  // Rule 8 — images.
+  'IMG_ALT_MISSING',
+  // Rule 9 — <kbd>.
+  'KBD_RENDERS_UNSTYLED',
+  // Round-trip diff.
+  'ROUNDTRIP_BODY_EMPTY',
+  'ROUNDTRIP_CONTENT_ESCAPED',
+  'ROUNDTRIP_TABLE_STRUCTURE_LOST',
+  'ROUNDTRIP_THEAD_DROPPED',
+  'ROUNDTRIP_CODE_BLOCK_LOST',
+  'ROUNDTRIP_CODE_LANGUAGE_LOST',
+  'ROUNDTRIP_LINK_LOST',
+  'ROUNDTRIP_IMG_LOST',
+  'ROUNDTRIP_IMG_ALT_LOST',
+] as const;
+
+/** One of {@link ARTICLE_HTML_CODES}. */
+export type ArticleHtmlCode = (typeof ARTICLE_HTML_CODES)[number];
+
+/**
+ * Where these rules come from, and what they are therefore worth.
+ *
+ * Every rule in this module is a fact about ONE Hudu build, established by ONE audit on
+ * 2026-09-16 that read that build's shipped assets. They are not permanent properties of
+ * Hudu: the editor generation changed once already (TinyMCE → Tiptap/ProseMirror), and that
+ * change invalidated several earlier rules outright.
+ *
+ * Staleness here is silent. If Hudu ships an editor change, `validateArticleHtml` starts
+ * reporting findings that are no longer real (or misses new ones), `normalizeArticleHtml`
+ * rewrites real article bodies by a stale rule, and `diffArticleRoundTrip` can call a
+ * content loss cosmetic. Nothing announces any of that.
+ *
+ * So the provenance is part of the public API, not a comment: surface it next to results,
+ * assert on `auditedOn` in your own tests, or refuse to auto-rewrite content when the audit
+ * is older than you are comfortable with. Deliberately NOT included: any runtime probe of a
+ * live Hudu instance. That would be network I/O, and this module is pure.
+ */
+export interface ArticleHtmlProvenance {
+  /** ISO date of the audit these rules were read from. */
+  readonly auditedOn: string;
+  /** The editor generation the rules assume. */
+  readonly editorGeneration: string;
+  /** The editor generation it replaced — rules predating the swap do not transfer. */
+  readonly supersededEditor: string;
+  /** What was inspected to establish the rules. */
+  readonly sources: readonly string[];
+  /** Plain-language statement of the shelf life. */
+  readonly caveat: string;
+}
+
+/** @see ArticleHtmlProvenance */
+export const ARTICLE_HTML_PROVENANCE: ArticleHtmlProvenance = {
+  auditedOn: '2026-09-16',
+  editorGeneration: 'Tiptap/ProseMirror',
+  supersededEditor: 'TinyMCE',
+  sources: [
+    "Hudu's container CSS (hudu2-app-1): alignment classes, callout variants, the auto-applied table-scroll wrapper, <kbd> styling",
+    "the editor's compiled JS schema: Tiptap node/mark extensions for callouts, accordions, images, task lists, tables and lists",
+    "the published view's syntax-highlighting bootstrap script: which element the language class is read from",
+  ],
+  caveat:
+    'These rules describe the Hudu build audited on 2026-09-16. A Hudu editor or renderer change can invalidate any of them silently — re-audit before trusting them to rewrite content.',
+};
+
+/** The fixed metadata of one rule. Severity, impact and element are properties of the CODE. */
+export interface ArticleHtmlRule {
+  readonly severity: ArticleHtmlSeverity;
+  readonly impact: ArticleHtmlImpact;
+  readonly element: ArticleHtmlElement;
+  /** Default change kind for a round-trip code; a finding may narrow it. */
+  readonly change?: ArticleHtmlChange;
+  /** ISO date this specific rule was last verified against a Hudu build. */
+  readonly verifiedOn: string;
+  /** ISO date this rule was first established, when that predates `verifiedOn`. */
+  readonly firstVerifiedOn?: string;
+}
+
+/**
+ * The rule table: severity, content-vs-presentation impact and element family for every code.
+ *
+ * Exported so a caller can consult the classification without running a check — for example
+ * to decide, before a lossy transform, which losses are acceptable. Each `impact` call is
+ * justified by the platform fact documented on the corresponding check below:
+ *
+ * - CONTENT when the reader loses information: Markdown that Hudu escapes away; a code
+ *   block's language (the published view then highlights nothing); a callout that is not a
+ *   callout node (the editor does not round-trip it as one); an accordion body the editor
+ *   restructures; a `<summary>` whose block structure Tiptap strips; a task item Hudu
+ *   cannot render at all; a missing `alt`.
+ * - PRESENTATION when only appearance changes and the words survive: `align-*` classes the
+ *   editor drops on resave; the `mce-accordion` class, which exists for caret/heading
+ *   alignment CSS; a `rich_text_content__table-scroll` wrapper Hudu's renderer regenerates
+ *   itself; `<kbd>`, which round-trips intact and is merely unstyled; a `<thead>` wrapper
+ *   the editor has no node for, where the `<th>` cells (which carry the header semantics
+ *   and styling) survive; and a task list's non-interactivity, where every item and its
+ *   checked state still render.
+ */
+export const ARTICLE_HTML_RULES: Readonly<Record<ArticleHtmlCode, ArticleHtmlRule>> = {
+  // The Markdown rule predates the editor audit: it is a property of the content field
+  // itself and was established at the skill's initial release, not read from the schema.
+  MARKDOWN_SYNTAX: { severity: 'error', impact: 'content', element: 'markup', verifiedOn: '2026-04-27' },
+  CONTENT_NOT_HTML: { severity: 'warning', impact: 'content', element: 'body', verifiedOn: '2026-04-27' },
+  CODE_LANGUAGE_CLASS_MISSING_ON_CODE: { severity: 'error', impact: 'content', element: 'code', verifiedOn: '2026-09-16' },
+  CODE_LANGUAGE_CLASS_ABSENT: { severity: 'warning', impact: 'content', element: 'code', verifiedOn: '2026-09-16' },
+  CODE_LANGUAGE_CLASS_MISMATCH: { severity: 'warning', impact: 'content', element: 'code', verifiedOn: '2026-09-16' },
+  CALLOUT_NOT_DIV: { severity: 'error', impact: 'content', element: 'callout', verifiedOn: '2026-09-16' },
+  CALLOUT_BASE_CLASS_MISSING: { severity: 'error', impact: 'content', element: 'callout', verifiedOn: '2026-09-16' },
+  CALLOUT_TYPE_UNKNOWN: { severity: 'warning', impact: 'presentation', element: 'callout', verifiedOn: '2026-09-16' },
+  ACCORDION_BODY_MISSING: { severity: 'error', impact: 'content', element: 'accordion', verifiedOn: '2026-09-16' },
+  ACCORDION_CLASS_MISSING: { severity: 'warning', impact: 'presentation', element: 'accordion', verifiedOn: '2026-09-16' },
+  ACCORDION_SUMMARY_BLOCK_CONTENT: { severity: 'warning', impact: 'content', element: 'accordion', verifiedOn: '2026-09-16' },
+  ALIGN_CLASS_ON_HEADING: { severity: 'warning', impact: 'presentation', element: 'heading', verifiedOn: '2026-09-16' },
+  ALIGN_CLASS_ON_IMAGE: { severity: 'warning', impact: 'presentation', element: 'img', verifiedOn: '2026-09-16' },
+  TABLE_SCROLL_WRAPPER: { severity: 'warning', impact: 'presentation', element: 'table', verifiedOn: '2026-09-16' },
+  TASK_LIST_NOT_INTERACTIVE: { severity: 'warning', impact: 'presentation', element: 'taskList', verifiedOn: '2026-09-16' },
+  TASK_ITEM_MALFORMED: { severity: 'error', impact: 'content', element: 'taskList', verifiedOn: '2026-09-16' },
+  IMG_ALT_MISSING: { severity: 'error', impact: 'content', element: 'img', verifiedOn: '2026-09-16' },
+  // First established under TinyMCE (sandbox article 3208), re-verified against Tiptap.
+  KBD_RENDERS_UNSTYLED: { severity: 'warning', impact: 'presentation', element: 'kbd', verifiedOn: '2026-09-16', firstVerifiedOn: '2026-05-12' },
+  ROUNDTRIP_BODY_EMPTY: { severity: 'error', impact: 'content', element: 'body', change: 'stripped', verifiedOn: '2026-07-25' },
+  ROUNDTRIP_CONTENT_ESCAPED: { severity: 'error', impact: 'content', element: 'markup', change: 'escaped', verifiedOn: '2026-04-27' },
+  ROUNDTRIP_TABLE_STRUCTURE_LOST: { severity: 'error', impact: 'content', element: 'table', change: 'restructured', verifiedOn: '2026-09-16' },
+  ROUNDTRIP_THEAD_DROPPED: { severity: 'warning', impact: 'presentation', element: 'table', change: 'restructured', verifiedOn: '2026-09-16' },
+  ROUNDTRIP_CODE_BLOCK_LOST: { severity: 'error', impact: 'content', element: 'code', change: 'stripped', verifiedOn: '2026-09-16' },
+  ROUNDTRIP_CODE_LANGUAGE_LOST: { severity: 'error', impact: 'content', element: 'code', change: 'attribute-lost', verifiedOn: '2026-09-16' },
+  ROUNDTRIP_LINK_LOST: { severity: 'error', impact: 'content', element: 'link', change: 'stripped', verifiedOn: '2026-09-16' },
+  ROUNDTRIP_IMG_LOST: { severity: 'error', impact: 'content', element: 'img', change: 'stripped', verifiedOn: '2026-09-16' },
+  ROUNDTRIP_IMG_ALT_LOST: { severity: 'error', impact: 'content', element: 'img', change: 'attribute-lost', verifiedOn: '2026-09-16' },
+};
+
+/**
+ * Advisory codes fire on *correct* markup: they describe a Hudu behaviour that surprises
+ * authors, not a mistake. Mute them with `opts.ignore` when you already know.
+ */
+export const ARTICLE_HTML_ADVISORY_CODES: readonly ArticleHtmlCode[] = ['TASK_LIST_NOT_INTERACTIVE', 'KBD_RENDERS_UNSTYLED'];
+
+/** The callout variants Hudu's editor and CSS define (evidence: container CSS + callout node extension, 2026-09-16). */
+export const HUDU_CALLOUT_TYPES = ['info', 'success', 'warning', 'danger'] as const;
+
+/**
+ * One problem found in article HTML, or one element family changed across a round trip.
+ *
+ * The list is meant to be filtered programmatically: branch on `code`, group by `element`,
+ * gate on `impact`. `message` is for humans and its wording is not part of the contract.
+ */
+export interface ArticleHtmlFinding {
+  /** Stable machine-readable code — branch on this, not on `message`. */
+  code: ArticleHtmlCode;
+  /** `error`: Hudu will break or silently rewrite this. `warning`: it will surprise you. */
+  severity: ArticleHtmlSeverity;
+  /** Whether the reader loses information (`content`) or only appearance (`presentation`). */
+  impact: ArticleHtmlImpact;
+  /** The element family this finding is about. */
+  element: ArticleHtmlElement;
+  /** What happened to the element. Always set by `diffArticleRoundTrip`. */
+  change?: ArticleHtmlChange;
+  /** Human-readable explanation. Wording is not part of the contract. */
+  message: string;
+  /**
+   * The specific values involved — the lost hrefs, language names or alt strings — so a
+   * caller can enumerate them without re-parsing `message`.
+   */
+  detail?: readonly string[];
+  /**
+   * 0-based character offset of the offending markup, when known. For a round-trip finding
+   * it points into `sent`, since that is the text the caller wrote.
+   */
+  index?: number;
+  /** Up to 80 characters of the offending markup, when known. */
+  snippet?: string;
+}
+
+/** Options of {@link validateArticleHtml}. */
+export interface ValidateArticleHtmlOptions {
+  /** Codes to suppress — typically {@link ARTICLE_HTML_ADVISORY_CODES}. */
+  ignore?: readonly string[];
+}
+
+const SNIPPET_LENGTH = 80;
+
+/** Non-throwing string guard: anything that is not a string is treated as empty content. */
+function asHtml(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+/** Build one finding, taking severity/impact/element/change from the rule table. */
+function finding(
+  source: string,
+  code: ArticleHtmlCode,
+  message: string,
+  extra?: { index?: number; detail?: readonly string[]; change?: ArticleHtmlChange },
+): ArticleHtmlFinding {
+  const rule = ARTICLE_HTML_RULES[code];
+  const out: ArticleHtmlFinding = {
+    code,
+    severity: rule.severity,
+    impact: rule.impact,
+    element: rule.element,
+    message,
+  };
+  const change = extra?.change ?? rule.change;
+  if (change !== undefined) out.change = change;
+  if (extra?.detail !== undefined && extra.detail.length > 0) out.detail = extra.detail;
+  if (extra?.index !== undefined && extra.index >= 0) {
+    out.index = extra.index;
+    out.snippet = source.slice(extra.index, extra.index + SNIPPET_LENGTH);
+  }
+  return out;
+}
+
+/** Extract the `class` attribute value of a tag's attribute text ("" when absent). */
+function classOf(attrs: string): string {
+  const m = /\bclass\s*=\s*("([^"]*)"|'([^']*)'|([^\s"'>]+))/i.exec(attrs);
+  return m === null ? '' : (m[2] ?? m[3] ?? m[4] ?? '');
+}
+
+/** Extract an arbitrary attribute value, or undefined when the attribute is absent. */
+function attrOf(attrs: string, name: string): string | undefined {
+  const m = new RegExp(`\\b${name}\\s*=\\s*("([^"]*)"|'([^']*)'|([^\\s"'>]+))`, 'i').exec(attrs);
+  return m === null ? undefined : (m[2] ?? m[3] ?? m[4] ?? '');
+}
+
+function hasClass(classValue: string, name: string): boolean {
+  return classValue.split(/\s+/).includes(name);
+}
+
+/** The `language-X` token of a class attribute, or undefined. */
+function languageOf(classValue: string): string | undefined {
+  for (const token of classValue.split(/\s+/)) {
+    if (token.startsWith('language-') && token.length > 'language-'.length) return token.slice('language-'.length);
+  }
+  return undefined;
+}
+
+interface OpenTag {
+  index: number;
+  attrs: string;
+  tag: string;
+}
+
+/** Iterate opening tags of one element name (the name may be a character-class pattern). */
+function* openTags(html: string, name: string): Generator<OpenTag> {
+  const re = new RegExp(`<${name}\\b([^>]*)>`, 'gi');
+  for (let m = re.exec(html); m !== null; m = re.exec(html)) {
+    yield { index: m.index, attrs: m[1] ?? '', tag: m[0] };
+  }
+}
+
+/** Count occurrences of an opening tag. */
+function countTags(html: string, name: string): number {
+  return [...openTags(html, name)].length;
+}
+
+/**
+ * Inner text of the element whose opening tag ends at `from`, found by depth-counting
+ * `<name>` / `</name>`. Returns the rest of the input when the element is never closed —
+ * callers that must not touch malformed markup check `closed`.
+ */
+function innerOf(html: string, name: string, from: number): { inner: string; end: number; closed: boolean } {
+  const re = new RegExp(`<(/?)${name}\\b[^>]*>`, 'gi');
+  re.lastIndex = from;
+  for (let m = re.exec(html), depth = 1; m !== null; m = re.exec(html)) {
+    depth += m[1] === '/' ? -1 : 1;
+    if (depth === 0) return { inner: html.slice(from, m.index), end: m.index + m[0].length, closed: true };
+  }
+  return { inner: html.slice(from), end: html.length, closed: false };
+}
+
+/** Blank out `<pre>` and `<code>` regions (length-preserving) so offsets stay meaningful. */
+function blankCodeRegions(html: string): string {
+  return html.replace(/<(pre|code)\b[^>]*>[\s\S]*?<\/\1>/gi, (block) => ' '.repeat(block.length));
+}
+
+/** The index of the first tag of `name` in `html` whose attributes satisfy `pick`, or -1. */
+function indexOfTag(html: string, name: string, pick: (tag: OpenTag) => boolean): number {
+  for (const tag of openTags(html, name)) if (pick(tag)) return tag.index;
+  return -1;
+}
+
+// ---------------------------------------------------------------------------
+// validateArticleHtml
+// ---------------------------------------------------------------------------
+
+type Add = (code: ArticleHtmlCode, message: string, extra?: { index?: number; detail?: readonly string[] }) => void;
+
+/**
+ * Check article body HTML against the Hudu platform rules.
+ *
+ * Pure: never throws (any input, including a non-string, is accepted), never mutates,
+ * never performs I/O. Returns findings grouped by rule, in document order within a rule.
+ *
+ * A clean result means "no known Hudu-specific fault found" — see the module header for
+ * the parser's limits.
+ *
+ * @example
+ * const findings = validateArticleHtml(article.content);
+ * const blocking = findings.filter((f) => f.severity === 'error' && f.impact === 'content');
+ */
+export function validateArticleHtml(html: string, opts?: ValidateArticleHtmlOptions): ArticleHtmlFinding[] {
+  const source = asHtml(html);
+  if (source.trim().length === 0) return [];
+
+  const findings: ArticleHtmlFinding[] = [];
+  const add: Add = (code, message, extra) => {
+    findings.push(finding(source, code, message, extra));
+  };
+
+  checkMarkdown(source, add);
+  checkCodeBlocks(source, add);
+  checkCallouts(source, add);
+  checkAccordions(source, add);
+  checkAlignment(source, add);
+  checkTableScroll(source, add);
+  checkTaskLists(source, add);
+  checkImages(source, add);
+  checkKbd(source, add);
+
+  const ignore = opts?.ignore;
+  return ignore === undefined || ignore.length === 0 ? findings : findings.filter((f) => !ignore.includes(f.code));
+}
+
+/**
+ * Rule 1 — body content must be HTML. Hudu stores the `content` field as HTML and its
+ * editor strips or escapes Markdown; Markdown left in the body never renders as intended,
+ * which is why this is a CONTENT impact — the reader loses the structure entirely.
+ * Evidence: 2026-04-27 initial release; restated in the skill's common-mistakes ledger.
+ *
+ * Markdown-looking text inside `<pre>`/`<code>` is legitimate (a code sample about
+ * Markdown), so those regions are blanked before scanning.
+ */
+function checkMarkdown(html: string, add: Add): void {
+  const scan = blankCodeRegions(html);
+  const constructs: ReadonlyArray<readonly [RegExp, string]> = [
+    [/^[ \t]*#{1,6}[ \t]+\S/m, 'a Markdown ATX heading (`# Heading`)'],
+    [/^[ \t]*```/m, 'a Markdown fenced code block (```)'],
+    [/^[ \t]*[-*+][ \t]+\S/m, 'a Markdown bullet list item (`- item`)'],
+    [/\[[^\]\n<>]+\]\([^)\s]+\)/, 'a Markdown link (`[text](url)`)'],
+    [/\*\*[^\s*][^*\n]*\*\*/, 'Markdown bold (`**text**`)'],
+  ];
+  for (const [re, what] of constructs) {
+    const m = re.exec(scan);
+    if (m !== null) {
+      add('MARKDOWN_SYNTAX', `Article body must be HTML: found ${what}. Hudu strips or escapes Markdown.`, {
+        index: m.index,
+        detail: [what],
+      });
+    }
+  }
+  if (!/<[a-z][a-z0-9-]*(\s|\/|>)/i.test(html)) {
+    add(
+      'CONTENT_NOT_HTML',
+      'Article body contains no HTML element. Hudu renders the content field as HTML; plain text is not wrapped in paragraphs for you.',
+      { index: 0 },
+    );
+  }
+}
+
+/**
+ * Rule 2 — the `language-X` class must be on `<code>`, not only on `<pre>`.
+ * Hudu's published-view highlighting bootstrap reads the language from the `<code>`
+ * element; with the class only on `<pre>`, some languages (YAML is the observed case)
+ * render with no highlighting at all even though the language name is valid. CONTENT
+ * impact: the language is information about the block, and the reader loses it.
+ * Evidence: 2026-09-16, read against Hudu's view-mode highlighting bootstrap script.
+ */
+function checkCodeBlocks(html: string, add: Add): void {
+  for (const pre of openTags(html, 'pre')) {
+    const preEnd = pre.index + pre.tag.length;
+    const { inner } = innerOf(html, 'pre', preEnd);
+    const code = /<code\b([^>]*)>/i.exec(inner);
+    if (code === null) continue;
+    const index = preEnd + code.index;
+    const preLang = languageOf(classOf(pre.attrs));
+    const codeLang = languageOf(classOf(code[1] ?? ''));
+    if (preLang !== undefined && codeLang === undefined) {
+      add(
+        'CODE_LANGUAGE_CLASS_MISSING_ON_CODE',
+        `Code block declares class="language-${preLang}" on <pre> but not on <code>. Hudu's published-view highlighter reads the class from <code>, so this block renders unhighlighted.`,
+        { index, detail: [preLang] },
+      );
+    } else if (preLang === undefined && codeLang === undefined) {
+      add(
+        'CODE_LANGUAGE_CLASS_ABSENT',
+        'Code block has no language-X class on <pre> or <code>, so Hudu applies no syntax highlighting. Use language-plaintext for output and logs.',
+        { index },
+      );
+    } else if (preLang !== undefined && codeLang !== undefined && preLang !== codeLang) {
+      add(
+        'CODE_LANGUAGE_CLASS_MISMATCH',
+        `Code block declares language-${preLang} on <pre> but language-${codeLang} on <code>. Hudu highlights using the <code> class; pick one language deliberately (this is not auto-corrected).`,
+        { index, detail: [preLang, codeLang] },
+      );
+    }
+  }
+}
+
+/**
+ * Rule 3 — a callout must be `<div class="callout callout-X">`.
+ * Hudu's editor parses only the div form into a real callout node. A `<p class="callout-X">`
+ * still picks up the CSS on first publish but is not edit-aware (no callout toolbar, toggle
+ * command or slash-menu recognition) and is not preserved as a callout by the editor —
+ * the node identity is lost, so this is a CONTENT impact. An unknown severity modifier is
+ * PRESENTATION: the div is still a callout node, it just has no variant styling.
+ * Evidence: 2026-09-16, read against the editor's callout node extension.
+ */
+function checkCallouts(html: string, add: Add): void {
+  for (const tag of openTags(html, '[a-z][a-z0-9-]*')) {
+    const cls = classOf(tag.attrs);
+    if (cls === '') continue;
+    const tokens = cls.split(/\s+/);
+    const modifier = tokens.find((t) => t.startsWith('callout-'));
+    const base = tokens.includes('callout');
+    if (modifier === undefined && !base) continue;
+    const name = /^<([a-z][a-z0-9-]*)/i.exec(tag.tag)?.[1]?.toLowerCase() ?? '';
+    if (name !== 'div') {
+      add(
+        'CALLOUT_NOT_DIV',
+        `Callout is a <${name}>, not a <div>. Hudu's editor only parses <div class="callout callout-X"> as a callout node.`,
+        { index: tag.index, detail: [name] },
+      );
+      continue;
+    }
+    if (!base) {
+      add(
+        'CALLOUT_BASE_CLASS_MISSING',
+        `Callout <div> carries "${modifier ?? ''}" without the base "callout" class. Both classes are required for Hudu to parse it as a callout.`,
+        { index: tag.index },
+      );
+    }
+    const type = modifier?.slice('callout-'.length);
+    if (type !== undefined && !(HUDU_CALLOUT_TYPES as readonly string[]).includes(type)) {
+      add('CALLOUT_TYPE_UNKNOWN', `Unknown callout type "${type}". Hudu defines: ${HUDU_CALLOUT_TYPES.join(', ')}.`, {
+        index: tag.index,
+        detail: [type],
+      });
+    }
+  }
+}
+
+/**
+ * Rule 4 — accordion body content must be wrapped in `<div class="mce-accordion-body">`.
+ * Without the wrapper, Hudu's editor rewrites the structure the first time the article is
+ * opened and saved, so the stored HTML changes underneath you (CONTENT: the body's block
+ * structure is what gets rewritten). The `mce-accordion` class on `<details>` exists for
+ * the renderer's caret/heading alignment CSS, so its absence is PRESENTATION only. A block
+ * element inside `<summary>` (a heading, typically) is stripped by Tiptap on save.
+ * Evidence: 2026-09-16, read against the editor's details/accordion extension.
+ */
+function checkAccordions(html: string, add: Add): void {
+  for (const details of openTags(html, 'details')) {
+    const from = details.index + details.tag.length;
+    const { inner } = innerOf(html, 'details', from);
+    if (!hasClass(classOf(details.attrs), 'mce-accordion')) {
+      add(
+        'ACCORDION_CLASS_MISSING',
+        'Accordion <details> has no class="mce-accordion". Hudu\'s renderer styles caret and heading alignment from that class, and the editor emits it.',
+        { index: details.index },
+      );
+    }
+    const summary = /<summary\b[^>]*>([\s\S]*?)<\/summary>/i.exec(inner);
+    if (summary !== null && /<(h[1-6]|p|div|ul|ol|table)\b/i.test(summary[1] ?? '')) {
+      add(
+        'ACCORDION_SUMMARY_BLOCK_CONTENT',
+        '<summary> contains block content. Hudu\'s editor keeps only inline content there and strips the block structure on save.',
+        { index: from + summary.index },
+      );
+    }
+    const bodyStart = summary === null ? 0 : summary.index + summary[0].length;
+    const body = inner.slice(bodyStart);
+    if (body.trim().length === 0) continue;
+    const firstDiv = /^\s*<div\b([^>]*)>/i.exec(body);
+    if (firstDiv === null || !hasClass(classOf(firstDiv[1] ?? ''), 'mce-accordion-body')) {
+      add(
+        'ACCORDION_BODY_MISSING',
+        'Accordion body is not wrapped in <div class="mce-accordion-body">. Hudu\'s editor rewrites the accordion structure on the next open/save without it.',
+        { index: from + bodyStart },
+      );
+    }
+  }
+}
+
+/**
+ * Rule 5 — `class="align-*"` does not survive an editor resave on headings or images.
+ * The editor strips `class` from heading nodes entirely, and the image node re-emits
+ * `data-align` only, so an alignment class on an image is silently dropped on the next
+ * save even though the CSS matches it on first publish. PRESENTATION: the heading and the
+ * image survive, only their alignment reverts. Other blocks (paragraphs, list items) keep
+ * their alignment class and are not flagged.
+ * Evidence: 2026-09-16, read against the Tiptap editor JS schema.
+ */
+function checkAlignment(html: string, add: Add): void {
+  for (const tag of openTags(html, 'h[1-6]')) {
+    const align = classOf(tag.attrs).split(/\s+/).find((t) => t.startsWith('align-'));
+    if (align !== undefined) {
+      add(
+        'ALIGN_CLASS_ON_HEADING',
+        `Heading carries class="${align}". Hudu's editor strips class from headings on resave; use style="text-align: …" or leave the heading left-aligned.`,
+        { index: tag.index, detail: [align] },
+      );
+    }
+  }
+  for (const tag of openTags(html, 'img')) {
+    const align = classOf(tag.attrs).split(/\s+/).find((t) => t.startsWith('align-'));
+    if (align !== undefined) {
+      add(
+        'ALIGN_CLASS_ON_IMAGE',
+        `Image carries class="${align}". Hudu's image node round-trips data-align only, so the class is dropped on the next editor save — use data-align="center" or "right".`,
+        { index: tag.index, detail: [align] },
+      );
+    }
+  }
+}
+
+/**
+ * Rule 6 — do not hand-add a `rich_text_content__table-scroll` wrapper.
+ * Hudu's renderer wraps wide tables for horizontal scrolling itself; a hand-added wrapper
+ * duplicates it. PRESENTATION: the table and every cell survive either way.
+ * Evidence: 2026-09-16, read against the `hudu2-app-1` container CSS.
+ */
+function checkTableScroll(html: string, add: Add): void {
+  for (const div of openTags(html, 'div')) {
+    if (hasClass(classOf(div.attrs), 'rich_text_content__table-scroll')) {
+      add(
+        'TABLE_SCROLL_WRAPPER',
+        'Hand-added rich_text_content__table-scroll wrapper. Hudu\'s renderer applies scroll wrapping to wide tables automatically; submit a plain <table>.',
+        { index: div.index },
+      );
+    }
+  }
+}
+
+/**
+ * Rule 7 — task lists are display-only in the published article, and every task item needs
+ * the full structure Hudu's task-item node emits (`data-type`, `data-checked`, the
+ * `<label>` with its checkbox, and the `<div>` content wrapper) or the item does not render.
+ * Non-interactivity is PRESENTATION (every item and its checked state still render, the
+ * reader just cannot tick a box); a malformed item is CONTENT, because it renders as
+ * nothing.
+ * Evidence: 2026-09-16, read against the editor's task-list/task-item extensions and the
+ * container CSS.
+ */
+function checkTaskLists(html: string, add: Add): void {
+  for (const list of openTags(html, 'ul')) {
+    if (attrOf(list.attrs, 'data-type') !== 'taskList') continue;
+    const from = list.index + list.tag.length;
+    const { inner } = innerOf(html, 'ul', from);
+    add(
+      'TASK_LIST_NOT_INTERACTIVE',
+      'Task list renders display-only in the published article: readers cannot tick the boxes. Use it for a fixed, printable checklist.',
+      { index: list.index },
+    );
+    for (const item of openTags(inner, 'li')) {
+      const body = innerOf(inner, 'li', item.index + item.tag.length).inner;
+      const wellFormed =
+        attrOf(item.attrs, 'data-type') === 'taskItem' &&
+        attrOf(item.attrs, 'data-checked') !== undefined &&
+        /<label\b[^>]*>[\s\S]*<input\b/i.test(body) &&
+        /<div\b/i.test(body);
+      if (!wellFormed) {
+        add(
+          'TASK_ITEM_MALFORMED',
+          'Task item is missing part of the structure Hudu renders: <li data-type="taskItem" data-checked="…"><label><input type="checkbox"><span></span></label><div><p>…</p></div></li>.',
+          { index: from + item.index },
+        );
+      }
+    }
+  }
+}
+
+/**
+ * Rule 8 — every `<img>` needs a descriptive `alt`. CONTENT: the alt text is the only
+ * description a screen reader (or a failed image load) has.
+ *
+ * Note for verification code: on write, Hudu rewrites the `src` into a
+ * `/public_photo/<slug>` reference (embedded and remote images become PublicPhoto records).
+ * That rewrite is expected behaviour, not corruption — verify that an `<img>` with the
+ * right `alt` is present, never that the `src` string matches what was submitted.
+ * {@link diffArticleRoundTrip} treats the rewrite as expected for exactly this reason.
+ */
+function checkImages(html: string, add: Add): void {
+  for (const img of openTags(html, 'img')) {
+    const alt = attrOf(img.attrs, 'alt');
+    if (alt === undefined || alt.trim().length === 0) {
+      add('IMG_ALT_MISSING', '<img> has no descriptive alt attribute.', { index: img.index });
+    }
+  }
+}
+
+/**
+ * Rule 9 — `<kbd>` survives the editor round-trip (preserved as an inline mark) but Hudu
+ * carries no styling for it, so it renders as plain running text rather than a key cap.
+ * PRESENTATION, and advisory: it fires on correct markup.
+ * Evidence: originally verified 2026-05-12 against sandbox article 3208 under TinyMCE;
+ * re-verified 2026-09-16 against the Tiptap editor.
+ */
+function checkKbd(html: string, add: Add): void {
+  const m = /<kbd\b/i.exec(html);
+  if (m !== null) {
+    add(
+      'KBD_RENDERS_UNSTYLED',
+      '<kbd> survives Hudu\'s editor round-trip but renders unstyled (plain text, not a key cap). Use it for semantics, not for visual emphasis.',
+      { index: m.index },
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// normalizeArticleHtml
+// ---------------------------------------------------------------------------
+
+/**
+ * Apply the mechanically-safe subset of the rules and return corrected HTML.
+ *
+ * **This is opt-in. The SDK NEVER calls it for you.** No `create`, `update` or any other
+ * write path invokes it: silently rewriting a caller's content would be unacceptable in an
+ * SDK, because the caller — not this module — owns the article body. Call it deliberately,
+ * diff the result, and submit it yourself if you agree with the change.
+ *
+ * Only two fixes qualify as mechanically safe (one correct outcome, no judgement call):
+ *
+ *  1. mirror a `language-X` class from `<pre>` onto a `<code>` that has none (rule 2);
+ *  2. unwrap a hand-added `rich_text_content__table-scroll` div (rule 6).
+ *
+ * Everything else is reported by {@link validateArticleHtml} and left alone: a `<pre>`/
+ * `<code>` language mismatch (which one did you mean?), a `<p>` callout (moving to a `<div>`
+ * changes the block structure), an unwrapped accordion body (what exactly is the body?),
+ * and alignment classes (dropping or translating them changes the rendering).
+ *
+ * Idempotent: `normalize(normalize(x)) === normalize(x)`. Never throws; a non-string input
+ * returns `''`. Markup that is truncated (no closing tag) is left untouched rather than
+ * guessed at.
+ *
+ * **Staleness matters most here.** This is the only function that changes a caller's
+ * content, and it does so by rules read from one Hudu build on one day — see
+ * {@link ARTICLE_HTML_PROVENANCE} (`auditedOn`, and `verifiedOn` per rule in
+ * {@link ARTICLE_HTML_RULES}). If Hudu changes its editor, this function will keep
+ * rewriting article bodies to the old shape and nothing will complain. Before wiring it
+ * into anything automated, check the audit date, and prefer showing the diff to a human
+ * over applying it blind.
+ */
+export function normalizeArticleHtml(html: string): string {
+  const source = asHtml(html);
+  if (source === '') return '';
+  return unwrapTableScroll(mirrorCodeLanguage(source));
+}
+
+/** Rule 2 fix: copy `language-X` from `<pre>` onto a `<code>` that carries none. */
+function mirrorCodeLanguage(html: string): string {
+  // Only complete <pre …>…</pre> blocks are rewritten: a truncated block has no provable
+  // extent, so it is left exactly as the caller wrote it.
+  return html.replace(/(<pre\b([^>]*)>)([\s\S]*?)(<\/pre>)/gi, (whole, open: string, attrs: string, inner: string, close: string) => {
+    const lang = languageOf(classOf(attrs));
+    if (lang === undefined) return whole;
+    const code = /<code\b([^>]*)>/i.exec(inner);
+    if (code === null) return whole;
+    const codeAttrs = code[1] ?? '';
+    if (languageOf(classOf(codeAttrs)) !== undefined) return whole;
+    const replacement = /\bclass\s*=\s*"/i.test(codeAttrs)
+      ? `<code${codeAttrs.replace(/(\bclass\s*=\s*")([^"]*)(")/i, (_m, a: string, value: string, b: string) => `${a}${value === '' ? '' : `${value} `}language-${lang}${b}`)}>`
+      : `<code class="language-${lang}"${codeAttrs}>`;
+    return `${open}${inner.slice(0, code.index)}${replacement}${inner.slice(code.index + code[0].length)}${close}`;
+  });
+}
+
+/** Rule 6 fix: remove a hand-added table-scroll wrapper, keeping its contents. */
+function unwrapTableScroll(html: string): string {
+  let out = html;
+  for (;;) {
+    const at = indexOfTag(out, 'div', (d) => hasClass(classOf(d.attrs), 'rich_text_content__table-scroll'));
+    if (at === -1) return out;
+    const opener = [...openTags(out, 'div')].find((d) => d.index === at) as OpenTag;
+    const from = opener.index + opener.tag.length;
+    const { inner, end, closed } = innerOf(out, 'div', from);
+    // A wrapper with no closing </div> is malformed; unwrapping it would change where the
+    // rest of the document nests, so leave the whole input alone.
+    if (!closed) return out;
+    out = out.slice(0, opener.index) + inner + out.slice(end);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// diffArticleRoundTrip
+// ---------------------------------------------------------------------------
+
+/**
+ * Compare the HTML submitted to Hudu against the HTML Hudu read back, and return an
+ * enumerable list of what changed.
+ *
+ * Each entry names the element family (`element`), what happened to it (`change`), whether
+ * the reader lost information or only appearance (`impact`), the specific values involved
+ * (`detail`) and where the affected markup sits in `sent` (`index`/`snippet`). It is a
+ * list, never a verdict: the caller decides what is acceptable — for example, refusing a
+ * lossy transform only when `findings.some((f) => f.impact === 'content')`.
+ *
+ * This is a lightweight spot-check across the four families that actually break in
+ * practice — tables, code blocks, links, images — not a byte diff. Hudu legitimately
+ * reformats whitespace, reorders attributes and drops a `<thead>` wrapper, and none of
+ * that costs the reader anything.
+ *
+ * The `src` rewrite to `/public_photo/<slug>` is **expected behaviour**: on write, Hudu
+ * turns embedded and remote images into PublicPhoto records and rewrites the reference.
+ * It is never reported here. Image checks therefore look at presence and `alt`, never `src`.
+ *
+ * Never throws; non-string inputs are treated as empty.
+ *
+ * @param sent the HTML submitted in `content`
+ * @param readBack the `content` Hudu returned (remember: the compact article summary drops
+ *   `content` entirely — read it with `articles.get` or `{ expand: true }`)
+ */
+export function diffArticleRoundTrip(sent: string, readBack: string): ArticleHtmlFinding[] {
+  const before = asHtml(sent);
+  const after = asHtml(readBack);
+  const findings: ArticleHtmlFinding[] = [];
+  const add: Add = (code, message, extra) => {
+    findings.push(finding(before, code, message, extra));
+  };
+
+  if (before.trim().length === 0) return [];
+  if (after.trim().length === 0) {
+    add(
+      'ROUNDTRIP_BODY_EMPTY',
+      'Hudu returned an empty body for content that was submitted. Confirm the read fetched the full record — a compact article summary drops `content`.',
+      { index: 0 },
+    );
+    return findings;
+  }
+
+  diffEscaped(before, after, add);
+  diffTables(before, after, add);
+  diffCodeBlocks(before, after, add);
+  diffLinks(before, after, findings, before);
+  diffImages(before, after, add);
+  return findings;
+}
+
+/** Markup that came back as escaped text (`&lt;table&gt;`) was not stored as markup. */
+function diffEscaped(before: string, after: string, add: Add): void {
+  const escaped = new Set<string>();
+  for (const m of after.matchAll(/&lt;\/?([a-z][a-z0-9-]*)\b/gi)) {
+    const name = (m[1] ?? '').toLowerCase();
+    if (new RegExp(`<${name}\\b`, 'i').test(before)) escaped.add(name);
+  }
+  if (escaped.size > 0) {
+    const names = [...escaped];
+    add(
+      'ROUNDTRIP_CONTENT_ESCAPED',
+      `Hudu returned escaped text where markup was submitted: ${names.map((n) => `<${n}>`).join(', ')}. The body was stored as text, not HTML.`,
+      { index: before.indexOf(`<${names[0]}`), detail: names },
+    );
+  }
+}
+
+/**
+ * Tables: compare row and cell counts. A dropped `<thead>` with the `<th>` cells intact is
+ * known Tiptap behaviour (its schema has no `thead` node) and is PRESENTATION — the header
+ * cells, which carry the semantics and the styling, survive.
+ * Evidence: 2026-09-16, editor table extension.
+ */
+function diffTables(before: string, after: string, add: Add): void {
+  const counts = (html: string) => ({
+    table: countTags(html, 'table'),
+    tr: countTags(html, 'tr'),
+    th: countTags(html, 'th'),
+    td: countTags(html, 'td'),
+    thead: countTags(html, 'thead'),
+  });
+  const a = counts(before);
+  const b = counts(after);
+  const index = before.search(/<table\b/i);
+  const lost = (['table', 'tr', 'th', 'td'] as const).filter((k) => b[k] < a[k]);
+  if (lost.length > 0) {
+    add('ROUNDTRIP_TABLE_STRUCTURE_LOST', `Table structure changed: ${lost.map((k) => `<${k}> ${a[k]} sent, ${b[k]} returned`).join('; ')}.`, {
+      index,
+      detail: lost.map((k) => `${k}:${a[k]}->${b[k]}`),
+    });
+    return;
+  }
+  if (b.thead < a.thead) {
+    add(
+      'ROUNDTRIP_THEAD_DROPPED',
+      'Hudu dropped a <thead> wrapper while keeping the header cells. This is expected: the editor has no thead node, and <th> carries the header styling.',
+      { index, detail: [`thead:${a.thead}->${b.thead}`] },
+    );
+  }
+}
+
+/** Code blocks: block count first, then the language classes (rule 2's failure mode). */
+function diffCodeBlocks(before: string, after: string, add: Add): void {
+  const sentBlocks = countTags(before, 'code');
+  const backBlocks = countTags(after, 'code');
+  if (backBlocks < sentBlocks) {
+    add('ROUNDTRIP_CODE_BLOCK_LOST', `Code blocks lost: ${sentBlocks} <code> sent, ${backBlocks} returned.`, {
+      index: before.search(/<code\b/i),
+      detail: [`code:${sentBlocks}->${backBlocks}`],
+    });
+    return;
+  }
+  const langs = (html: string): string[] => {
+    const out: string[] = [];
+    for (const name of ['code', 'pre'] as const) {
+      for (const tag of openTags(html, name)) {
+        const lang = languageOf(classOf(tag.attrs));
+        if (lang !== undefined) out.push(lang);
+      }
+    }
+    return out;
+  };
+  const back = langs(after);
+  for (const lang of new Set(langs(before).filter((l) => !back.includes(l)))) {
+    add(
+      'ROUNDTRIP_CODE_LANGUAGE_LOST',
+      `Code block language class "language-${lang}" was not returned by Hudu. Without it the published view applies no highlighting.`,
+      { index: indexOfTag(before, '(?:code|pre)', (tag) => languageOf(classOf(tag.attrs)) === lang), detail: [lang] },
+    );
+  }
+}
+
+/**
+ * Links: every href submitted must come back (order and surrounding markup may differ).
+ * The change kind distinguishes a dropped anchor from an anchor that kept its text and
+ * lost its href, because the two are different repairs.
+ */
+function diffLinks(before: string, after: string, findings: ArticleHtmlFinding[], source: string): void {
+  const hrefs = (html: string): string[] => {
+    const out: string[] = [];
+    for (const tag of openTags(html, 'a')) {
+      const href = attrOf(tag.attrs, 'href');
+      if (href !== undefined) out.push(href);
+    }
+    return out;
+  };
+  const back = hrefs(after);
+  const anchorsLost = countTags(after, 'a') < countTags(before, 'a');
+  for (const href of new Set(hrefs(before).filter((h) => !back.includes(h)))) {
+    findings.push(
+      finding(source, 'ROUNDTRIP_LINK_LOST', `Link href not returned by Hudu: ${href}.`, {
+        index: indexOfTag(before, 'a', (tag) => attrOf(tag.attrs, 'href') === href),
+        detail: [href],
+        change: anchorsLost ? 'stripped' : 'attribute-lost',
+      }),
+    );
+  }
+}
+
+/**
+ * Images: presence and `alt` only. `src` is deliberately not compared — Hudu rewrites it to
+ * `/public_photo/<slug>` on write, which is expected behaviour, not corruption.
+ */
+function diffImages(before: string, after: string, add: Add): void {
+  const sentImgs = countTags(before, 'img');
+  const backImgs = countTags(after, 'img');
+  if (backImgs < sentImgs) {
+    add('ROUNDTRIP_IMG_LOST', `Images lost: ${sentImgs} <img> sent, ${backImgs} returned.`, {
+      index: before.search(/<img\b/i),
+      detail: [`img:${sentImgs}->${backImgs}`],
+    });
+    return;
+  }
+  const alts = (html: string): string[] =>
+    [...openTags(html, 'img')].map((tag) => (attrOf(tag.attrs, 'alt') ?? '').trim()).filter((alt) => alt !== '');
+  const back = alts(after);
+  for (const alt of new Set(alts(before).filter((a) => !back.includes(a)))) {
+    add('ROUNDTRIP_IMG_ALT_LOST', `Image alt text not returned by Hudu: "${alt}".`, {
+      index: indexOfTag(before, 'img', (tag) => (attrOf(tag.attrs, 'alt') ?? '').trim() === alt),
+      detail: [alt],
+    });
+  }
+}
