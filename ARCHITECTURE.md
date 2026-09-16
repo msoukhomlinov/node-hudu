@@ -36,7 +36,7 @@ The SDK is built to be consumed by **Model Context Protocol (MCP) servers**. Con
 | Package name | `node-hudu` |
 | Description | "Fully-typed TypeScript SDK for the Hudu IT documentation API. Built for building MCP servers and integrations." |
 | License | MIT |
-| Engines | `node >= 18.0.0` |
+| Engines | `node >= 24.0.0` |
 | Module | Dual ESM + CJS via `tsup` (`dist/index.js` ESM, `dist/index.cjs` CJS, `.d.ts`/`.d.cts`) |
 | Runtime deps | **none** (native `fetch`) |
 | Type runtime | TypeScript strict; no `zod` at runtime (`zod` is **never** a dependency; MCP consumers supply their own zod) |
@@ -914,7 +914,7 @@ export const NoopLogger: Logger = {};
 - **TS config**: strict, `NodeNext` module resolution, `verbatimModuleSyntax`,
   `noUncheckedIndexedAccess` (use non-null assertions / narrowing where the spec guarantees
   presence), `declaration` on.
-- **tsup**: dual ESM+CJS, `target: 'node18'`, `dts: true`. Add the subpath entries from §5
+- **tsup**: dual ESM+CJS, `target: 'node24'`, `dts: true`. Add the subpath entries from §5
   if deep imports are adopted.
 
 ---

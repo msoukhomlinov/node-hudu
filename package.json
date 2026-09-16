@@ -1,6 +1,6 @@
 {
   "name": "node-hudu",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Fully-typed TypeScript SDK for the Hudu IT documentation API. Built for building MCP servers and integrations.",
   "type": "module",
   "sideEffects": false,
@@ -93,7 +93,7 @@
     "capabilities.schema.json"
   ],
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=24.0.0"
   },
   "scripts": {
     "build": "tsup",

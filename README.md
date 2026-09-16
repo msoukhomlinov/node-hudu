@@ -6,7 +6,7 @@
 Designed from the ground up for building **MCP servers**, integrations, and ETL pipelines.
 
 - **Zero runtime dependencies.** Uses only native platform APIs (`fetch`, `FormData`,
-  `URLSearchParams`, `AbortSignal`) available in Node.js ≥ 18.
+  `URLSearchParams`, `AbortSignal`).
 - **35 typed resource clients**, each exposing full CRUD plus Hudu's special operations.
 - **Plain typed data** — every read returns concrete JSON-serialisable arrays and objects,
   ready to feed into zod output schemas, MCP tools, or downstream sinks.
@@ -297,7 +297,7 @@ serveStdio(() => {
 });
 ```
 
-> **Note:** MCP SDK v2 requires Node >= 20. The SDK itself supports Node >= 18.
+> **Note:** both this SDK and MCP SDK v2 require Node >= 24.
 
 ---
 
