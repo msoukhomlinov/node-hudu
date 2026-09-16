@@ -87,7 +87,7 @@
     "LICENSE",
     "CHANGELOG.md",
     "ARCHITECTURE.md",
-    "docs",
+    "docs/API.md",
     "MCP_TOOL_MANIFEST.md",
     "capabilities.json",
     "capabilities.schema.json"
