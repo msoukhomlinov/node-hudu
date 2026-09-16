@@ -337,28 +337,51 @@ describe('a ">" inside an attribute value (legal, and common in Hudu screenshots
     }
   });
 
-  it('keeps normalizeArticleHtml away from the tag entirely — no partial rewrite', () => {
+  it('reads the whole tag, so a class after the ">" is still seen', () => {
+    // `<code title="a > b" class="hljs">` has no language class; the report is a fact, not a
+    // guess, because the attributes are read quote-aware rather than cut at the first ">".
+    const html = '<pre class="language-js"><code title="a > b" class="hljs">x</code></pre>';
+    expect(codes(validateArticleHtml(html))).toEqual(['CODE_LANGUAGE_CLASS_MISSING_ON_CODE']);
+    // And one that DOES carry the class after the ">" is correctly left alone.
+    const ok = '<pre class="language-js"><code title="a > b" class="language-js">x</code></pre>';
+    expect(validateArticleHtml(ok).filter((f) => f.code.startsWith('CODE_LANGUAGE'))).toEqual([]);
+  });
+
+  it('extends the existing class in place — never a second class attribute', () => {
+    const out = normalizeArticleHtml('<pre class="language-js"><code title="a > b" class="hljs">x</code></pre>');
+    expect(out).toBe('<pre class="language-js"><code title="a > b" class="hljs language-js">x</code></pre>');
+    expect((out.match(/class\s*=/gi) ?? []).length).toBe(2); // one on <pre>, one on <code>
+    expect(normalizeArticleHtml(out)).toBe(out);
+  });
+
+  it('mirrors the language when the ">" is in the <pre> tag instead', () => {
+    const out = normalizeArticleHtml('<pre class="language-js" title="a > b"><code>x</code></pre>');
+    expect(out).toBe('<pre class="language-js" title="a > b"><code class="language-js">x</code></pre>');
+    expect(normalizeArticleHtml(out)).toBe(out);
+  });
+
+  it('unwraps a table-scroll wrapper whose attribute contains a ">", without stray text', () => {
+    const html =
+      '<p>Intro.</p><div class="rich_text_content__table-scroll" aria-label="Costs > $100"><table><tr><td>x</td></tr></table></div><p>Outro.</p>';
+    const out = normalizeArticleHtml(html);
+    expect(out).toBe('<p>Intro.</p><table><tr><td>x</td></tr></table><p>Outro.</p>');
+    expect(out).not.toContain('$100');
+    expect(normalizeArticleHtml(out)).toBe(out);
+  });
+
+  it('still refuses a tag that is never closed at all', () => {
     for (const html of [
-      '<p>Intro.</p><div class="rich_text_content__table-scroll" aria-label="Costs > $100"><table><tr><td>x</td></tr></table></div><p>Outro.</p>',
-      '<pre class="language-js"><code title="a > b" class="hljs">x</code></pre>',
-      '<pre class="language-js" title="a > b"><code>x</code></pre>',
+      '<pre class="language-bash"><code class="x">truncated',
+      '<pre class="language-bash"><code class="x',
+      '<div class="rich_text_content__table-scroll"><table><tr><td>a</td></tr>',
     ]) {
-      const out = normalizeArticleHtml(html);
-      expect(out, `mangled: ${html}`).toBe(html);
-      expect(normalizeArticleHtml(out)).toBe(out);
+      expect(normalizeArticleHtml(html), `rewrote an unterminated tag: ${html}`).toBe(html);
     }
   });
 
-  it('never emits a second class attribute through the truncated-tag route', () => {
-    const out = normalizeArticleHtml('<pre class="language-js"><code title="a > b" class="hljs">x</code></pre>');
-    expect((out.match(/<code[^>]*class\s*=/gi) ?? []).length).toBeLessThanOrEqual(1);
-    expect(out).toContain('class="hljs"');
-  });
-
-  it('stays silent about a truncated tag rather than guessing at its classes', () => {
-    // The hidden part of `<code title="a > b" …>` could hold class="language-js", so a
-    // CODE_LANGUAGE_CLASS_MISSING_ON_CODE here would be a coin flip. Silence is the contract.
-    expect(validateArticleHtml('<pre class="language-js"><code title="a > b" class="hljs">x</code></pre>')).toEqual([]);
+  it('does not treat markup written inside an attribute value as a tag', () => {
+    const html = '<p title="<div class=\'callout callout-info\'>">Body.</p>';
+    expect(validateArticleHtml(html).filter((f) => f.code.startsWith('CALLOUT'))).toEqual([]);
   });
 
   it('still reports the tags it CAN read in the same document', () => {
