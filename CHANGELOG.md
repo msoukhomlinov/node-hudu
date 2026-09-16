@@ -5,7 +5,7 @@ All notable changes to **node-hudu** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.1] — 2026-09-17
 
 ### Fixed
 
@@ -25,7 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `normalizeArticleHtml` handles these tags correctly rather than refusing them: a `<code>` whose
   class follows a `>`-bearing attribute has its language class extended in place (never a second
   `class` attribute), and a hand-added table-scroll wrapper carrying a `>` in an attribute is
-  unwrapped cleanly instead of being left in place.
+  unwrapped cleanly instead of being left in place. Its two guarantees are unchanged from 0.5.0
+  and now covered by regression tests: it is idempotent, and it refuses any tag it cannot read
+  to a closing `>` — including a `<code` whose attributes run past the closing `</pre>`.
 
 ## [0.5.0] — 2026-09-17
 
