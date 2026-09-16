@@ -13,3 +13,7 @@ coverage-*/
 *.local
 __pycache__/
 *.pyc
+
+# Agent/session scratch and internal process notes — never belong in a public repo.
+.claude/
+*-HANDOVER.md
