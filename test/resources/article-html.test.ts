@@ -379,6 +379,38 @@ describe('a ">" inside an attribute value (legal, and common in Hudu screenshots
     }
   });
 
+  it('does not let an unterminated <code swallow the closing </pre>', () => {
+    // The attribute read is bounded by the </pre>; without that bound it consumed the `>` of
+    // the closing tag, which deleted the </pre> from the body. The case the sibling test above
+    // misses, because every input there truncates at the END of the document.
+    const html = '<pre class="language-js"><code</pre>';
+    expect(normalizeArticleHtml(html)).toBe(html);
+  });
+
+  it('does not emit the <code> tag twice when a <pre> is nested', () => {
+    // openTags yields the nested <pre> as well, and the </pre> search is not depth-matched, so
+    // both resolve to the same <code>. Re-emitting it duplicated the opening tag.
+    const html = '<pre class="language-js">outer <pre class="language-py">inner <code>x</code></pre></pre>';
+    const out = normalizeArticleHtml(html);
+    expect((out.match(/<code/g) ?? []).length, `duplicated the <code> tag: ${out}`).toBe(1);
+    expect(normalizeArticleHtml(out)).toBe(out);
+  });
+
+  it('never extends an attribute that merely contains the text "class="', () => {
+    // The read path walks attributes in order; the write path must splice where it read. When
+    // the two disagreed, `data-class` grew by one `language-js` on EVERY call and never reached
+    // a fixed point, while the <code> still ended up with no language class.
+    for (const html of [
+      '<pre class="language-js"><code data-class="foo">x</code></pre>',
+      `<pre class="language-js"><code title='class="x"'>y</code></pre>`,
+    ]) {
+      const once = normalizeArticleHtml(html);
+      expect(normalizeArticleHtml(once), `not idempotent: ${once}`).toBe(once);
+      expect(once).toContain('class="language-js"');
+      expect(once).not.toMatch(/language-js language-js/);
+    }
+  });
+
   it('does not treat markup written inside an attribute value as a tag', () => {
     const html = '<p title="<div class=\'callout callout-info\'>">Body.</p>';
     expect(validateArticleHtml(html).filter((f) => f.code.startsWith('CALLOUT'))).toEqual([]);

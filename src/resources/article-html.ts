@@ -46,9 +46,13 @@
  * unsound in the usual ways. Known limits, all of which degrade to "say nothing" rather
  * than to a wrong claim:
  *
- *   - attribute values are read quote-aware, so a `>` inside one (e.g. `alt="Settings >
- *     Users"`, which is legal and ordinary) does not truncate the tag. A tag with no closing
- *     `>` at all IS skipped: no finding is reported about it, and no rewrite touches it;
+ *   - tag scanning (`openTags`) and attribute reading are quote-aware, so a `>` inside an
+ *     attribute value (e.g. `alt="Settings > Users"`, which is legal and ordinary) does not
+ *     truncate the tag. A tag with no closing `>` at all IS skipped: no finding is reported
+ *     about it, and no rewrite touches it. Two scanners are NOT quote-aware and still stop at
+ *     the first `>`: the containment helper (`innerOf`) and the task-item walk. Neither has
+ *     been shown to misreport on article-shaped markup, but neither is covered by the
+ *     guarantee above;
  *   - the Markdown scan ignores `<pre>`/`<code>`, comments, `<script>`/`<style>` bodies and
  *     attribute values, but markup written inside those regions is otherwise treated as
  *     markup;
@@ -872,15 +876,19 @@ export function normalizeArticleHtml(html: string): string {
 function mirrorCodeLanguage(html: string): string {
   let out = '';
   let cursor = 0;
+  // Lowercased once: taking it per-<pre> made the scan O(blocks x document).
+  const lower = html.toLowerCase();
   for (const pre of openTags(html, 'pre')) {
     const lang = languageOf(classOf(pre.attrs));
     if (lang === undefined) continue;
     const bodyFrom = pre.index + pre.tag.length;
     // A <pre> with no </pre> has no provable extent, so it is left exactly as written.
-    const closeAt = html.toLowerCase().indexOf('</pre>', bodyFrom);
+    const closeAt = lower.indexOf('</pre>', bodyFrom);
     if (closeAt === -1) continue;
     const rewrite = codeOpenTagWithLanguage(html, bodyFrom, closeAt, lang);
-    if (rewrite === null) continue;
+    // A nested <pre> can resolve to a <code> an outer one already rewrote. Emitting it again
+    // would duplicate the opening tag, so anything at or behind the cursor is skipped.
+    if (rewrite === null || rewrite.at < cursor) continue;
     out += html.slice(cursor, rewrite.at) + rewrite.tag;
     cursor = rewrite.end;
   }
@@ -895,7 +903,7 @@ function codeOpenTagWithLanguage(html: string, from: number, to: number, lang: s
   const found = /<code\b/i.exec(html.slice(from, to));
   if (found === null) return null;
   const at = from + found.index;
-  const read = readAttrs(html, at + found[0].length);
+  const read = readAttrs(html.slice(0, to), at + found[0].length);
   if (read === null) return null;
   const attrs = read.attrs;
   if (languageOf(classOf(attrs)) !== undefined) return null;
@@ -904,11 +912,11 @@ function codeOpenTagWithLanguage(html: string, from: number, to: number, lang: s
   // `class="language-X"` would emit a SECOND class attribute — and a parser keeps the first
   // and discards the rest, silently destroying the caller's classes. Report it, never
   // rewrite it: degrading to silence is this module's contract.
-  const hasClassAttr = /\bclass\s*=/i.test(attrs);
-  const doubleQuoted = /\bclass\s*=\s*"/i.test(attrs);
+  const hasClassAttr = parseAttrs(attrs).has('class');
+  const doubleQuoted = hasClassAttr && /(?:^|[\s/])class\s*=\s*"/i.test(attrs);
   if (hasClassAttr && !doubleQuoted) return null;
   const tag = doubleQuoted
-    ? `<code${attrs.replace(/(\bclass\s*=\s*")([^"]*)(")/i, (_m, a: string, value: string, b: string) => `${a}${value === '' ? '' : `${value} `}language-${lang}${b}`)}>`
+    ? `<code${attrs.replace(/((?:^|[\s/])class\s*=\s*")([^"]*)(")/i, (_m, a: string, value: string, b: string) => `${a}${value === '' ? '' : `${value} `}language-${lang}${b}`)}>`
     : `<code class="language-${lang}"${attrs}>`;
   return { at, end: read.end, tag };
 }
