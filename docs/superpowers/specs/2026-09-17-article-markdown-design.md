@@ -11,18 +11,72 @@ materially smaller and is the format an LLM edits most reliably.
 | Decision | Choice | Rationale |
 |---|---|---|
 | Direction | Bidirectional, markdown writes opt-in | Reading markdown is free; writing it is lossy, so it must be an explicit act |
-| Dependencies | `turndown`, `turndown-plugin-gfm`, `marked` | Correct GFM tables and edge cases for a fraction of the code. Retires the zero-dep property |
+| Dependencies | `turndown@^7.2.4`, `turndown-plugin-gfm@^1.0.2`, `marked@^15.0.12` | Correct GFM tables and edge cases for a fraction of the code. Retires the zero-dep property. **Version ceilings are load-bearing — see §1.2** |
 | Default shape | `format` opt-in per call, default `'html'` | No existing consumer changes behaviour; no major version needed |
 | Resource scope | Articles only, converter built resource-agnostic | Articles hold the token bulk; other resources adopt the same unit later |
 | Lossy writes | Refused by default, override available | Prevents silently destroying the regions an agent never edited |
 
 ### 1.1 Retired property
 
-The package currently advertises zero runtime dependencies in `README.md`, the `package.json`
-description, and the Hindsight *Conventions* knowledge page. This is now false. All three must be
-updated; the Hindsight page gets a `Correction:` document.
+Zero runtime dependencies is not a passing remark in this repo — it is a documented architectural
+principle:
 
-`turndown` pulls `@mixmark-io/domino` transitively. We do **not** depend on domino directly.
+- `README.md:8` — headline feature bullet, "**Zero runtime dependencies.** Uses only native
+  platform APIs"
+- `ARCHITECTURE.md:12` — "zero-runtime-dependency TypeScript SDK"
+- `ARCHITECTURE.md:384` — "**No runtime dependencies.**"
+- `ARCHITECTURE.md:900` — an entire section 15, "Dependency & build decisions"
+- Hindsight *Conventions and patterns* knowledge page
+
+(The `package.json` description does **not** claim it — an earlier draft of this spec said it did.)
+
+All of these must be updated, and `ARCHITECTURE.md` §15 needs a recorded rationale for why this
+feature justified breaking the principle. The Hindsight page gets a `Correction:` document.
+
+Reviewers should treat this as the most contestable decision in the design. If the principle is
+worth more than the ergonomics, approach C from the brainstorm — a separate `hudu-markdown`
+companion package, leaving node-hudu zero-dep — remains available and nothing below changes except
+where the module lives.
+
+### 1.2 Verified dependency facts
+
+Checked against the live npm registry on 2026-09-17. **These corrected two errors in the first
+draft of this spec**, so treat the pins as load-bearing rather than cosmetic.
+
+| Package | Latest | Pin to | Why the ceiling |
+|---|---|---|---|
+| `turndown` | 7.2.4 | `^7.2.4` | None needed. `engines: node >=18` ✓. One runtime dep, `@mixmark-io/domino@^2.2.0` |
+| `turndown-plugin-gfm` | 1.0.2 | `^1.0.2` | None needed, but see maintenance risk below |
+| `marked` | 18.0.13 | **`^15.0.12`** | **marked ≥16.0.0 is ESM-only and requires Node ≥20.** Both break this repo |
+
+**The marked ceiling is the important finding.** At v16.0.0 marked dropped its CJS export condition
+(`exports["."]` now offers only `./lib/marked.esm.js`) and raised `engines.node` to `>= 20`. This
+package builds dual ESM+CJS via tsup and declares `engines: {"node": ">=18.0.0"}`, so taking latest
+marked would break the CJS build and the Node floor simultaneously. `15.0.12` is the last release
+with both a `require` condition and `node >= 18`.
+
+This leaves an open decision the implementer must not silently resolve:
+
+- **(a)** Pin `marked@^15.0.12`, keep Node ≥18 and the dual build. Accepts sitting on a superseded
+  major that will not receive fixes.
+- **(b)** Bump this package's Node floor to ≥20 and consume latest marked via dynamic `import()`
+  from the CJS build. Current and maintained, but a breaking change for this SDK's own consumers.
+
+**Default is (a)** unless the owner says otherwise.
+
+Two further verified points:
+
+- **`turndown-plugin-gfm` is effectively abandoned** — last release 1.0.2 on 2018-05-11, roughly
+  eight years ago. It is MIT, has zero dependencies, and still works. Turndown genuinely does *not*
+  convert tables natively, so the plugin is required for GFM tables; there is no maintained
+  alternative that does only this. Accept it with eyes open, or drop GFM table support and classify
+  every table as a `complex-table` content loss.
+- **No single package does both directions.** `node-html-markdown`, `html-to-md`, and
+  `@joplin/turndown` are all HTML→MD only. The unified/remark/rehype route needs 5+ packages and
+  every one is ESM-only, which is *worse* here than marked's situation. Do not "simplify" to fewer
+  deps; the realistic set is these three.
+
+All three are MIT; `LICENSE` confirms node-hudu is MIT. Compatible.
 
 ## 2. The converter
 
@@ -85,8 +139,10 @@ data. Implementation must keep it trivially editable.
 
 - turndown: `headingStyle: 'atx'`, `codeBlockStyle: 'fenced'`, plus `turndown-plugin-gfm` for tables
   and strikethrough.
-- marked: `gfm: true`, `breaks: false`. No sanitizer: marked removed its `sanitize` option in v9, so
-  it is not an available knob. This introduces no new vector — markdown may embed raw HTML, but
+- marked: `gfm: true`, `breaks: false`. No sanitizer: marked removed its `sanitize`/`sanitizer`
+  options in **v8.0.0** (deprecated from 0.7.0, present through 7.0.5, gone from 8.0.0 — an earlier
+  draft of this spec said v9, which was wrong), so on the pinned v15 line it is not an available
+  knob. This introduces no new vector — markdown may embed raw HTML, but
   `articles.update` already accepts arbitrary HTML in `content` by design, so a markdown caller
   reaches exactly the surface an HTML caller already had. Hudu remains the trust boundary that
   decides what its own renderer will execute.
@@ -233,7 +289,19 @@ TDD throughout — test first, watch it fail, then implement.
 Guaranteed direction is HTML → MD → HTML. MD → HTML → MD is **not** identity — `marked` and
 `turndown` disagree at the edges — and nothing in this design depends on it.
 
-The full suite (62 files / ~1971 tests at time of writing) must stay green, plus lint and typecheck.
+### 6.1 Baseline
+
+Measured on this branch at commit `5f1446c`, 2026-09-17. All four gates must still pass at the end:
+
+| Gate | Command | Baseline |
+|---|---|---|
+| Typecheck | `npm run typecheck` | exit 0 |
+| Lint | `npm run lint` (= `eslint src test`) | clean |
+| Tests | `npm test` | 62 files / **1992** passed, ~12.5s |
+| Capabilities | `npm run capabilities:check` | PASS — rows=227 scoped=227 registryRecords=227, 66 warnings |
+
+Note `npm run lint` scopes to `src test`. A bare `eslint .` reports 223 errors from `scripts/`,
+which are pre-existing and out of scope — do not "fix" them.
 
 ## 7. Calibration
 
