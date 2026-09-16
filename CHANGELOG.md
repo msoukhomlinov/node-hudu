@@ -5,6 +5,20 @@ All notable changes to **node-hudu** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] — 2026-09-17
+
+### Changed
+
+- **BREAKING: the supported Node floor is now 24.** `engines` moves from `>=18.0.0` to
+  `>=24.0.0` and the build target from `node18` to `node24`. Node 18 reached end of life on
+  2025-04-30 and Node 20 on 2026-04-30, so the previous floor named a runtime that receives no
+  security patches; Node 24 is Active LTS until 2028-04-30. Node 22 remains in maintenance until
+  2027-04-30 and is deliberately not supported — the floor is set for runway, not for the widest
+  possible range. Nothing in the SDK's own code required the bump, so a consumer already on Node
+  24 needs no change beyond the version range.
+- `iit-mcp-hudu`, the reference MCP server, already required Node >= 20 via MCP SDK v2; the SDK's
+  floor is now at or above its own consumers' rather than below them.
+
 ## [0.5.1] — 2026-09-17
 
 ### Fixed
