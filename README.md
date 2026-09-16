@@ -219,6 +219,32 @@ patterns, list-nesting limits) is deliberately **not** encoded: that belongs to 
 See [`examples/mcp-server.ts`](examples/mcp-server.ts) for a complete, working MCP server
 that exposes `hudu_*` tools backed by this SDK.
 
+**`node-hudu/mcp` ships the generated tool catalog**, so a server does not have to re-derive (or
+re-type) the projection:
+
+```ts
+import { CORE_TOOLS, META_TOOLS, TOOL_DESCRIPTIONS, catalogPage, describeOperation } from 'node-hudu/mcp';
+import { getCapability } from 'node-hudu/capabilities';
+
+// The always-present tool profile, generated from the CORE rule — not a hand-kept list.
+// The three META tools carry their own spec (name, title, description, inputSchema); the other
+// twelve take their description from TOOL_DESCRIPTIONS. Together they are exactly CORE_TOOLS —
+// TOOL_DESCRIPTIONS deliberately has no entry for a META tool.
+for (const meta of META_TOOLS) server.registerTool(meta.name, meta, handler);
+for (const [name, description] of Object.entries(TOOL_DESCRIPTIONS)) {
+  server.registerTool(name, { description }, handler);
+}
+
+// Discovery: a bounded page of every operation, including the ones with no tool of their own.
+const page = catalogPage({ unexposed_only: true, limit: 40 });
+const detail = describeOperation(getCapability('companies.update')!);
+```
+
+It is DATA plus a schema reader: no validator and no write governor, because those live in exactly
+one place — `operations.invoke` in [`node-hudu/operations`](#agent-helpers), which validates a call
+against its registry record before any request, forces a dry run on writes and refuses a destructive
+operation without its confirmation flag.
+
 A minimal skeleton built on MCP SDK v2 (`@modelcontextprotocol/server`, zod v4):
 
 ```ts

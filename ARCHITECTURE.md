@@ -978,6 +978,7 @@ machine-readable surface is generated, never hand-written:
 | `src/capabilities.ts` | The **generated runtime registry** (`node-hudu/capabilities`), one record per implemented operation, zero imports. |
 | `capabilities.json`, `capabilities.schema.json` | The emitted **data + JSON Schema** at the package root, for non-TypeScript consumers. Pin-checked by `planHash`. |
 | `MCP_TOOL_MANIFEST.md` | The **mechanical MCP projection** of the registry; curation deltas are recorded in `MCP_TOOL_OVERRIDES.json`. |
+| `src/mcp/catalog.generated.ts` | The **generated MCP tool catalog** (`node-hudu/mcp`, re-exported by `src/mcp/index.ts`): the CORE profile, the three META tool specs, the curated tool descriptions, the `hudu_search` contract, and one row per registry operation so a capability with no tool of its own is discoverable. Compiled like every other entry point, so a host that only has the tarball can import it. DATA and a schema reader only — validation and the write governor live once, in `src/operations/invoke.ts`. |
 | `scripts/*.mjs` | `plan:derive`, `capabilities:build`, `capabilities:check` (the gate), `mcp:project`, `public-surface`. |
 
 **The envelope/capability table above stays the contract for how responses are unwrapped** (singleKey,

@@ -32,7 +32,7 @@ import {
 } from '../../src/operations/invoke.js';
 import { CAPABILITY_NAMES, getCapability, type CapabilityRecord } from '../../src/capabilities.js';
 import { HuduConfigError } from '../../src/errors.js';
-import { REFUSALS } from '../../examples/tool-catalog.generated.js';
+import { REFUSALS } from '../../src/mcp/index.js';
 import { stubFetch, json, empty, clearFetch, type FetchHandler, type FetchSpy } from '../helpers.js';
 
 const ORIGIN = 'https://hudu.example.com';

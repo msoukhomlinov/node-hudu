@@ -511,7 +511,7 @@ if (IS_MAIN) {
   lines.push('| `hudu_describe` | one operation\'s full schema, flags, errors and guidance |');
   lines.push('| `hudu_invoke` | execute by canonical key, validated against the registry record before any request |');
   lines.push('');
-  lines.push('The catalog is GENERATED from `capabilities.json` (see `examples/tool-catalog.generated.ts`,');
+  lines.push('The catalog is GENERATED from `capabilities.json` (see `src/mcp/catalog.generated.ts`,');
   lines.push('emitted by `scripts/build-tool-catalog.mjs`), so an operation that gains or loses a tool cannot');
   lines.push('become invisible: every operation has a row, and an operation the escape hatch refuses has');
   lines.push('`reachable: false` with the reason. An unexposed capability that is indistinguishable from a');

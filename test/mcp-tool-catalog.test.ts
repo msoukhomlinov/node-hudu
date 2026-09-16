@@ -3,7 +3,8 @@
  * the `hudu_invoke` safety path.
  *
  * The catalog and the CORE list are GENERATED (`scripts/build-tool-catalog.mjs` ->
- * `examples/tool-catalog.generated.ts`) from the capability registry plus the curated projection.
+ * `src/mcp/catalog.generated.ts`, re-exported as `node-hudu/mcp`) from the capability registry
+ * plus the curated projection.
  * These tests assert the two invariants that make the mechanism honest, against the registry the
  * SDK actually ships:
  *
@@ -22,7 +23,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { CAPABILITY_REGISTRY, getCapability } from '../src/capabilities.js';
+import { CAPABILITIES_PLAN_HASH, CAPABILITY_REGISTRY, getCapability } from '../src/capabilities.js';
 import {
   CATALOG,
   CATALOG_PLAN_HASH,
@@ -37,7 +38,7 @@ import {
   configError,
   describeOperation,
   requireCatalogRow,
-} from '../examples/tool-catalog.generated.js';
+} from '../src/mcp/index.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..');
@@ -205,3 +206,48 @@ describe('configError', () => {
   });
 });
 
+
+/**
+ * The `node-hudu/mcp` subpath. The catalog used to be emitted into `examples/` and published as
+ * raw TypeScript, so a compiled consumer (the separate MCP server repo) could not import it at
+ * all. It is now a first-class entry point, and these are the two things that make the claim real
+ * from inside the repo: the barrel actually re-exports the whole generated surface, and the hash
+ * it pins is the hash of the registry shipping beside it. That the COMPILED surface imports from
+ * both ESM and CJS out of a packed tarball is `npm run verify:pack`'s job, not vitest's.
+ */
+describe('node-hudu/mcp export surface', () => {
+  it('re-exports the whole generated surface, non-empty', async () => {
+    const mcp = await import('../src/mcp/index.js');
+    const generated = await import('../src/mcp/catalog.generated.js');
+    // Every runtime export of the generated module reaches the subpath (types are erased, so a
+    // value-level comparison is the whole comparable surface).
+    expect(Object.keys(mcp).sort()).toEqual(Object.keys(generated).sort());
+    expect(mcp.CORE_TOOLS.length).toBeGreaterThan(0);
+    expect(mcp.META_TOOLS.length).toBe(3);
+    expect(mcp.CATALOG.length).toBe(records.length);
+    expect(Object.keys(mcp.EXPOSED).length).toBeGreaterThan(0);
+    expect(Object.keys(mcp.REFUSALS).length).toBeGreaterThan(0);
+    expect(Object.keys(mcp.TOOL_DESCRIPTIONS).length).toBeGreaterThan(0);
+    expect(mcp.WORKFLOW_RESOURCES.length).toBeGreaterThan(0);
+    expect(typeof mcp.catalogPage).toBe('function');
+    expect(typeof mcp.describeOperation).toBe('function');
+    expect(typeof mcp.requireCatalogRow).toBe('function');
+  });
+
+  it('pins the planHash of the registry it ships beside', async () => {
+    const mcp = await import('../src/mcp/index.js');
+    const emitted = JSON.parse(readFileSync(join(root, 'capabilities.json'), 'utf8'));
+    expect(mcp.CATALOG_PLAN_HASH).toBe(emitted.planHash);
+    expect(mcp.CATALOG_PLAN_HASH).toBe(CAPABILITIES_PLAN_HASH);
+  });
+
+  it('is a declared entry point, wired for both ESM and CJS', () => {
+    const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+    expect(pkg.exports['./mcp']).toEqual({
+      import: { types: './dist/mcp/index.d.ts', default: './dist/mcp/index.js' },
+      require: { types: './dist/mcp/index.d.cts', default: './dist/mcp/index.cjs' },
+    });
+    const tsup = readFileSync(join(root, 'tsup.config.ts'), 'utf8');
+    expect(tsup).toContain("'src/mcp/index.ts'");
+  });
+});

@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`node-hudu/mcp`** — the generated MCP tool catalog is now a first-class, compiled subpath
+  export. `CORE_TOOLS`, `META_TOOLS`, `TOOL_DESCRIPTIONS`, `SEARCH_MODES`, `SEARCH_RESOURCES`,
+  `SEARCH_HELP`, `CATALOG`, `EXPOSED`, `REFUSALS`, `CATALOG_PLAN_HASH`, `CORE_RULE`,
+  `WORKFLOW_RESOURCES` and the runtime helpers (`catalogPage`, `catalogRow`, `nearestKeys`,
+  `requireCatalogRow`, `describeOperation`, `inputFields`, `configError`) import from both ESM and
+  CJS, with types for each. The catalog is still generated, still carries no second validator and no
+  second write governor, and still imports nothing at runtime.
+
 - **Hudu article HTML rules** (`src/resources/article-html.ts`, exported from the package
   root and from `node-hudu/resources`) — three pure functions, no HTTP, no new dependency:
   - `validateArticleHtml(html, opts?)` returns structured findings with stable `code`s, a
@@ -23,6 +31,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `ARTICLE_HTML_PROVENANCE` declares the audit the rules came from (2026-09-16, Hudu's
     container CSS and the compiled Tiptap/ProseMirror editor schema), and `ARTICLE_HTML_RULES`
     carries a per-rule verification date, so a consumer can tell stale rules from current ones.
+
+### Changed
+
+- The catalog is generated into **`src/mcp/catalog.generated.ts`** instead of
+  `examples/tool-catalog.generated.ts`. It was previously published under `files[]` as uncompiled
+  TypeScript, which a compiled consumer could not import; it is now compiled by tsup like every
+  other entry point. `scripts/build-tool-catalog.mjs --out` and `scripts/check-capabilities.mjs
+  --catalog` default to the new path. No tool name, title or description changed.
+- `examples/mcp-server.ts` imports the catalog from `node-hudu/mcp` rather than a relative path to
+  the generated file, which is what a real host does.
 
 ### Documentation
 
