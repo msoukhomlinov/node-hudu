@@ -178,11 +178,16 @@ describe('scoped clients (withAuth) never leak credentials', () => {
 
   it('a scoped client shares the parent rate-limit state and logger, but not the credential', async () => {
     stubFetchAny({ baseUrl: BASE });
-    const client = new HuduClient({ baseUrl: BASE, apiKey: 'parent', rateLimit: { perMinute: 60, burst: 60 } });
+    // `perMinute` sets the refill interval, and `availableTokens` applies the pending refill AT READ
+    // TIME (src/http.ts): at perMinute 60 the consumed token is back after 1s of wall clock, so a
+    // loaded suite that stalls this test for a second makes the assertion below pass or fail by
+    // timing. 6/minute puts the next refill 10s out — far past any plausible stall — while asserting
+    // exactly the same thing. The burst is well above the one request this test issues.
+    const client = new HuduClient({ baseUrl: BASE, apiKey: 'parent', rateLimit: { perMinute: 6, burst: 6 } });
     const scoped = client.withAuth('key-A');
     await scoped.companies.get(1);
     // One bucket for the whole tree: the scope's call consumed the parent's token.
-    expect(scoped.getRateLimitStatus().availableTokens).toBeLessThan(60);
+    expect(scoped.getRateLimitStatus().availableTokens).toBeLessThan(6);
     expect(scoped.getRateLimitStatus().availableTokens).toBe(client.getRateLimitStatus().availableTokens);
     expect(scoped.config.auth).not.toBe(client.config.auth);
     expect(scoped.config.auth).toBeInstanceOf(ApiKeyAuth);

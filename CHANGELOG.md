@@ -5,6 +5,28 @@ All notable changes to **node-hudu** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`node-hudu/mcp`** — the generated MCP tool catalog is now a first-class, compiled subpath
+  export. `CORE_TOOLS`, `META_TOOLS`, `TOOL_DESCRIPTIONS`, `SEARCH_MODES`, `SEARCH_RESOURCES`,
+  `SEARCH_HELP`, `CATALOG`, `EXPOSED`, `REFUSALS`, `CATALOG_PLAN_HASH`, `CORE_RULE`,
+  `WORKFLOW_RESOURCES` and the runtime helpers (`catalogPage`, `catalogRow`, `nearestKeys`,
+  `requireCatalogRow`, `describeOperation`, `inputFields`, `configError`) import from both ESM and
+  CJS, with types for each. The catalog is still generated, still carries no second validator and no
+  second write governor, and still imports nothing at runtime.
+
+### Changed
+
+- The catalog is generated into **`src/mcp/catalog.generated.ts`** instead of
+  `examples/tool-catalog.generated.ts`. It was previously published under `files[]` as uncompiled
+  TypeScript, which a compiled consumer could not import; it is now compiled by tsup like every
+  other entry point. `scripts/build-tool-catalog.mjs --out` and `scripts/check-capabilities.mjs
+  --catalog` default to the new path. No tool name, title or description changed.
+- `examples/mcp-server.ts` imports the catalog from `node-hudu/mcp` rather than a relative path to
+  the generated file, which is what a real host does.
+
 ## [0.4.0] — 2026-09-15
 
 **Additive: pluggable auth strategies (issue #23).** No **existing** method signature changed and no

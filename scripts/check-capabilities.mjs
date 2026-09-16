@@ -720,7 +720,7 @@ if (IS_DEFAULT_PLAN) {
 }
 
 // ---------------------------------------------------------------- progressive disclosure (catalog / core profile)
-// Build-order step 4. The generated catalog (`examples/tool-catalog.generated.ts`, written by
+// Build-order step 4. The generated catalog (`src/mcp/catalog.generated.ts`, written by
 // `scripts/build-tool-catalog.mjs` from the projection) is what makes every registry operation
 // discoverable, and the CORE profile is what a client actually pays for on every turn. Both rot
 // silently unless they are gated, so they are gated here:
@@ -737,7 +737,7 @@ if (IS_DEFAULT_PLAN) {
 //                           META tools / the cross-resource helpers (measured today: 9/9 resources)
 //   core-budget             the CORE tools/list payload exceeds its token budget (the whole point
 //                           of the profile: it cannot creep back to the flat 147-tool surface)
-const CATALOG_PATH = path.resolve(ROOT, argValue('--catalog', 'examples/tool-catalog.generated.ts'));
+const CATALOG_PATH = path.resolve(ROOT, argValue('--catalog', 'src/mcp/catalog.generated.ts'));
 const CORE_BUDGET_BYTES = 32000; // ~8,000 tokens at the measured ratio; today's CORE is far under it
 const catalogRel = path.relative(ROOT, CATALOG_PATH);
 let catalogData = null;

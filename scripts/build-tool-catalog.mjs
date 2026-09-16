@@ -3,7 +3,8 @@
 // `node scripts/build-tool-catalog.mjs [--out <path>] [--check]`
 //
 // Builds the progressive-disclosure artifacts from the capability registry, and writes them as a
-// generated consumer-layer module (`examples/tool-catalog.generated.ts`, default):
+// generated consumer-layer module (`src/mcp/catalog.generated.ts`, default — compiled by tsup and
+// published as the `node-hudu/mcp` subpath, re-exported through `src/mcp/index.ts`):
 //
 //   - the CATALOG: one row per registry operation (all of them, never a subset), with the tool
 //     that exposes it when there is one, its effect, the arguments it requires, whether it is
@@ -50,7 +51,11 @@ import {
 const ROOT = process.cwd();
 const argv = process.argv.slice(2);
 const argValue = (flag, fallback) => { const i = argv.indexOf(flag); return i === -1 ? fallback : argv[i + 1]; };
-const OUT = path.resolve(ROOT, argValue('--out', 'examples/tool-catalog.generated.ts'));
+// The default lives in src/ on purpose: tsup compiles it, so `node-hudu/mcp` ships the catalog as
+// compiled JS + .d.ts. Emitting it under examples/ published it as raw TypeScript, which a compiled
+// consumer could not import. `--out` still overrides, but the emitted `import type` is relative to
+// src/mcp/, so an out-of-tree path needs its own re-export.
+const OUT = path.resolve(ROOT, argValue('--out', 'src/mcp/catalog.generated.ts'));
 const CHECK = argv.includes('--check');
 
 // ---------------------------------------------------------------- reachability
@@ -137,30 +142,41 @@ const runtime = `
 
 // ---------------------------------------------------------------------------------------------
 // Runtime helpers. Deliberately MCP-agnostic and dependency-free: this module is consumer-layer
-// code (an MCP server needs it, the SDK must not), it imports nothing, and every function takes
-// the registry record it needs as an argument, so a host passes \`getCapability(op)\` from
-// \`node-hudu/capabilities\` and nothing here can drift from the registry it is used with.
+// code (an MCP server needs it, the SDK must not) and every function takes the registry record it
+// needs as an argument, so a host passes \`getCapability(op)\` from \`node-hudu/capabilities\` and
+// nothing here can drift from the registry it is used with. The module's ONLY import is the
+// type-only one at the top: \`verbatimModuleSyntax\` erases it, so the emitted JS still imports
+// nothing and the SDK stays MCP-independent in both directions.
 // ---------------------------------------------------------------------------------------------
 
 /** Bounded catalog page: default 40 rows, hard cap 100. */
 export const DEFAULT_CATALOG_LIMIT = 40;
 export const MAX_CATALOG_LIMIT = 100;
 
+/** The filters \`catalogPage\` honours. All optional, all ANDed. */
+export interface CatalogPageOptions {
+  limit?: number;
+  offset?: number;
+  effect?: string;
+  resource?: string;
+  unexposed_only?: boolean;
+}
+
 /** Config refusal, same code the SDK uses for a caller-side configuration error. */
-export function configError(message) {
+export function configError(message: string): Error {
   const err = new Error(message);
   err.name = 'ConfigError';
   return err;
 }
 
 /** One catalog row by canonical operation key, or null. */
-export function catalogRow(operation) {
-  for (let i = 0; i < CATALOG.length; i += 1) if (CATALOG[i].op === operation) return CATALOG[i];
+export function catalogRow(operation: string): CatalogRow | null {
+  for (const row of CATALOG) if (row.op === operation) return row;
   return null;
 }
 
 /** The nearest catalog keys to an unknown one (exact-key lookup, but a useful refusal). */
-export function nearestKeys(operation, limit) {
+export function nearestKeys(operation: string, limit?: number): string[] {
   const want = String(operation).toLowerCase();
   const head = want.split('.')[0];
   const scored = CATALOG.map((row) => {
@@ -178,8 +194,8 @@ export function nearestKeys(operation, limit) {
  * A bounded, filterable page of the catalog. Filters are ANDed. \`unexposed_only\` is the
  * "what can I reach that has no tool?" question, which is the whole point of the mechanism.
  */
-export function catalogPage(options) {
-  const o = options || {};
+export function catalogPage(options?: CatalogPageOptions) {
+  const o: CatalogPageOptions = options || {};
   const limit = o.limit === undefined ? DEFAULT_CATALOG_LIMIT : o.limit;
   const offset = o.offset === undefined ? 0 : o.offset;
   if (typeof limit !== 'number' || !Number.isInteger(limit) || limit < 1 || limit > MAX_CATALOG_LIMIT) {
@@ -209,7 +225,7 @@ export function catalogPage(options) {
 }
 
 /** Resolve an operation key to its catalog row, refusing an unknown key by naming the nearest. */
-export function requireCatalogRow(operation) {
+export function requireCatalogRow(operation: string): CatalogRow {
   if (typeof operation !== 'string' || operation.length === 0) {
     throw configError('operation must be a non-empty canonical registry key, for example "companies.update".');
   }
@@ -223,11 +239,11 @@ export function requireCatalogRow(operation) {
  * One operation's full description, from the registry record the host passes in. The generic
  * registry vocabulary is echoed verbatim; \`reachable\` / \`why_not\` come from the generated catalog.
  */
-export function describeOperation(record) {
+export function describeOperation(record: CapabilityRecord) {
   const row = requireCatalogRow(record.name);
   const fields = inputFields(record.inputSchema);
-  const required = [];
-  for (let i = 0; i < fields.length; i += 1) if (fields[i].required === true) required.push(fields[i].name);
+  const required: string[] = [];
+  for (const field of fields) if (field.required === true) required.push(field.name);
   return {
     op: record.name,
     kind: record.kind,
@@ -260,18 +276,16 @@ export function describeOperation(record) {
 // it. Validation is the SDK's (\`src/operations/invoke.ts\`), one implementation, G4-tested over
 // every registry record — see the header.
 
-export function inputFields(inputSchema) {
+export function inputFields(inputSchema: unknown): CapabilityField[] {
   if (inputSchema === null || inputSchema === undefined) return [];
-  if (Array.isArray(inputSchema)) return inputSchema;
-  const fields = inputSchema.fields;
-  if (Array.isArray(fields)) return fields;
-  const out = [];
-  const keys = Object.keys(inputSchema);
-  for (let i = 0; i < keys.length; i += 1) {
-    const k = keys[i];
-    const v = inputSchema[k];
+  if (Array.isArray(inputSchema)) return inputSchema as CapabilityField[];
+  const schema = inputSchema as Record<string, unknown>;
+  const fields = schema.fields;
+  if (Array.isArray(fields)) return fields as CapabilityField[];
+  const out: CapabilityField[] = [];
+  for (const [k, v] of Object.entries(schema)) {
     if (k === 'type' || k === 'fields' || k === 'name') continue;
-    if (v !== null && typeof v === 'object') out.push(v);
+    if (v !== null && typeof v === 'object') out.push(v as CapabilityField);
   }
   return out;
 }
@@ -395,6 +409,14 @@ lines.push('// projected by scripts/project-mcp-tools.mjs. `npm run capabilities
 lines.push('//');
 lines.push(`// ${catalog.length} operations, ${exposures.length} exposed as their own tool, ${catalog.filter((r) => r.reachable === true && r.tool === null).length} reachable only through hudu_invoke,`);
 lines.push(`// ${refusals.length} deliberately refused (unbounded read / binary). CORE = ${CORE_TOOL_NAMES.length} tools + 3 META.`);
+lines.push('//');
+lines.push('// This module lives in src/ so tsup compiles it and `node-hudu/mcp` ships it to a consumer that');
+lines.push('// only has the tarball. It is re-exported by src/mcp/index.ts and must never be hand-edited.');
+lines.push('');
+// The one import, and it is type-only: `verbatimModuleSyntax` erases it, so the emitted JS still
+// imports nothing at runtime. The alternative — re-declaring the registry record shape here —
+// would be a second definition free to drift from the registry this module is used with.
+lines.push("import type { CapabilityField, CapabilityRecord } from '../capabilities.js';");
 lines.push('');
 lines.push(`export const CATALOG_PLAN_HASH = '${registry.planHash}';`);
 lines.push('');
@@ -454,8 +476,28 @@ lines.push('export const REFUSALS = {');
 for (const r of refusals) lines.push(`  ${JSON.stringify(r.op)}: ${JSON.stringify({ reachable: false, reason: r.reason, alternative: r.alternative })},`);
 lines.push('};');
 lines.push('');
+lines.push('/**');
+lines.push(' * One row per registry operation. `reason` is present on every row without a tool of its own');
+lines.push(' * (curated out as a duplicate outcome, or refused by rule); `alternative` names the bounded tool');
+lines.push(' * a refused row points at, when the registry has one. Annotated rather than inferred so the');
+lines.push(' * emitted .d.ts is one named type instead of a 227-member union of object literals.');
+lines.push(' */');
+lines.push('export interface CatalogRow {');
+lines.push('  op: string;');
+lines.push('  tool: string | null;');
+lines.push('  summary: string | null;');
+lines.push('  when: string | null;');
+lines.push('  effect: string | null;');
+lines.push('  requires: string[];');
+lines.push('  dry_run: boolean;');
+lines.push('  confirm_required: boolean;');
+lines.push('  reachable: boolean;');
+lines.push('  reason?: string;');
+lines.push('  alternative?: string;');
+lines.push('}');
+lines.push('');
 lines.push('/** One row per registry operation. `requires` = the required top-level argument names. */');
-lines.push('export const CATALOG = [');
+lines.push('export const CATALOG: CatalogRow[] = [');
 for (const row of catalog) lines.push(`  ${JSON.stringify(row)},`);
 lines.push('];');
 lines.push('');
