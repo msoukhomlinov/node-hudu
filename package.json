@@ -105,13 +105,14 @@
     "plan:derive": "node scripts/derive-plan.mjs",
     "capabilities:build": "node scripts/generate-capabilities.mjs",
     "capabilities:check": "node scripts/check-capabilities.mjs",
+    "catalog:check": "node scripts/build-tool-catalog.mjs --check",
     "mcp:project": "node scripts/project-mcp-tools.mjs",
     "lint": "eslint src test",
     "lint:fix": "eslint src test --fix",
     "clean": "rimraf dist coverage",
     "verify:pack": "node scripts/verify-pack.mjs",
     "prepack": "npm run build",
-    "prepublishOnly": "npm run clean && npm run build"
+    "prepublishOnly": "npm run clean && npm run catalog:check && npm run capabilities:check && npm run build"
   },
   "keywords": [
     "hudu",
