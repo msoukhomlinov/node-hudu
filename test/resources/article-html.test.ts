@@ -337,33 +337,107 @@ describe('a ">" inside an attribute value (legal, and common in Hudu screenshots
     }
   });
 
-  it('keeps normalizeArticleHtml away from the tag entirely — no partial rewrite', () => {
+  it('reads the whole tag, so a class after the ">" is still seen', () => {
+    // `<code title="a > b" class="hljs">` has no language class; the report is a fact, not a
+    // guess, because the attributes are read quote-aware rather than cut at the first ">".
+    const html = '<pre class="language-js"><code title="a > b" class="hljs">x</code></pre>';
+    expect(codes(validateArticleHtml(html))).toEqual(['CODE_LANGUAGE_CLASS_MISSING_ON_CODE']);
+    // And one that DOES carry the class after the ">" is correctly left alone.
+    const ok = '<pre class="language-js"><code title="a > b" class="language-js">x</code></pre>';
+    expect(validateArticleHtml(ok).filter((f) => f.code.startsWith('CODE_LANGUAGE'))).toEqual([]);
+  });
+
+  it('extends the existing class in place — never a second class attribute', () => {
+    const out = normalizeArticleHtml('<pre class="language-js"><code title="a > b" class="hljs">x</code></pre>');
+    expect(out).toBe('<pre class="language-js"><code title="a > b" class="hljs language-js">x</code></pre>');
+    expect((out.match(/class\s*=/gi) ?? []).length).toBe(2); // one on <pre>, one on <code>
+    expect(normalizeArticleHtml(out)).toBe(out);
+  });
+
+  it('mirrors the language when the ">" is in the <pre> tag instead', () => {
+    const out = normalizeArticleHtml('<pre class="language-js" title="a > b"><code>x</code></pre>');
+    expect(out).toBe('<pre class="language-js" title="a > b"><code class="language-js">x</code></pre>');
+    expect(normalizeArticleHtml(out)).toBe(out);
+  });
+
+  it('unwraps a table-scroll wrapper whose attribute contains a ">", without stray text', () => {
+    const html =
+      '<p>Intro.</p><div class="rich_text_content__table-scroll" aria-label="Costs > $100"><table><tr><td>x</td></tr></table></div><p>Outro.</p>';
+    const out = normalizeArticleHtml(html);
+    expect(out).toBe('<p>Intro.</p><table><tr><td>x</td></tr></table><p>Outro.</p>');
+    expect(out).not.toContain('$100');
+    expect(normalizeArticleHtml(out)).toBe(out);
+  });
+
+  it('still refuses a tag that is never closed at all', () => {
     for (const html of [
-      '<p>Intro.</p><div class="rich_text_content__table-scroll" aria-label="Costs > $100"><table><tr><td>x</td></tr></table></div><p>Outro.</p>',
-      '<pre class="language-js"><code title="a > b" class="hljs">x</code></pre>',
-      '<pre class="language-js" title="a > b"><code>x</code></pre>',
+      '<pre class="language-bash"><code class="x">truncated',
+      '<pre class="language-bash"><code class="x',
+      '<div class="rich_text_content__table-scroll"><table><tr><td>a</td></tr>',
     ]) {
-      const out = normalizeArticleHtml(html);
-      expect(out, `mangled: ${html}`).toBe(html);
-      expect(normalizeArticleHtml(out)).toBe(out);
+      expect(normalizeArticleHtml(html), `rewrote an unterminated tag: ${html}`).toBe(html);
     }
   });
 
-  it('never emits a second class attribute through the truncated-tag route', () => {
-    const out = normalizeArticleHtml('<pre class="language-js"><code title="a > b" class="hljs">x</code></pre>');
-    expect((out.match(/<code[^>]*class\s*=/gi) ?? []).length).toBeLessThanOrEqual(1);
-    expect(out).toContain('class="hljs"');
+  it('does not let an unterminated <code swallow the closing </pre>', () => {
+    // The attribute read is bounded by the </pre>; without that bound it consumed the `>` of
+    // the closing tag, which deleted the </pre> from the body. The case the sibling test above
+    // misses, because every input there truncates at the END of the document.
+    const html = '<pre class="language-js"><code</pre>';
+    expect(normalizeArticleHtml(html)).toBe(html);
   });
 
-  it('stays silent about a truncated tag rather than guessing at its classes', () => {
-    // The hidden part of `<code title="a > b" …>` could hold class="language-js", so a
-    // CODE_LANGUAGE_CLASS_MISSING_ON_CODE here would be a coin flip. Silence is the contract.
-    expect(validateArticleHtml('<pre class="language-js"><code title="a > b" class="hljs">x</code></pre>')).toEqual([]);
+  it('does not emit the <code> tag twice when a <pre> is nested', () => {
+    // openTags yields the nested <pre> as well, and the </pre> search is not depth-matched, so
+    // both resolve to the same <code>. Re-emitting it duplicated the opening tag.
+    const html = '<pre class="language-js">outer <pre class="language-py">inner <code>x</code></pre></pre>';
+    const out = normalizeArticleHtml(html);
+    expect((out.match(/<code/g) ?? []).length, `duplicated the <code> tag: ${out}`).toBe(1);
+    expect(normalizeArticleHtml(out)).toBe(out);
+  });
+
+  it('never extends an attribute that merely contains the text "class="', () => {
+    // The read path walks attributes in order; the write path must splice where it read. When
+    // the two disagreed, `data-class` grew by one `language-js` on EVERY call and never reached
+    // a fixed point, while the <code> still ended up with no language class.
+    for (const html of [
+      '<pre class="language-js"><code data-class="foo">x</code></pre>',
+      `<pre class="language-js"><code title='class="x"'>y</code></pre>`,
+    ]) {
+      const once = normalizeArticleHtml(html);
+      expect(normalizeArticleHtml(once), `not idempotent: ${once}`).toBe(once);
+      expect(once).toContain('class="language-js"');
+      expect(once).not.toMatch(/language-js language-js/);
+    }
+  });
+
+  it('does not treat markup written inside an attribute value as a tag', () => {
+    const html = '<p title="<div class=\'callout callout-info\'>">Body.</p>';
+    expect(validateArticleHtml(html).filter((f) => f.code.startsWith('CALLOUT'))).toEqual([]);
   });
 
   it('still reports the tags it CAN read in the same document', () => {
     const html = '<img src="/a.png" alt="Settings > Users"><img src="/b.png">';
     expect(codes(validateArticleHtml(html))).toEqual(['IMG_ALT_MISSING']);
+  });
+
+  it('REPORTS a genuinely missing alt on a tag whose other attribute contains ">"', () => {
+    // The defect this parser fixes: skipping such a tag hid real faults. The alt is absent
+    // here, and the `>` lives in title/aria-label — the finding must still be made.
+    for (const html of [
+      '<img src="/a.png" title="Settings > Users">',
+      '<img src="/a.png" aria-label="Cost > $100" alt="">',
+      `<img src='/a.png' title='a > b'>`,
+    ]) {
+      expect(codes(validateArticleHtml(html)), `missed a real fault: ${html}`).toEqual(['IMG_ALT_MISSING']);
+    }
+  });
+
+  it('reads an attribute that sits AFTER the one containing ">"', () => {
+    // data-align follows the `>`-bearing attribute, so an attribute-order-sensitive scan
+    // would miss it; the alignment class here must still be the thing reported.
+    const html = '<img title="a > b" class="align-center" src="/x.png" alt="Diagram">';
+    expect(codes(validateArticleHtml(html))).toEqual(['ALIGN_CLASS_ON_IMAGE']);
   });
 });
 

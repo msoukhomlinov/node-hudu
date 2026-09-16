@@ -46,9 +46,13 @@
  * unsound in the usual ways. Known limits, all of which degrade to "say nothing" rather
  * than to a wrong claim:
  *
- *   - an attribute value containing `>` (e.g. `alt="Settings > Users"`, which is legal and
- *     common) ends a tag match early. Such a tag is detected by its unbalanced quote and is
- *     SKIPPED: no finding is reported about it, and no rewrite touches it;
+ *   - tag scanning (`openTags`) and attribute reading are quote-aware, so a `>` inside an
+ *     attribute value (e.g. `alt="Settings > Users"`, which is legal and ordinary) does not
+ *     truncate the tag. A tag with no closing `>` at all IS skipped: no finding is reported
+ *     about it, and no rewrite touches it. Two scanners are NOT quote-aware and still stop at
+ *     the first `>`: the containment helper (`innerOf`) and the task-item walk. Neither has
+ *     been shown to misreport on article-shaped markup, but neither is covered by the
+ *     guarantee above;
  *   - the Markdown scan ignores `<pre>`/`<code>`, comments, `<script>`/`<style>` bodies and
  *     attribute values, but markup written inside those regions is otherwise treated as
  *     markup;
@@ -335,16 +339,32 @@ function finding(
   return out;
 }
 
+/**
+ * Walk a tag's attribute text into name → value pairs (names lower-cased).
+ *
+ * Walking in order matters: searching the text for `class\s*=` would also match a `class=`
+ * written INSIDE another attribute's value — `<p title="<div class='callout'>">` is prose
+ * about HTML, not a callout. Consuming each quoted value as a unit makes that impossible.
+ * A valueless attribute (`open`, `checked`) maps to `''`, which is how the callers read it.
+ */
+function parseAttrs(attrs: string): Map<string, string> {
+  const pairs = new Map<string, string>();
+  const re = /([a-z_:@][-\w:.]*)\s*(?:=\s*("([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/gi;
+  for (let m = re.exec(attrs); m !== null; m = re.exec(attrs)) {
+    const name = (m[1] ?? '').toLowerCase();
+    if (!pairs.has(name)) pairs.set(name, m[3] ?? m[4] ?? m[5] ?? '');
+  }
+  return pairs;
+}
+
 /** Extract the `class` attribute value of a tag's attribute text ("" when absent). */
 function classOf(attrs: string): string {
-  const m = /\bclass\s*=\s*("([^"]*)"|'([^']*)'|([^\s"'>]+))/i.exec(attrs);
-  return m === null ? '' : (m[2] ?? m[3] ?? m[4] ?? '');
+  return parseAttrs(attrs).get('class') ?? '';
 }
 
 /** Extract an arbitrary attribute value, or undefined when the attribute is absent. */
 function attrOf(attrs: string, name: string): string | undefined {
-  const m = new RegExp(`\\b${name}\\s*=\\s*("([^"]*)"|'([^']*)'|([^\\s"'>]+))`, 'i').exec(attrs);
-  return m === null ? undefined : (m[2] ?? m[3] ?? m[4] ?? '');
+  return parseAttrs(attrs).get(name.toLowerCase());
 }
 
 function hasClass(classValue: string, name: string): boolean {
@@ -366,25 +386,43 @@ interface OpenTag {
 }
 
 /**
- * True when a captured attribute string was cut short by a `>` INSIDE an attribute value.
+ * Read one tag's attribute text, starting just after its element name, and report where the
+ * tag really ends.
  *
- * `alt="Settings > Users"` and `title="Cost > $100"` are legal and common in Hudu articles,
- * and the tag regexes here stop at the first `>`. The tell is an odd number of quotes: the
- * attribute text ends mid-value. Nothing can be concluded from a truncated tag, so every
- * scan skips it (silence, not a wrong claim) and every rewrite refuses outright — a partial
- * rewrite would splice the document at an offset inside an attribute value.
+ * A plain `[^>]*` stops at the first `>` — including one INSIDE an attribute value, and
+ * `alt="Settings > Users"` or `title="Cost > $100"` is ordinary Hudu screenshot markup. Acting
+ * on those truncated attributes is how a scan invents a missing `alt` that is right there in
+ * the tag, and how a rewrite splices a document at an offset inside an attribute value. So the
+ * scan is quote-aware: a `>` only ends the tag when it is outside quotes.
+ *
+ * Returns `null` for a tag that is never closed at all — genuinely truncated input, about
+ * which nothing can be concluded and which nothing here may rewrite.
  */
-function truncatedAttrs(attrs: string): boolean {
-  return (attrs.match(/"/g) ?? []).length % 2 === 1 || (attrs.match(/'/g) ?? []).length % 2 === 1;
+function readAttrs(html: string, from: number): { attrs: string; end: number } | null {
+  let quote: string | null = null;
+  for (let i = from; i < html.length; i += 1) {
+    const ch = html[i];
+    if (quote !== null) {
+      if (ch === quote) quote = null;
+    } else if (ch === '"' || ch === "'") {
+      quote = ch;
+    } else if (ch === '>') {
+      return { attrs: html.slice(from, i), end: i + 1 };
+    }
+  }
+  return null;
 }
 
 /** Iterate opening tags of one element name (the name may be a character-class pattern). */
 function* openTags(html: string, name: string): Generator<OpenTag> {
-  const re = new RegExp(`<${name}\\b([^>]*)>`, 'gi');
+  const re = new RegExp(`<${name}\\b`, 'gi');
   for (let m = re.exec(html); m !== null; m = re.exec(html)) {
-    const attrs = m[1] ?? '';
-    if (truncatedAttrs(attrs)) continue;
-    yield { index: m.index, attrs, tag: m[0] };
+    const read = readAttrs(html, m.index + m[0].length);
+    if (read === null) continue;
+    yield { index: m.index, attrs: read.attrs, tag: html.slice(m.index, read.end) };
+    // Resume after the tag, so a `<div …>` written inside an attribute value is never
+    // mistaken for markup.
+    re.lastIndex = read.end;
   }
 }
 
@@ -524,14 +562,15 @@ function checkCodeBlocks(html: string, add: Add): void {
   for (const pre of openTags(html, 'pre')) {
     const preEnd = pre.index + pre.tag.length;
     const { inner } = innerOf(html, 'pre', preEnd);
-    const code = /<code\b([^>]*)>/i.exec(inner);
+    const code = /<code\b/i.exec(inner);
     if (code === null) continue;
-    // A `>` inside one of the <code> tag's attribute values truncates the capture, so its
-    // class cannot be read — say nothing rather than guess (see `truncatedAttrs`).
-    if (truncatedAttrs(code[1] ?? '')) continue;
+    // Quote-aware, so a `>` inside one of the <code> tag's attribute values does not hide the
+    // class that follows it. A tag with no closing `>` at all is skipped: nothing to read.
+    const codeTag = readAttrs(inner, code.index + code[0].length);
+    if (codeTag === null) continue;
     const index = preEnd + code.index;
     const preLang = languageOf(classOf(pre.attrs));
-    const codeLang = languageOf(classOf(code[1] ?? ''));
+    const codeLang = languageOf(classOf(codeTag.attrs));
     if (preLang !== undefined && codeLang === undefined) {
       add(
         'CODE_LANGUAGE_CLASS_MISSING_ON_CODE',
@@ -635,11 +674,11 @@ function checkAccordions(html: string, add: Add): void {
     const bodyStart = summary === null ? 0 : summary.index + summary[0].length;
     const body = inner.slice(bodyStart);
     if (body.trim().length === 0) continue;
-    const firstDiv = /^\s*<div\b([^>]*)>/i.exec(body);
-    // A truncated wrapper tag (a `>` inside one of its attribute values) hides its class, so
-    // "the body is not wrapped" cannot be proven — stay quiet.
-    if (firstDiv !== null && truncatedAttrs(firstDiv[1] ?? '')) continue;
-    if (firstDiv === null || !hasClass(classOf(firstDiv[1] ?? ''), 'mce-accordion-body')) {
+    const firstDiv = /^\s*<div\b/i.exec(body);
+    const divTag = firstDiv === null ? null : readAttrs(body, firstDiv.index + firstDiv[0].length);
+    // An unterminated wrapper tag proves nothing either way — stay quiet.
+    if (firstDiv !== null && divTag === null) continue;
+    if (divTag === null || !hasClass(classOf(divTag.attrs), 'mce-accordion-body')) {
       add(
         'ACCORDION_BODY_MISSING',
         'Accordion body is not wrapped in <div class="mce-accordion-body">. Hudu\'s editor rewrites the accordion structure on the next open/save without it.',
@@ -828,35 +867,58 @@ export function normalizeArticleHtml(html: string): string {
   return unwrapTableScroll(mirrorCodeLanguage(source));
 }
 
-/** Rule 2 fix: copy `language-X` from `<pre>` onto a `<code>` that carries none. */
+/**
+ * Rule 2 fix: copy `language-X` from `<pre>` onto a `<code>` that carries none.
+ *
+ * Nothing but the `<code>` opening tag is ever touched, and only when the whole block can be
+ * read: the `<pre>` must be closed, and the `<code>` tag must have a closing `>`.
+ */
 function mirrorCodeLanguage(html: string): string {
-  // Only complete <pre …>…</pre> blocks are rewritten: a truncated block has no provable
-  // extent, so it is left exactly as the caller wrote it.
-  return html.replace(/(<pre\b([^>]*)>)([\s\S]*?)(<\/pre>)/gi, (whole, open: string, attrs: string, inner: string, close: string) => {
-    // A `>` inside an attribute value truncates the captured attributes of either tag. The
-    // class read from them would be incomplete, and rewriting on that basis is how a caller's
-    // markup gets mangled — so refuse the block outright, exactly like a truncated <pre>.
-    if (truncatedAttrs(attrs)) return whole;
-    const lang = languageOf(classOf(attrs));
-    if (lang === undefined) return whole;
-    const code = /<code\b([^>]*)>/i.exec(inner);
-    if (code === null) return whole;
-    const codeAttrs = code[1] ?? '';
-    if (truncatedAttrs(codeAttrs)) return whole;
-    if (languageOf(classOf(codeAttrs)) !== undefined) return whole;
-    // `classOf` reads double-quoted, single-quoted AND unquoted class attributes, but only
-    // the double-quoted form can be extended in place below. For the other two, prepending
-    // `class="language-X"` would emit a SECOND class attribute — and a parser keeps the
-    // first and discards the rest, silently destroying the caller's classes. Report it,
-    // never rewrite it: degrading to silence is this module's contract.
-    const hasClassAttr = /\bclass\s*=/i.test(codeAttrs);
-    const doubleQuoted = /\bclass\s*=\s*"/i.test(codeAttrs);
-    if (hasClassAttr && !doubleQuoted) return whole;
-    const replacement = doubleQuoted
-      ? `<code${codeAttrs.replace(/(\bclass\s*=\s*")([^"]*)(")/i, (_m, a: string, value: string, b: string) => `${a}${value === '' ? '' : `${value} `}language-${lang}${b}`)}>`
-      : `<code class="language-${lang}"${codeAttrs}>`;
-    return `${open}${inner.slice(0, code.index)}${replacement}${inner.slice(code.index + code[0].length)}${close}`;
-  });
+  let out = '';
+  let cursor = 0;
+  // Lowercased once: taking it per-<pre> made the scan O(blocks x document).
+  const lower = html.toLowerCase();
+  for (const pre of openTags(html, 'pre')) {
+    const lang = languageOf(classOf(pre.attrs));
+    if (lang === undefined) continue;
+    const bodyFrom = pre.index + pre.tag.length;
+    // A <pre> with no </pre> has no provable extent, so it is left exactly as written.
+    const closeAt = lower.indexOf('</pre>', bodyFrom);
+    if (closeAt === -1) continue;
+    const rewrite = codeOpenTagWithLanguage(html, bodyFrom, closeAt, lang);
+    // A nested <pre> can resolve to a <code> an outer one already rewrote. Emitting it again
+    // would duplicate the opening tag, so anything at or behind the cursor is skipped.
+    if (rewrite === null || rewrite.at < cursor) continue;
+    out += html.slice(cursor, rewrite.at) + rewrite.tag;
+    cursor = rewrite.end;
+  }
+  return cursor === 0 ? html : out + html.slice(cursor);
+}
+
+/**
+ * The replacement `<code …>` opening tag for the first `<code>` between `from` and `to`, or
+ * `null` when it must be left alone.
+ */
+function codeOpenTagWithLanguage(html: string, from: number, to: number, lang: string): { at: number; end: number; tag: string } | null {
+  const found = /<code\b/i.exec(html.slice(from, to));
+  if (found === null) return null;
+  const at = from + found.index;
+  const read = readAttrs(html.slice(0, to), at + found[0].length);
+  if (read === null) return null;
+  const attrs = read.attrs;
+  if (languageOf(classOf(attrs)) !== undefined) return null;
+  // `classOf` reads double-quoted, single-quoted AND unquoted class attributes, but only the
+  // double-quoted form can be extended in place below. For the other two, prepending
+  // `class="language-X"` would emit a SECOND class attribute — and a parser keeps the first
+  // and discards the rest, silently destroying the caller's classes. Report it, never
+  // rewrite it: degrading to silence is this module's contract.
+  const hasClassAttr = parseAttrs(attrs).has('class');
+  const doubleQuoted = hasClassAttr && /(?:^|[\s/])class\s*=\s*"/i.test(attrs);
+  if (hasClassAttr && !doubleQuoted) return null;
+  const tag = doubleQuoted
+    ? `<code${attrs.replace(/((?:^|[\s/])class\s*=\s*")([^"]*)(")/i, (_m, a: string, value: string, b: string) => `${a}${value === '' ? '' : `${value} `}language-${lang}${b}`)}>`
+    : `<code class="language-${lang}"${attrs}>`;
+  return { at, end: read.end, tag };
 }
 
 /**
