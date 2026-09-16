@@ -152,6 +152,11 @@ test/
 > **File layout rule**: exactly **one resource class per `resources/<name>.ts`** file and
 > **one resource-type module per `types/<name>.ts`** file. Nothing else lives in those
 > files. This keeps the mapping between types, resources, and test files 1:1.
+>
+> Two companion modules sit in `resources/` without being resource classes, and are named so
+> that they cannot be mistaken for one: `agent-layer-helpers.ts` (shared scan guards) and
+> `article-html.ts` (pure Hudu article-HTML rules — `validateArticleHtml`,
+> `normalizeArticleHtml`, `diffArticleRoundTrip`; no HTTP, no client, no resource class).
 
 ---
 

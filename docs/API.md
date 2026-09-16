@@ -335,6 +335,40 @@ class ArticlesResource {
 // }
 ```
 
+Two gotchas on this resource:
+
+- **A body that reads back empty is a projection, not a fetch.** There is no
+  `include_content` flag on the REST API — `get()` and `listAll()` always return `content`.
+  The compact `ArticleSummary` from `resolve()`, `findBySlug()` and `search()` DROPS
+  `content`; pass `{ expand: true }` (or use `get()`) when you need the HTML.
+- **The `slug` filter matches the stored slug exactly** — the identifier segment after
+  `/kba/` in an article URL, not the trailing human-readable SEO suffix. A URL fragment that
+  includes the suffix resolves to `null`, not to the article you meant.
+
+#### Article HTML rules (pure helpers, no HTTP)
+
+```ts
+validateArticleHtml(html: string, opts?: { ignore?: readonly string[] }): ArticleHtmlFinding[];
+normalizeArticleHtml(html: string): string;              // OPT-IN — never called by a write path
+diffArticleRoundTrip(sent: string, readBack: string): ArticleHtmlFinding[];
+
+// ArticleHtmlFinding = {
+//   code: ArticleHtmlCode;                // stable, machine-readable — branch on this
+//   severity: 'error' | 'warning';
+//   impact: 'content' | 'presentation';   // did the reader lose information, or only looks?
+//   element: 'code' | 'callout' | 'table' | 'img' | 'link' | …;
+//   change?: 'stripped' | 'escaped' | 'attribute-lost' | 'restructured' | 'malformed';
+//   message: string; detail?: readonly string[]; index?: number; snippet?: string;
+// }
+```
+
+Also exported: `ARTICLE_HTML_CODES`, `ARTICLE_HTML_RULES` (severity / impact / element /
+per-rule audit date for every code), `ARTICLE_HTML_ADVISORY_CODES`, `HUDU_CALLOUT_TYPES`
+and `ARTICLE_HTML_PROVENANCE` — the audit these rules came from (2026-09-16, Hudu's
+container CSS and the compiled Tiptap/ProseMirror editor schema). The rules describe one
+Hudu build; check `ARTICLE_HTML_PROVENANCE.auditedOn` before letting `normalizeArticleHtml`
+rewrite real content.
+
 ### AssetLayoutsResource
 
 ```ts

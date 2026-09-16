@@ -59,3 +59,11 @@ export {
   VlansResource, WebsitesResource,
 } from './resources/index.js';
 export type * from './resources/index.js';
+
+// Hudu article HTML rules (platform facts about Hudu's editor/renderer). Pure functions:
+// no HTTP, and `normalizeArticleHtml` is never invoked by a write path.
+export {
+  validateArticleHtml, normalizeArticleHtml, diffArticleRoundTrip,
+  ARTICLE_HTML_CODES, ARTICLE_HTML_RULES, ARTICLE_HTML_ADVISORY_CODES,
+  ARTICLE_HTML_PROVENANCE, HUDU_CALLOUT_TYPES,
+} from './resources/article-html.js';

@@ -2,6 +2,29 @@
  * Resource client barrel for node-hudu.
  */
 export { BaseResource } from './base.js';
+
+// Hudu article HTML rules — pure helpers, no HTTP. See src/resources/article-html.ts.
+export {
+  validateArticleHtml,
+  normalizeArticleHtml,
+  diffArticleRoundTrip,
+  ARTICLE_HTML_CODES,
+  ARTICLE_HTML_RULES,
+  ARTICLE_HTML_ADVISORY_CODES,
+  ARTICLE_HTML_PROVENANCE,
+  HUDU_CALLOUT_TYPES,
+} from './article-html.js';
+export type {
+  ArticleHtmlFinding,
+  ArticleHtmlCode,
+  ArticleHtmlRule,
+  ArticleHtmlSeverity,
+  ArticleHtmlImpact,
+  ArticleHtmlElement,
+  ArticleHtmlChange,
+  ArticleHtmlProvenance,
+  ValidateArticleHtmlOptions,
+} from './article-html.js';
 import { ActivityLogsResource } from './activity_logs.js';
 import { ApiInfoResource } from './api_info.js';
 import { ArticlesResource } from './articles.js';

@@ -17,6 +17,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CJS, with types for each. The catalog is still generated, still carries no second validator and no
   second write governor, and still imports nothing at runtime.
 
+- **Hudu article HTML rules** (`src/resources/article-html.ts`, exported from the package
+  root and from `node-hudu/resources`) — three pure functions, no HTTP, no new dependency:
+  - `validateArticleHtml(html, opts?)` returns structured findings with stable `code`s, a
+    `severity`, a `content`-vs-`presentation` `impact`, the `element` family and a location
+    hint. Never throws, never mutates.
+  - `normalizeArticleHtml(html)` returns corrected HTML for the two mechanically-safe fixes
+    only (mirror a `language-X` class from `<pre>` onto `<code>`; unwrap a hand-added
+    `rich_text_content__table-scroll` div). **Opt-in and idempotent — no write path calls it.**
+  - `diffArticleRoundTrip(sent, readBack)` returns an enumerable list of what Hudu changed
+    across tables, code blocks, links and images. The `/public_photo/<slug>` `src` rewrite is
+    expected behaviour and is never reported.
+  - `ARTICLE_HTML_PROVENANCE` declares the audit the rules came from (2026-09-16, Hudu's
+    container CSS and the compiled Tiptap/ProseMirror editor schema), and `ARTICLE_HTML_RULES`
+    carries a per-rule verification date, so a consumer can tell stale rules from current ones.
+
 ### Changed
 
 - The catalog is generated into **`src/mcp/catalog.generated.ts`** instead of
@@ -26,6 +41,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   --catalog` default to the new path. No tool name, title or description changed.
 - `examples/mcp-server.ts` imports the catalog from `node-hudu/mcp` rather than a relative path to
   the generated file, which is what a real host does.
+
+### Documentation
+
+- `ArticlesResource.get`, `findBySlug` and `ArticlesListParams.slug` now document the two
+  long-standing gotchas (both established 2026-07-25): the REST API has no `include_content`
+  flag — an "empty" body is the compact `ArticleSummary` dropping `content` — and the `slug`
+  filter matches the stored slug exactly, not the trailing SEO suffix of an article URL.
 
 ## [0.4.0] — 2026-09-15
 

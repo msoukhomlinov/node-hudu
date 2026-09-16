@@ -113,6 +113,12 @@ export interface ArticlesListParams extends ListParams {
   company_id?: number;
   draft?: boolean;
   enable_sharing?: boolean;
+  /**
+   * Exact match on the article's stored slug — the identifier segment after `/kba/` in an
+   * article URL, NOT the trailing human-readable SEO suffix and not the whole URL path.
+   * Take the value from `article.slug` rather than assuming a length or format.
+   * (Established 2026-07-25.)
+   */
   slug?: string;
   search?: string;
   updated_at?: string;
@@ -123,7 +129,22 @@ export class ArticlesResource extends BaseResource<Article> {
     super(http, { resourcePath: 'articles', singleKey: 'article', listKey: 'articles', createType: 'raw', paginated: true });
   }
 
-  /** Get a articles by id. */
+  /**
+   * Get a articles by id. The full record is returned, `content` (the body HTML) included:
+   * the Hudu REST API has no `include_content` flag, and none is needed on this path.
+   *
+   * GOTCHA — a body that "reads back empty" is almost always a projection, not a fetch:
+   * the compact `ArticleSummary` returned by `resolve`, `findBySlug` and `search` DROPS
+   * `content` (documented in `ArticleSummary`). Use this method, or pass `{ expand: true }`
+   * to those helpers, when you need the HTML. (Some Hudu MCP servers expose an
+   * `include_content` parameter of their own; that is a server-side concept, not an SDK or
+   * REST one. Established 2026-07-25.)
+   *
+   * The body is HTML. `validateArticleHtml` / `diffArticleRoundTrip` in
+   * `src/resources/article-html.ts` check it against Hudu's editor and renderer rules —
+   * note that on write Hudu rewrites inline image `src` values to `/public_photo/<slug>`,
+   * which is expected behaviour, not corruption.
+   */
   async get(id: number): Promise<Article> {
     return this.getOne<Article>(id);
   }
@@ -219,7 +240,19 @@ export class ArticlesResource extends BaseResource<Article> {
     return projectResolution(resolution, opts, toArticleSummary) as ArticleSummary | Article | null | Resolution<ArticleSummary>;
   }
 
-  /** Resolve an article by its slug, with an exact compare (policy §6). */
+  /**
+   * Resolve an article by its slug, with an exact compare (policy §6).
+   *
+   * GOTCHA — pass the STORED slug, which is the identifier segment after `/kba/` in an
+   * article URL, not the whole path and not the trailing human-readable SEO suffix that
+   * follows it. The vendor `slug` filter is an exact match and this helper re-compares
+   * exactly, so a URL fragment that includes the suffix resolves to `null` rather than to
+   * the article you meant. Do not assume a fixed hash length; take the value from
+   * `article.slug`. (Established 2026-07-25.)
+   *
+   * The compact `ArticleSummary` returned by default DROPS `content` — pass
+   * `{ expand: true }` when you need the body HTML.
+   */
   async findBySlug(slug: string): Promise<ArticleSummary | null>;
   /** `expand: true` returns the full record. */
   async findBySlug(slug: string, opts: HelperOptions & { expand: true }): Promise<Article | null>;
