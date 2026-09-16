@@ -526,6 +526,13 @@ function checkCodeBlocks(html: string, add: Add): void {
  * the node identity is lost, so this is a CONTENT impact. An unknown severity modifier is
  * PRESENTATION: the div is still a callout node, it just has no variant styling.
  * Evidence: 2026-09-16, read against the editor's callout node extension.
+ *
+ * BLAST RADIUS: the scan keys off any element carrying a `callout` or `callout-*` class
+ * token, because that is all a regex can see. An unrelated class that happens to start
+ * with `callout-` — `<section class="callout-container">`, say — is therefore reported as
+ * `CALLOUT_NOT_DIV` (error/content). A consumer gating writes on errors should expect that
+ * false positive and can mute the code for content it knows uses the prefix for its own
+ * purposes.
  */
 function checkCallouts(html: string, add: Add): void {
   for (const tag of openTags(html, '[a-z][a-z0-9-]*')) {
@@ -673,20 +680,30 @@ function checkTaskLists(html: string, add: Add): void {
       'Task list renders display-only in the published article: readers cannot tick the boxes. Use it for a fixed, printable checklist.',
       { index: list.index },
     );
-    for (const item of openTags(inner, 'li')) {
-      const body = innerOf(inner, 'li', item.index + item.tag.length).inner;
+    // Walk the items SEQUENTIALLY, jumping the cursor past each item's closing tag. A task
+    // item's content div may legitimately hold a nested list, and those nested <li>s are
+    // not task items — scanning every <li> in the subtree would report correct markup as
+    // malformed. (A nested taskList is reached by the outer loop instead, so each list and
+    // each item is still visited exactly once.)
+    for (let cursor = 0; ; ) {
+      const open = /<li\b([^>]*)>/i.exec(inner.slice(cursor));
+      if (open === null) break;
+      const openAt = cursor + open.index;
+      const attrs = open[1] ?? '';
+      const { inner: body, end } = innerOf(inner, 'li', openAt + open[0].length);
       const wellFormed =
-        attrOf(item.attrs, 'data-type') === 'taskItem' &&
-        attrOf(item.attrs, 'data-checked') !== undefined &&
+        attrOf(attrs, 'data-type') === 'taskItem' &&
+        attrOf(attrs, 'data-checked') !== undefined &&
         /<label\b[^>]*>[\s\S]*<input\b/i.test(body) &&
         /<div\b/i.test(body);
       if (!wellFormed) {
         add(
           'TASK_ITEM_MALFORMED',
           'Task item is missing part of the structure Hudu renders: <li data-type="taskItem" data-checked="…"><label><input type="checkbox"><span></span></label><div><p>…</p></div></li>.',
-          { index: from + item.index },
+          { index: from + openAt },
         );
       }
+      cursor = end;
     }
   }
 }
@@ -742,8 +759,12 @@ function checkKbd(html: string, add: Add): void {
  *
  * Only two fixes qualify as mechanically safe (one correct outcome, no judgement call):
  *
- *  1. mirror a `language-X` class from `<pre>` onto a `<code>` that has none (rule 2);
- *  2. unwrap a hand-added `rich_text_content__table-scroll` div (rule 6).
+ *  1. mirror a `language-X` class from `<pre>` onto a `<code>` that has none (rule 2) —
+ *     skipped when the `<code>` class attribute is single-quoted or unquoted, since it
+ *     cannot be extended in place without emitting a second `class` attribute;
+ *  2. unwrap a hand-added `rich_text_content__table-scroll` div (rule 6) — the wrapper's
+ *     OWN attributes (any extra classes, an `id`) go with it, and the unwrap is refused
+ *     outright when a literal `</div>` may sit in a comment or an attribute value.
  *
  * Everything else is reported by {@link validateArticleHtml} and left alone: a `<pre>`/
  * `<code>` language mismatch (which one did you mean?), a `<p>` callout (moving to a `<div>`
@@ -779,19 +800,41 @@ function mirrorCodeLanguage(html: string): string {
     if (code === null) return whole;
     const codeAttrs = code[1] ?? '';
     if (languageOf(classOf(codeAttrs)) !== undefined) return whole;
-    const replacement = /\bclass\s*=\s*"/i.test(codeAttrs)
+    // `classOf` reads double-quoted, single-quoted AND unquoted class attributes, but only
+    // the double-quoted form can be extended in place below. For the other two, prepending
+    // `class="language-X"` would emit a SECOND class attribute — and a parser keeps the
+    // first and discards the rest, silently destroying the caller's classes. Report it,
+    // never rewrite it: degrading to silence is this module's contract.
+    const hasClassAttr = /\bclass\s*=/i.test(codeAttrs);
+    const doubleQuoted = /\bclass\s*=\s*"/i.test(codeAttrs);
+    if (hasClassAttr && !doubleQuoted) return whole;
+    const replacement = doubleQuoted
       ? `<code${codeAttrs.replace(/(\bclass\s*=\s*")([^"]*)(")/i, (_m, a: string, value: string, b: string) => `${a}${value === '' ? '' : `${value} `}language-${lang}${b}`)}>`
       : `<code class="language-${lang}"${codeAttrs}>`;
     return `${open}${inner.slice(0, code.index)}${replacement}${inner.slice(code.index + code[0].length)}${close}`;
   });
 }
 
-/** Rule 6 fix: remove a hand-added table-scroll wrapper, keeping its contents. */
+/**
+ * Rule 6 fix: remove a hand-added table-scroll wrapper, keeping its contents.
+ *
+ * The wrapper element's own attributes go with it — a `class="rich_text_content__table-scroll
+ * keepme"` loses `keepme`, and an `id` on the wrapper is dropped too. The wrapper is markup
+ * Hudu regenerates for itself, so anything hung off it was never going to survive; if you
+ * need those attributes, put them on the `<table>`.
+ */
 function unwrapTableScroll(html: string): string {
   let out = html;
   for (;;) {
     const at = indexOfTag(out, 'div', (d) => hasClass(classOf(d.attrs), 'rich_text_content__table-scroll'));
     if (at === -1) return out;
+    // The depth scan below counts `</div>` as text, so a literal `</div>` inside an HTML
+    // comment or a quoted attribute value would end it early and splice the document at the
+    // wrong offset — mangling a caller's article instead of failing loudly. Neither can be
+    // told apart from real markup without a parser, so the whole rewrite is refused (the
+    // conservative test looks at everything from the wrapper onwards).
+    const region = out.slice(at);
+    if (/<!--/.test(region) || /=\s*("[^"]*<\/div\b|'[^']*<\/div\b)/i.test(region)) return out;
     const opener = [...openTags(out, 'div')].find((d) => d.index === at) as OpenTag;
     const from = opener.index + opener.tag.length;
     const { inner, end, closed } = innerOf(out, 'div', from);
@@ -827,6 +870,21 @@ function unwrapTableScroll(html: string): string {
  *
  * Never throws; non-string inputs are treated as empty.
  *
+ * ## Contract: this is a pure HTML-vs-HTML comparison
+ *
+ * `readBack` is NOT required to have come from Hudu, and nothing here may ever assume it
+ * did. Both arguments are just HTML strings, and the comparison is defined entirely by
+ * their contents. A supported caller is a local lossy transform checking itself before it
+ * writes anything — the article Markdown conversion feature calls
+ * `diffArticleRoundTrip(original, mdToHtml(htmlToMd(original)))` to detect its OWN
+ * converter's loss, with no Hudu instance involved.
+ *
+ * This constraint is load-bearing because its failure mode fails OPEN. An "optimisation"
+ * reasoning that Hudu would never return shape X would quietly stop detecting that same
+ * shape coming out of a converter, and a caller gating a destructive write on an empty
+ * result would be told nothing was lost. Keep every check symmetric in the two arguments
+ * and free of assumptions about their provenance.
+ *
  * @param sent the HTML submitted in `content`
  * @param readBack the `content` Hudu returned (remember: the compact article summary drops
  *   `content` entirely — read it with `articles.get` or `{ expand: true }`)
@@ -857,12 +915,22 @@ export function diffArticleRoundTrip(sent: string, readBack: string): ArticleHtm
   return findings;
 }
 
-/** Markup that came back as escaped text (`&lt;table&gt;`) was not stored as markup. */
+/**
+ * Markup that came back as escaped text (`&lt;table&gt;`) was not stored as markup.
+ *
+ * An article about HTML legitimately contains escaped samples of the very elements it also
+ * uses for real, so the mere presence of `&lt;div` proves nothing: only an INCREASE in a
+ * name's escaped count is evidence that real markup was escaped on this trip. Counting
+ * (rather than blanking code regions) also covers a sample written outside `<pre>`.
+ */
 function diffEscaped(before: string, after: string, add: Add): void {
+  const escapedCount = (html: string, name: string): number =>
+    (html.match(new RegExp(`&lt;/?${name}\\b`, 'gi')) ?? []).length;
   const escaped = new Set<string>();
   for (const m of after.matchAll(/&lt;\/?([a-z][a-z0-9-]*)\b/gi)) {
     const name = (m[1] ?? '').toLowerCase();
-    if (new RegExp(`<${name}\\b`, 'i').test(before)) escaped.add(name);
+    if (!new RegExp(`<${name}\\b`, 'i').test(before)) continue;
+    if (escapedCount(after, name) > escapedCount(before, name)) escaped.add(name);
   }
   if (escaped.size > 0) {
     const names = [...escaped];

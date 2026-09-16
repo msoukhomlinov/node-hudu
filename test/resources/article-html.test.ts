@@ -270,6 +270,31 @@ describe('rule 7 — task lists render display-only', () => {
     expect(has(validateArticleHtml(`<ul data-type="taskList">${item}</ul>`), 'TASK_ITEM_MALFORMED')).toBe(false);
   });
 
+  it('accepts a task item whose content div holds a nested list (the nested <li>s are not task items)', () => {
+    const nested =
+      '<ul data-type="taskList"><li data-type="taskItem" data-checked="false">' +
+      '<label><input type="checkbox"><span></span></label>' +
+      '<div><p>Check the backup</p><ul><li>nightly</li><li>weekly</li></ul></div>' +
+      '</li></ul>';
+    expect(has(validateArticleHtml(nested), 'TASK_ITEM_MALFORMED')).toBe(false);
+  });
+
+  it('checks each item once when task lists are nested', () => {
+    const inner = `<ul data-type="taskList">${item}</ul>`;
+    const outer =
+      '<ul data-type="taskList"><li data-type="taskItem" data-checked="false">' +
+      `<label><input type="checkbox"><span></span></label><div><p>Parent</p>${inner}</div>` +
+      '</li></ul>';
+    const findings = validateArticleHtml(outer);
+    expect(has(findings, 'TASK_ITEM_MALFORMED')).toBe(false);
+    expect(codes(findings).filter((c) => c === 'TASK_LIST_NOT_INTERACTIVE')).toHaveLength(2);
+  });
+
+  it('still flags a malformed item that follows a well-formed one', () => {
+    const html = `<ul data-type="taskList">${item}<li>bare</li></ul>`;
+    expect(codes(validateArticleHtml(html)).filter((c) => c === 'TASK_ITEM_MALFORMED')).toHaveLength(1);
+  });
+
   it('does not impose a nesting-depth limit (deep nesting is valid in Hudu)', () => {
     const deep = '<ul><li>a<ul><li>b<ul><li>c<ul><li>d</li></ul></li></ul></li></ul></li></ul>';
     expect(validateArticleHtml(deep)).toEqual([]);
@@ -354,6 +379,41 @@ describe('normalizeArticleHtml', () => {
 
   it('unwraps a hand-added table-scroll div', () => {
     expect(normalizeArticleHtml('<div class="rich_text_content__table-scroll"><table><tr><td>a</td></tr></table></div>')).toBe(
+      '<table><tr><td>a</td></tr></table>',
+    );
+  });
+
+  it('never emits a second class attribute — a class it cannot extend is left alone', () => {
+    // A parser keeps the FIRST class attribute and discards the rest, so prepending one
+    // would silently delete the caller's classes. Report only.
+    for (const html of [
+      `<pre class="language-yaml"><code class='hljs mine'>k: v</code></pre>`,
+      '<pre class="language-yaml"><code class=hljs>k: v</code></pre>',
+      `<pre class="language-yaml"><code class='' >k: v</code></pre>`,
+    ]) {
+      const out = normalizeArticleHtml(html);
+      expect(out, `rewrote a non-double-quoted class: ${html}`).toBe(html);
+      expect((out.match(/class\s*=/gi) ?? []).length).toBe(2); // one on <pre>, one on <code>
+    }
+  });
+
+  it('still reports the unfixable case through validate', () => {
+    expect(
+      has(validateArticleHtml(`<pre class="language-yaml"><code class='hljs'>k: v</code></pre>`), 'CODE_LANGUAGE_CLASS_MISSING_ON_CODE'),
+    ).toBe(true);
+  });
+
+  it('refuses the table-scroll unwrap when a literal </div> may sit in a comment or attribute', () => {
+    for (const html of [
+      '<div class="rich_text_content__table-scroll"><table><tr><td>a</td></tr></table><!-- </div> --></div><p>after</p>',
+      '<div class="rich_text_content__table-scroll"><p title="close with </div> here">x</p></div><p>after</p>',
+    ]) {
+      expect(normalizeArticleHtml(html), `mis-sliced: ${html}`).toBe(html);
+    }
+  });
+
+  it('drops the wrapper div\'s own attributes along with the wrapper', () => {
+    expect(normalizeArticleHtml('<div class="rich_text_content__table-scroll keepme" id="t1"><table><tr><td>a</td></tr></table></div>')).toBe(
       '<table><tr><td>a</td></tr></table>',
     );
   });
@@ -492,6 +552,42 @@ describe('diffArticleRoundTrip', () => {
     const f = find(diffArticleRoundTrip(sent, readBack), 'ROUNDTRIP_THEAD_DROPPED');
     expect(f?.severity).toBe('warning');
     expect(has(diffArticleRoundTrip(sent, readBack), 'ROUNDTRIP_TABLE_STRUCTURE_LOST')).toBe(false);
+  });
+
+  it('reports nothing for an article that documents HTML (escaped samples beside real markup)', () => {
+    // An article ABOUT Hudu callouts contains an escaped sample of the element it also uses
+    // for real. A byte-identical round trip must be clean.
+    const html =
+      '<h1>Callouts</h1><div class="callout callout-info"><p>Like this one.</p></div>' +
+      '<pre class="language-html"><code class="language-html">&lt;div class="callout callout-info"&gt;&lt;p&gt;x&lt;/p&gt;&lt;/div&gt;</code></pre>' +
+      '<p>Inline sample outside a code block: &lt;div class="callout"&gt;.</p>';
+    expect(diffArticleRoundTrip(html, html)).toEqual([]);
+  });
+
+  it('still flags escaping when the escaped count actually grows', () => {
+    const sent = '<p>Sample: &lt;div&gt;</p><div class="callout callout-info"><p>real</p></div>';
+    const readBack = '<p>Sample: &lt;div&gt;</p>&lt;div class="callout callout-info"&gt;&lt;p&gt;real&lt;/p&gt;&lt;/div&gt;';
+    expect(has(diffArticleRoundTrip(sent, readBack), 'ROUNDTRIP_CONTENT_ESCAPED')).toBe(true);
+  });
+
+  it('is clean for any byte-identical round trip', () => {
+    for (const html of [
+      '<p>plain</p>',
+      '<table><thead><tr><th>A</th></tr></thead><tbody><tr><td>b</td></tr></tbody></table>',
+      '<pre class="language-bash"><code class="language-bash">ls</code></pre><a href="https://a.test">a</a><img src="/a.png" alt="A">',
+      '<p>&lt;table&gt; is written like this</p><table><tr><td>a</td></tr></table>',
+    ]) {
+      expect(diffArticleRoundTrip(html, html), `not clean: ${html}`).toEqual([]);
+    }
+  });
+
+  it('is usable as a self-check on a local lossy transform (no Hudu involved)', () => {
+    // The supported non-Hudu caller: a converter checking its own round trip before a write.
+    const original = '<p>See <a href="https://a.test">docs</a>.</p><pre class="language-yaml"><code class="language-yaml">a: 1</code></pre>';
+    const lossyConverted = '<p>See docs.</p><pre><code>a: 1</code></pre>';
+    const lost = diffArticleRoundTrip(original, lossyConverted);
+    expect(lost.some((f) => f.impact === 'content')).toBe(true);
+    expect(codes(lost).sort()).toEqual(['ROUNDTRIP_CODE_LANGUAGE_LOST', 'ROUNDTRIP_LINK_LOST']);
   });
 
   it('flags markup that came back escaped as text', () => {
