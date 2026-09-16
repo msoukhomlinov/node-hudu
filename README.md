@@ -172,6 +172,39 @@ getCapability('companies.resolve');
 `capabilities.json` and `capabilities.schema.json` ship at the package root for non-TypeScript
 consumers, and `MCP_TOOL_MANIFEST.md` is projected from the same registry.
 
+## Article HTML rules
+
+Hudu's editor (Tiptap/ProseMirror) and its published-view renderer treat article body HTML in ways
+that surprise authors: a code block's language class must be on `<code>` or nothing is highlighted,
+a callout must be a `<div>` to be a callout, `class="align-*"` does not survive a resave. Three pure
+functions encode those platform facts — no HTTP, no HTML parser, no new dependency:
+
+```ts
+import { validateArticleHtml, normalizeArticleHtml, diffArticleRoundTrip, ARTICLE_HTML_PROVENANCE } from 'node-hudu';
+
+const findings = validateArticleHtml(html);
+// [{ code: 'CODE_LANGUAGE_CLASS_MISSING_ON_CODE', severity: 'error', impact: 'content',
+//    element: 'code', message: '…', index: 34, snippet: '<code>' }, …]
+
+// Opt-in, idempotent, and NEVER called for you on a write path: it rewrites your content.
+const fixed = normalizeArticleHtml(html);
+
+// After a write: what did Hudu actually keep? Returns a list you filter, not a verdict.
+const lost = diffArticleRoundTrip(sent, (await hudu.articles.get(id)).content);
+if (lost.some((f) => f.impact === 'content')) { /* semantics disappeared, not just styling */ }
+```
+
+Findings carry a stable `code` (branch on it), a `severity`, an `impact` of `content` (information
+the reader loses) or `presentation` (cosmetics only), the `element` family and a location hint. The
+`/public_photo/<slug>` `src` rewrite Hudu applies to images is expected behaviour and is never
+reported as a fault.
+
+These are facts about **one Hudu build**, audited on 2026-09-16 against Hudu's container CSS and the
+editor's compiled schema. `ARTICLE_HTML_PROVENANCE` and the per-rule dates in `ARTICLE_HTML_RULES`
+are public API so you can check the age before trusting them — especially before letting
+`normalizeArticleHtml` rewrite real articles. Editorial house style (section structure, tone, title
+patterns, list-nesting limits) is deliberately **not** encoded: that belongs to your style guide.
+
 ## Model Context Protocol (MCP) motivation
 
 `node-hudu` was built to power **MCP servers**. Three design decisions make it a natural fit:
