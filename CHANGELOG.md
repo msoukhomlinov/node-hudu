@@ -5,6 +5,28 @@ All notable changes to **node-hudu** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Article HTML rules now parse tag attributes instead of skipping tags they could not read.**
+  A `>` inside an attribute value is legal and ordinary in Hudu articles (`alt="Settings >
+  Users"`). 0.5.0 detected such a tag and skipped it, which was safe but silent; attributes are
+  now read quote-aware, so the tag is evaluated properly. **Behaviour change for consumers that
+  gate on findings:** a fault on one of those tags is now REPORTED where 0.5.0 said nothing —
+  most importantly `IMG_ALT_MISSING` on an `<img>` with no `alt` whose `title`/`aria-label`
+  contains a `>`. A tag with no closing `>` at all is still skipped, and
+  `normalizeArticleHtml` still refuses it.
+- **Attributes are walked as name/value pairs, so a quoted value can never false-match.**
+  A `class=` written inside another attribute's value — `<p title="<div class='callout'>">`, prose
+  about HTML — must not be read as that tag's class. 0.5.0 happened to stay silent here only
+  because it skipped the whole tag; now that tags are no longer skipped, consuming each quoted
+  value as a unit is what keeps it silent on purpose rather than by accident.
+- `normalizeArticleHtml` handles these tags correctly rather than refusing them: a `<code>` whose
+  class follows a `>`-bearing attribute has its language class extended in place (never a second
+  `class` attribute), and a hand-added table-scroll wrapper carrying a `>` in an attribute is
+  unwrapped cleanly instead of being left in place.
+
 ## [0.5.0] — 2026-09-17
 
 ### Added

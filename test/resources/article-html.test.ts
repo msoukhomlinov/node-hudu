@@ -388,6 +388,25 @@ describe('a ">" inside an attribute value (legal, and common in Hudu screenshots
     const html = '<img src="/a.png" alt="Settings > Users"><img src="/b.png">';
     expect(codes(validateArticleHtml(html))).toEqual(['IMG_ALT_MISSING']);
   });
+
+  it('REPORTS a genuinely missing alt on a tag whose other attribute contains ">"', () => {
+    // The defect this parser fixes: skipping such a tag hid real faults. The alt is absent
+    // here, and the `>` lives in title/aria-label — the finding must still be made.
+    for (const html of [
+      '<img src="/a.png" title="Settings > Users">',
+      '<img src="/a.png" aria-label="Cost > $100" alt="">',
+      `<img src='/a.png' title='a > b'>`,
+    ]) {
+      expect(codes(validateArticleHtml(html)), `missed a real fault: ${html}`).toEqual(['IMG_ALT_MISSING']);
+    }
+  });
+
+  it('reads an attribute that sits AFTER the one containing ">"', () => {
+    // data-align follows the `>`-bearing attribute, so an attribute-order-sensitive scan
+    // would miss it; the alignment class here must still be the thing reported.
+    const html = '<img title="a > b" class="align-center" src="/x.png" alt="Diagram">';
+    expect(codes(validateArticleHtml(html))).toEqual(['ALIGN_CLASS_ON_IMAGE']);
+  });
 });
 
 describe('Markdown detection ignores everything that is not prose', () => {
