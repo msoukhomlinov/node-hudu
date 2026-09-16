@@ -46,9 +46,12 @@
  * unsound in the usual ways. Known limits, all of which degrade to "say nothing" rather
  * than to a wrong claim:
  *
- *   - an attribute value containing `>` (e.g. `alt="a > b"`) ends a tag match early, so a
- *     following attribute on that tag can be missed;
- *   - markup inside an HTML comment or an attribute value is treated as markup;
+ *   - an attribute value containing `>` (e.g. `alt="Settings > Users"`, which is legal and
+ *     common) ends a tag match early. Such a tag is detected by its unbalanced quote and is
+ *     SKIPPED: no finding is reported about it, and no rewrite touches it;
+ *   - the Markdown scan ignores `<pre>`/`<code>`, comments, `<script>`/`<style>` bodies and
+ *     attribute values, but markup written inside those regions is otherwise treated as
+ *     markup;
  *   - element containment is approximated by "the text between an opening tag and its
  *     matching closing tag", with depth counting only for the element being matched;
  *   - a truncated element (no closing tag) is scanned to the end of the input by
@@ -362,11 +365,26 @@ interface OpenTag {
   tag: string;
 }
 
+/**
+ * True when a captured attribute string was cut short by a `>` INSIDE an attribute value.
+ *
+ * `alt="Settings > Users"` and `title="Cost > $100"` are legal and common in Hudu articles,
+ * and the tag regexes here stop at the first `>`. The tell is an odd number of quotes: the
+ * attribute text ends mid-value. Nothing can be concluded from a truncated tag, so every
+ * scan skips it (silence, not a wrong claim) and every rewrite refuses outright — a partial
+ * rewrite would splice the document at an offset inside an attribute value.
+ */
+function truncatedAttrs(attrs: string): boolean {
+  return (attrs.match(/"/g) ?? []).length % 2 === 1 || (attrs.match(/'/g) ?? []).length % 2 === 1;
+}
+
 /** Iterate opening tags of one element name (the name may be a character-class pattern). */
 function* openTags(html: string, name: string): Generator<OpenTag> {
   const re = new RegExp(`<${name}\\b([^>]*)>`, 'gi');
   for (let m = re.exec(html); m !== null; m = re.exec(html)) {
-    yield { index: m.index, attrs: m[1] ?? '', tag: m[0] };
+    const attrs = m[1] ?? '';
+    if (truncatedAttrs(attrs)) continue;
+    yield { index: m.index, attrs, tag: m[0] };
   }
 }
 
@@ -390,9 +408,19 @@ function innerOf(html: string, name: string, from: number): { inner: string; end
   return { inner: html.slice(from), end: html.length, closed: false };
 }
 
-/** Blank out `<pre>` and `<code>` regions (length-preserving) so offsets stay meaningful. */
-function blankCodeRegions(html: string): string {
-  return html.replace(/<(pre|code)\b[^>]*>[\s\S]*?<\/\1>/gi, (block) => ' '.repeat(block.length));
+/**
+ * Blank out everything that is not prose (length-preserving, so offsets stay meaningful):
+ * `<pre>`/`<code>` bodies, HTML comments, `<script>`/`<style>` bodies and attribute values.
+ *
+ * All five legitimately contain text that looks like Markdown — a code sample, a commented-out
+ * note, `title="[text](url)"`, a JS string — and none of it is article prose, so none of it is
+ * evidence that the author wrote Markdown into the body.
+ */
+function blankNonProse(html: string): string {
+  const blank = (block: string): string => ' '.repeat(block.length);
+  return html
+    .replace(/<!--[\s\S]*?-->|<(pre|code|script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, blank)
+    .replace(/=\s*("[^"]*"|'[^']*')/g, blank);
 }
 
 /** The index of the first tag of `name` in `html` whose attributes satisfy `pick`, or -1. */
@@ -449,11 +477,16 @@ export function validateArticleHtml(html: string, opts?: ValidateArticleHtmlOpti
  * which is why this is a CONTENT impact — the reader loses the structure entirely.
  * Evidence: 2026-04-27 initial release; restated in the skill's common-mistakes ledger.
  *
- * Markdown-looking text inside `<pre>`/`<code>` is legitimate (a code sample about
- * Markdown), so those regions are blanked before scanning.
+ * Markdown-looking text is legitimate outside prose — a code sample about Markdown, a
+ * commented-out note, an attribute value, a script string — so `blankNonProse` removes all
+ * of those before scanning. What remains that still matches is prose the author wrote.
+ *
+ * Known trade-off, disclosed rather than fixed: a paragraph whose text wraps onto a line
+ * beginning with `- ` reads as a bullet. Markdown in a Hudu body is always wrong, so the
+ * check errs towards reporting.
  */
 function checkMarkdown(html: string, add: Add): void {
-  const scan = blankCodeRegions(html);
+  const scan = blankNonProse(html);
   const constructs: ReadonlyArray<readonly [RegExp, string]> = [
     [/^[ \t]*#{1,6}[ \t]+\S/m, 'a Markdown ATX heading (`# Heading`)'],
     [/^[ \t]*```/m, 'a Markdown fenced code block (```)'],
@@ -493,6 +526,9 @@ function checkCodeBlocks(html: string, add: Add): void {
     const { inner } = innerOf(html, 'pre', preEnd);
     const code = /<code\b([^>]*)>/i.exec(inner);
     if (code === null) continue;
+    // A `>` inside one of the <code> tag's attribute values truncates the capture, so its
+    // class cannot be read — say nothing rather than guess (see `truncatedAttrs`).
+    if (truncatedAttrs(code[1] ?? '')) continue;
     const index = preEnd + code.index;
     const preLang = languageOf(classOf(pre.attrs));
     const codeLang = languageOf(classOf(code[1] ?? ''));
@@ -600,6 +636,9 @@ function checkAccordions(html: string, add: Add): void {
     const body = inner.slice(bodyStart);
     if (body.trim().length === 0) continue;
     const firstDiv = /^\s*<div\b([^>]*)>/i.exec(body);
+    // A truncated wrapper tag (a `>` inside one of its attribute values) hides its class, so
+    // "the body is not wrapped" cannot be proven — stay quiet.
+    if (firstDiv !== null && truncatedAttrs(firstDiv[1] ?? '')) continue;
     if (firstDiv === null || !hasClass(classOf(firstDiv[1] ?? ''), 'mce-accordion-body')) {
       add(
         'ACCORDION_BODY_MISSING',
@@ -794,11 +833,16 @@ function mirrorCodeLanguage(html: string): string {
   // Only complete <pre …>…</pre> blocks are rewritten: a truncated block has no provable
   // extent, so it is left exactly as the caller wrote it.
   return html.replace(/(<pre\b([^>]*)>)([\s\S]*?)(<\/pre>)/gi, (whole, open: string, attrs: string, inner: string, close: string) => {
+    // A `>` inside an attribute value truncates the captured attributes of either tag. The
+    // class read from them would be incomplete, and rewriting on that basis is how a caller's
+    // markup gets mangled — so refuse the block outright, exactly like a truncated <pre>.
+    if (truncatedAttrs(attrs)) return whole;
     const lang = languageOf(classOf(attrs));
     if (lang === undefined) return whole;
     const code = /<code\b([^>]*)>/i.exec(inner);
     if (code === null) return whole;
     const codeAttrs = code[1] ?? '';
+    if (truncatedAttrs(codeAttrs)) return whole;
     if (languageOf(classOf(codeAttrs)) !== undefined) return whole;
     // `classOf` reads double-quoted, single-quoted AND unquoted class attributes, but only
     // the double-quoted form can be extended in place below. For the other two, prepending

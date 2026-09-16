@@ -327,6 +327,68 @@ describe('rule 9 — <kbd> survives the round-trip but renders unstyled', () => 
   });
 });
 
+describe('a ">" inside an attribute value (legal, and common in Hudu screenshots)', () => {
+  it('does not claim a missing alt on an image that has one', () => {
+    for (const html of [
+      '<img src="/public_photo/abc" alt="Settings > Users > Roles">',
+      `<img src='/x.png' alt='Cost > $100'>`,
+    ]) {
+      expect(validateArticleHtml(html), `false IMG_ALT_MISSING for: ${html}`).toEqual([]);
+    }
+  });
+
+  it('keeps normalizeArticleHtml away from the tag entirely — no partial rewrite', () => {
+    for (const html of [
+      '<p>Intro.</p><div class="rich_text_content__table-scroll" aria-label="Costs > $100"><table><tr><td>x</td></tr></table></div><p>Outro.</p>',
+      '<pre class="language-js"><code title="a > b" class="hljs">x</code></pre>',
+      '<pre class="language-js" title="a > b"><code>x</code></pre>',
+    ]) {
+      const out = normalizeArticleHtml(html);
+      expect(out, `mangled: ${html}`).toBe(html);
+      expect(normalizeArticleHtml(out)).toBe(out);
+    }
+  });
+
+  it('never emits a second class attribute through the truncated-tag route', () => {
+    const out = normalizeArticleHtml('<pre class="language-js"><code title="a > b" class="hljs">x</code></pre>');
+    expect((out.match(/<code[^>]*class\s*=/gi) ?? []).length).toBeLessThanOrEqual(1);
+    expect(out).toContain('class="hljs"');
+  });
+
+  it('stays silent about a truncated tag rather than guessing at its classes', () => {
+    // The hidden part of `<code title="a > b" …>` could hold class="language-js", so a
+    // CODE_LANGUAGE_CLASS_MISSING_ON_CODE here would be a coin flip. Silence is the contract.
+    expect(validateArticleHtml('<pre class="language-js"><code title="a > b" class="hljs">x</code></pre>')).toEqual([]);
+  });
+
+  it('still reports the tags it CAN read in the same document', () => {
+    const html = '<img src="/a.png" alt="Settings > Users"><img src="/b.png">';
+    expect(codes(validateArticleHtml(html))).toEqual(['IMG_ALT_MISSING']);
+  });
+});
+
+describe('Markdown detection ignores everything that is not prose', () => {
+  it('ignores Markdown inside an HTML comment', () => {
+    expect(has(validateArticleHtml('<p>Body.</p><!-- # TODO\n- item -->'), 'MARKDOWN_SYNTAX')).toBe(false);
+  });
+
+  it('ignores Markdown inside an attribute value', () => {
+    expect(has(validateArticleHtml('<p title="[text](url)">Body.</p>'), 'MARKDOWN_SYNTAX')).toBe(false);
+    expect(has(validateArticleHtml('<a href="/x" title="**bold**">link</a>'), 'MARKDOWN_SYNTAX')).toBe(false);
+  });
+
+  it('ignores Markdown inside <script> and <style> bodies', () => {
+    const script = '<p>Body.</p><script>\n// # heading\nconst s = "**bold**";\n</script>';
+    const style = '<p>Body.</p><style>\n/* # heading */\n.a { content: "**bold**"; }\n</style>';
+    expect(has(validateArticleHtml(script), 'MARKDOWN_SYNTAX')).toBe(false);
+    expect(has(validateArticleHtml(style), 'MARKDOWN_SYNTAX')).toBe(false);
+  });
+
+  it('still reports Markdown in the prose itself', () => {
+    expect(has(validateArticleHtml('<!-- a note -->\n# Introduction\n<p>Body.</p>'), 'MARKDOWN_SYNTAX')).toBe(true);
+  });
+});
+
 describe('validateArticleHtml — malformed input never throws', () => {
   const inputs: unknown[] = [
     '',
