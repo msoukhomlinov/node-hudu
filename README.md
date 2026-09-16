@@ -194,7 +194,13 @@ import { CORE_TOOLS, META_TOOLS, TOOL_DESCRIPTIONS, catalogPage, describeOperati
 import { getCapability } from 'node-hudu/capabilities';
 
 // The always-present tool profile, generated from the CORE rule — not a hand-kept list.
-for (const name of CORE_TOOLS) server.registerTool(name, { description: TOOL_DESCRIPTIONS[name] }, handler);
+// The three META tools carry their own spec (name, title, description, inputSchema); the other
+// twelve take their description from TOOL_DESCRIPTIONS. Together they are exactly CORE_TOOLS —
+// TOOL_DESCRIPTIONS deliberately has no entry for a META tool.
+for (const meta of META_TOOLS) server.registerTool(meta.name, meta, handler);
+for (const [name, description] of Object.entries(TOOL_DESCRIPTIONS)) {
+  server.registerTool(name, { description }, handler);
+}
 
 // Discovery: a bounded page of every operation, including the ones with no tool of their own.
 const page = catalogPage({ unexposed_only: true, limit: 40 });
