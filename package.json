@@ -68,6 +68,16 @@
         "default": "./dist/operations/index.cjs"
       }
     },
+    "./mcp": {
+      "import": {
+        "types": "./dist/mcp/index.d.ts",
+        "default": "./dist/mcp/index.js"
+      },
+      "require": {
+        "types": "./dist/mcp/index.d.cts",
+        "default": "./dist/mcp/index.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "files": [

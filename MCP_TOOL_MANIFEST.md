@@ -11,7 +11,7 @@
 - excluded by rule: 22
 - excluded by curation: 66 (dropped through `MCP_TOOL_OVERRIDES.json` — one tool kept per distinct outcome)
 - overrides applied: 667
-- projection timestamp: 2026-09-14T02:18:48.631Z
+- projection timestamp: 2026-09-16T14:24:10.164Z
 
 > 139 projected tools is a projection, not a shipped tool list. MCP servers are
 > token-budgeted: tiering (core / extended) and trimming are curation, recorded in
@@ -2404,7 +2404,7 @@ reachable on demand (progressive-disclosure design).
 | `hudu_describe` | one operation's full schema, flags, errors and guidance |
 | `hudu_invoke` | execute by canonical key, validated against the registry record before any request |
 
-The catalog is GENERATED from `capabilities.json` (see `examples/tool-catalog.generated.ts`,
+The catalog is GENERATED from `capabilities.json` (see `src/mcp/catalog.generated.ts`,
 emitted by `scripts/build-tool-catalog.mjs`), so an operation that gains or loses a tool cannot
 become invisible: every operation has a row, and an operation the escape hatch refuses has
 `reachable: false` with the reason. An unexposed capability that is indistinguishable from a
