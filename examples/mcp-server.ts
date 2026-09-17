@@ -256,6 +256,27 @@ function errorContent(err: unknown): ToolReturn {
   };
 }
 
+/**
+ * CONTRACT SURFACE, not runtime wiring: MCP_PROFILE is read from this file's source text by
+ * `npm run mcp:project -- --check-example` (the profile regex); the remaining declarations
+ * document the extended-profile contract surface for a reader of the reference file — the
+ * dry-run affordance (DRY_RUN), the company identifier vocabulary (COMPANY_IDENTIFIER), and
+ * the output shapes the extended profile would register (LIST_OUTPUT / WRITE_OUTPUT /
+ * listResult). The single reference below keeps every declaration inside the typecheck's used
+ * set (noUnusedLocals) without adding behaviour. (T5 review F1: the comment previously
+ * claimed the gate reads the per-tool declarations — it reads MCP_PROFILE only.)
+ */
+const CONTRACT_SURFACE_FOR_TOOLING = [
+  MCP_PROFILE,
+  DRY_RUN,
+  COMPANY_IDENTIFIER,
+  LIST_OUTPUT,
+  WRITE_OUTPUT,
+  listResult,
+  META_TOOLS,
+];
+void CONTRACT_SURFACE_FOR_TOOLING;
+
 const handle = serveStdio(() => {
   const hudu = new HuduClient({ baseUrl, apiKey });
   /** Cross-resource reads (`searchAcrossResources`, `resolveAny`); same client, no extra config. */
@@ -323,7 +344,14 @@ const handle = serveStdio(() => {
         const record = getCapability(operation);
         // Unknown key: requireCatalogRow throws CONFIG_ERROR naming the nearest catalog keys
         // (exact-key lookup only — there is no fuzzy execution anywhere in this server).
-        if (record === undefined) requireCatalogRow(operation);
+        if (record === undefined) {
+          requireCatalogRow(operation);
+          // requireCatalogRow only RETURNS if the catalog knows the key but the capability
+          // registry does not (a build inconsistency): surface it, never pass `undefined` on.
+          return errorContent(
+            configError(`hudu_describe: operation "${operation}" has a catalog row but no capability record.`),
+          );
+        }
         const described = describeOperation(record);
         return ok(`${operation}: ${described.effect}${described.reachable ? '' : ' — NOT callable here: ' + described.why_not}`, { ...described });
       } catch (err) {
@@ -448,7 +476,7 @@ const handle = serveStdio(() => {
         );
       }
       // R3: a field the mode cannot honour is a CONFIG_ERROR naming the fields it does honour.
-      const provided = Object.keys(args).filter((k) => k !== 'mode' && args[k] !== undefined);
+      const provided = Object.keys(args).filter((k) => k !== 'mode' && args[k as keyof typeof args] !== undefined);
       const unhonoured = provided.filter((k) => spec.rejects.includes(k));
       if (unhonoured.length) {
         return errorContent(
@@ -467,7 +495,7 @@ const handle = serveStdio(() => {
           );
         }
         const chosen = topic === 'core' ? SEARCH_HELP.core : topic === 'all' ? SEARCH_HELP.all : [topic];
-        const text = chosen.map((s) => SEARCH_HELP.text[s]).join('\n\n');
+        const text = chosen.map((s) => SEARCH_HELP.text[s as keyof typeof SEARCH_HELP.text]).join('\n\n');
         return ok(`hudu_search help (${chosen.join(', ')}).`, {
           mode: 'help',
           topic,
@@ -700,7 +728,7 @@ const handle = serveStdio(() => {
     },
     async (args) => {
       try {
-        const result = await hudu.folders.resolve(args.identifier, args.opts);
+        const result = await hudu.folders.resolve(args.identifier, args.opts ?? {});
         return oneResult('folder', result);
       } catch (err) {
         return errorContent(err);
@@ -713,7 +741,10 @@ const handle = serveStdio(() => {
       title: 'Find Asset Passwords By Slug',
       description: TOOL_DESCRIPTIONS['hudu_find_asset_passwords_by_slug'],
       inputSchema: z.object({
-        identifier: IDENTIFIER.describe('Id, exact name/slug, or an identifier object.'),
+        // The backing operation resolves by SLUG only (registry contract: `slug: string` required) —
+        // the input says exactly that; a wider identifier union would hand a number/object to a
+        // string-typed slug filter.
+        slug: z.string().min(1).describe('Exact slug of the asset password record; the backing operation resolves by slug only.'),
         opts: z.object({ expand: EXPAND }).optional(),
       }),
       outputSchema: ONE_OUTPUT,
@@ -722,7 +753,7 @@ const handle = serveStdio(() => {
     },
     async (args) => {
       try {
-        return oneResult('asset password', await hudu.assetPasswords.findBySlug(args.identifier, args.opts));
+        return oneResult('asset password', await hudu.assetPasswords.findBySlug(args.slug, args.opts));
       } catch (err) {
         return errorContent(err);
       }
@@ -735,7 +766,10 @@ const handle = serveStdio(() => {
       title: 'Find Websites By Slug',
       description: TOOL_DESCRIPTIONS['hudu_find_websites_by_slug'],
       inputSchema: z.object({
-        identifier: IDENTIFIER.describe('Id, exact name/slug, or an identifier object.'),
+        // The backing operation resolves by SLUG only (registry contract: `slug: string` required) —
+        // the input says exactly that; a wider identifier union would hand a number/object to a
+        // string-typed slug filter.
+        slug: z.string().min(1).describe('Exact slug of the website record (its URL slug); the backing operation resolves by slug only.'),
         opts: z.object({ expand: EXPAND }).optional(),
       }),
       outputSchema: ONE_OUTPUT,
@@ -744,7 +778,7 @@ const handle = serveStdio(() => {
     },
     async (args) => {
       try {
-        return oneResult('website', await hudu.websites.findBySlug(args.identifier, args.opts));
+        return oneResult('website', await hudu.websites.findBySlug(args.slug, args.opts ?? {}));
       } catch (err) {
         return errorContent(err);
       }
@@ -766,7 +800,7 @@ const handle = serveStdio(() => {
     },
     async (args) => {
       try {
-        return oneResult('password folder', await hudu.passwordFolders.resolve(args.identifier, args.opts));
+        return oneResult('password folder', await hudu.passwordFolders.resolve(args.identifier, args.opts ?? {}));
       } catch (err) {
         return errorContent(err);
       }
@@ -788,7 +822,7 @@ const handle = serveStdio(() => {
     },
     async (args) => {
       try {
-        return oneResult('group', await hudu.groups.resolve(args.identifier, args.opts));
+        return oneResult('group', await hudu.groups.resolve(args.identifier, args.opts ?? {}));
       } catch (err) {
         return errorContent(err);
       }
