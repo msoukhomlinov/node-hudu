@@ -898,6 +898,93 @@ describe('round-trip diff: the families a Markdown converter destroys', () => {
     const f = find(diffArticleRoundTrip(sent, '<p>More</p><p>Detail</p>'), 'ROUNDTRIP_ACCORDION_FLATTENED');
     expect(f?.detail).toEqual(['accordion: 1 -> 0']);
   });
+
+  // issue #43 F11 — the input/checkbox landmine: `input` sits in RAW_ELEMENTS while
+  // countTaskItems already treats <input type="checkbox"> as a valid task representation.
+  // Role note (2026-09-17 fix-round, B1-F3): this real-Markdown-path test PASSES on the
+  // pre-fix baseline (reviewer-measured on pristine 80f9e0c), so it is a REGRESSION GUARD
+  // for the full chain, not the #11 pin — the pin is the synthetic churn test below, which
+  // does fail pre-fix.
+  it('regression guard (passes pre-fix, not the #11 pin): a GFM task list whose <li><input type="checkbox"> form round-trips the real Markdown path', () => {
+    // Constructed through the real converter path: turndown emits a GFM task list and
+    // marked re-emits <input … type="checkbox"> for it, so the representation churns but no
+    // raw element is lost (T2 memo probe `task_input`).
+    const sent = '<ul data-type="taskList"><li><input type="checkbox" checked="">a</li><li><input type="checkbox">b</li></ul>';
+    const back = markdownToHtml(htmlToMarkdown(sent));
+    expect(has(diffArticleRoundTrip(sent, back), 'ROUNDTRIP_RAW_ELEMENT_LOST')).toBe(false);
+  });
+
+  it('does not flag a task representation churn (synthetic pair: <li><input type="checkbox"> <-> <li data-checked="true">)', () => {
+    // The live-Hudu direction the real Markdown path cannot produce (the memo's landmine):
+    // the editor stores the task in the OTHER representation. Synthetic before/after pair
+    // through diffArticleRoundTrip, both directions; the state is preserved, so no
+    // task-state finding is expected either.
+    const inputForm = '<ul data-type="taskList"><li><input type="checkbox" checked="">a</li></ul>';
+    const dataCheckedForm = '<ul data-type="taskList"><li data-checked="true">a</li></ul>';
+    expect(has(diffArticleRoundTrip(inputForm, dataCheckedForm), 'ROUNDTRIP_RAW_ELEMENT_LOST')).toBe(false);
+    expect(has(diffArticleRoundTrip(dataCheckedForm, inputForm), 'ROUNDTRIP_RAW_ELEMENT_LOST')).toBe(false);
+    expect(has(diffArticleRoundTrip(inputForm, dataCheckedForm), 'ROUNDTRIP_TASK_STATE_LOST')).toBe(false);
+  });
+
+  it('still flags a standalone checkbox (outside any list item) lost by the real Markdown path', () => {
+    // The precision control: the F11 exclusion is task-context only — a lone
+    // <input type="checkbox"> is not a task item and its loss must still fire (T2 memo
+    // probe `raw_input`).
+    const sent = '<p>Watch this</p><input type="checkbox">';
+    const back = markdownToHtml(htmlToMarkdown(sent));
+    const f = find(diffArticleRoundTrip(sent, back), 'ROUNDTRIP_RAW_ELEMENT_LOST');
+    expect(f !== undefined).toBe(true);
+    expect(f?.detail).toContain('input');
+  });
+
+  it('still flags a checkbox lost after an implicitly-closed <li> ends the list (post-list pin, B1-F1)', () => {
+    // Pre-fix, countTaskContextCheckboxes kept one document-wide liDepth that neither
+    // </ul> nor an implicitly-closed <li> reset, so a checkbox AFTER the list's end was
+    // still excluded from the raw count and its loss stayed silent (reviewer probe F2).
+    // This pin fails against the pre-fix-ROUND code (checkpoint f48a168cc6 = 80f9e0c +
+    // the Batch-1 tree; verified in the fix-round report). On pristine 80f9e0c the
+    // exclusion itself did not exist, so the loss already fired there.
+    const sent = '<ul><li>a<li>b</ul><input type="checkbox">';
+    const back = '<ul><li>a<li>b</ul>';
+    const f = find(diffArticleRoundTrip(sent, back), 'ROUNDTRIP_RAW_ELEMENT_LOST');
+    expect(f !== undefined).toBe(true);
+    expect(f?.detail).toContain('input');
+  });
+
+  it('points the RAW_ELEMENTS finding at the real element, not a custom name sharing its prefix (B1-F2)', () => {
+    // The count moved to the exact <name(?![\w-]) boundary; the index/snippet hint must
+    // use the SAME one, or a lost real <form> next to a <form-row> points the caller at
+    // the custom element (pre-fix probe K: index 8 = <form-row>).
+    const sent = '<p>t</p><form-row>a</form-row><form>b</form>';
+    const back = '<p>t</p><form-row>a</form-row>';
+    const f = find(diffArticleRoundTrip(sent, back), 'ROUNDTRIP_RAW_ELEMENT_LOST');
+    expect(f !== undefined).toBe(true);
+    expect(f?.detail).toEqual(['form']);
+    expect(f?.index).toBe(sent.indexOf('<form>'));
+    expect(f?.snippet?.startsWith('<form>')).toBe(true);
+  });
+
+  // issue #43 F13 — the shared `\b` boundary counted <form-row> as a <form>, <input-group>
+  // as an <input> and <audio-note> as an <audio>.
+  it('does not count custom-element names as raw elements (<form-row>, <input-group>, <audio-note>)', () => {
+    const sent = '<p>t</p><form-row>a</form-row><input-group>b</input-group><audio-note>c</audio-note>';
+    expect(has(diffArticleRoundTrip(sent, '<p>t</p>'), 'ROUNDTRIP_RAW_ELEMENT_LOST')).toBe(false);
+  });
+
+  it('still flags a real <form>/<input>/<audio> loss (F13 control)', () => {
+    const f = diffArticleRoundTrip('<p>t</p><form><input type="text"><audio src="a.mp3"></form>', '<p>t</p>');
+    const lost = f.filter((x) => x.code === 'ROUNDTRIP_RAW_ELEMENT_LOST').map((x) => x.detail?.[0]).sort();
+    expect(lost).toEqual(['audio', 'form', 'input']);
+  });
+
+  // issue #43 F16 — a non-canonical <div class="mce-accordion"> wrapping a <details>
+  // counted 2; normalising it to the canonical single element then fired a false
+  // ROUNDTRIP_ACCORDION_FLATTENED (pre-fix probe: "accordion: 2 -> 1").
+  it('does not flag a non-canonical <div.mce-accordion> wrapping <details> canonicalised to one element', () => {
+    const sent = '<div class="mce-accordion"><details class="mce-accordion"><summary>More</summary><p>Detail</p></details></div>';
+    const back = '<details class="mce-accordion"><summary>More</summary><p>Detail</p></details>';
+    expect(diffArticleRoundTrip(sent, back).filter((x) => x.code === 'ROUNDTRIP_ACCORDION_FLATTENED')).toEqual([]);
+  });
 });
 
 describe('the module is reachable from the package barrels', () => {

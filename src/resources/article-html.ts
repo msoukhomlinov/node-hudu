@@ -1028,7 +1028,14 @@ function unwrapTableScroll(html: string): string {
  *   Hudu rewrites it on write).
  * - Raw elements, callouts, accordions, task state — symmetric by construction
  *   (`diffRawElements` / `diffCallouts` / `diffAccordions` / `diffTaskState` — a count
- *   differing in EITHER direction is loss).
+ *   differing in EITHER direction is loss). Two scoping decisions inside `diffRawElements`
+ *   (2026-09-17, issue #43): the tag name is matched exactly (`<form-row>` is not a
+ *   `<form>`), and `input[type=checkbox]` inside an OPEN `<li>` is a task item, not a raw
+ *   element (HTML implicit-close semantics — a checkbox after the list's end is still
+ *   counted). `diffAccordions` counts the
+ *   canonical form: a `<details>` nested in a counted `mce-accordion` div is inner
+ *   markup, not a second accordion (2026-09-17 probes: non-canonical wrap canonicalised
+ *   to one element reports nothing; a real flattening still fires).
  *
  * The fail-open duty is unchanged: a missed direction is safe ONLY because the class it
  * misses is presentation/normalisation in BOTH contexts, per the per-code lines above.
@@ -1038,9 +1045,10 @@ function unwrapTableScroll(html: string): string {
  * **What the Markdown loss guard covers.** `diffArticleRoundTrip` spot-checks the
  * structural spine of the stored body across the HTML → Markdown → HTML round trip:
  * table structure, code blocks and their language classes, link hrefs, image presence
- * and `alt` text, elements Markdown cannot express (`script`, `svg`, `input`, …), Hudu
- * callouts, Hudu accordions, and task-list check state. A write is refused when any of
- * these is lost.
+ * and `alt` text, elements Markdown cannot express (`script`, `svg`, `input`, … — with one
+ * scoped exception: a checkbox inside a task-list item is a task item, whose loss fires
+ * `ROUNDTRIP_TASK_STATE_LOST` instead), Hudu callouts, Hudu accordions, and task-list
+ * check state. A write is refused when any of these is lost.
  *
  * **What it does not cover.** The guard does not detect loss of inline presentational
  * markup: `<kbd>` is dropped, `<u>` is dropped, `<s>` becomes `<del>`, and
@@ -1294,34 +1302,159 @@ function diffImages(before: string, after: string, add: Add): void {
   }
 }
 
-/**
- * Elements Markdown cannot represent at all. Counted, not matched positionally: Hudu and
- * a converter both reorder freely, and a count change is the loss that matters.
- *
- * Symmetric by construction -- a count differing in EITHER direction is reported, because
- * this function may not assume which argument came from Hudu.
- */
+/** The raw elements Markdown cannot express — `diffRawElements` defines what its count means. */
 const RAW_ELEMENTS = [
   'script', 'style', 'iframe', 'noscript', 'svg', 'math', 'form', 'input', 'button',
   'select', 'textarea', 'object', 'embed', 'video', 'audio', 'canvas',
 ] as const;
 
+/**
+ * Elements Markdown cannot represent at all. Counted, not matched positionally: Hudu and
+ * a converter both reorder freely, and a count change is the loss that matters.
+ *
+ * Two scoping decisions keep the count honest (2026-09-17, issue #43):
+ *
+ * - Exact tag-name boundary: `<name` must be followed by a character that is neither a
+ *   word character nor a hyphen, so a custom element's name is not counted as a raw
+ *   element — `<form-row>` is not a `<form>`, `<input-group>` is not an `<input>`,
+ *   `<audio-note>` is not an `<audio>` (the shared `openTags` `\b` boundary WOULD count
+ *   them, because `-` is a non-word character). Scoped to THIS count only: `openTags` and
+ *   the other helpers keep their boundaries; the region-awareness work is deferred.
+ * - `input[type=checkbox]` inside an OPEN `<li>` is excluded: that shape is a task item — the
+ *   input branch of `countTaskItems` already treats it as a valid task representation — so
+ *   representation churn (a Hudu read-back or converter that stores the task as
+ *   `li[data-checked]` instead of, or in addition to, `<li><input type="checkbox">`) is
+ *   not raw-element loss, and genuine loss of the state still fires
+ *   `ROUNDTRIP_TASK_STATE_LOST`. "Open" follows HTML implicit-close semantics (see
+ *   `countTaskContextCheckboxes`): a checkbox AFTER the list's end — including one whose
+ *   `<li>` was only implicitly closed — is counted as a raw element again and its loss
+ *   still fires this check, just like a standalone checkbox outside any list (2026-09-17
+ *   probes: a GFM task list round-trips the real Markdown path with no `RAW_ELEMENT_LOST`;
+ *   a lone checkbox the converter drops — or one after a list's close,
+ *   `<ul><li>a<li>b</ul><input type="checkbox">` — still fires; T2 memo probes
+ *   `task_input` / `raw_input`).
+ *
+ * Symmetric by construction -- a count differing in EITHER direction is reported, because
+ * this function may not assume which argument came from Hudu.
+ */
 function diffRawElements(before: string, after: string, add: Add): void {
   for (const tag of RAW_ELEMENTS) {
-    const b = countTags(before, tag);
-    const a = countTags(after, tag);
+    let b = countTagsExact(before, tag);
+    let a = countTagsExact(after, tag);
+    if (tag === 'input') {
+      // Task-context checkboxes are task items, not raw elements (see the note above).
+      b -= countTaskContextCheckboxes(before);
+      a -= countTaskContextCheckboxes(after);
+    }
     if (b === a) continue;
+    // The index hint uses the SAME exact boundary as the count: with a plain `\b`, a lost
+    // real <form> next to a <form-row> would point the hint at the custom element
+    // (2026-09-17 fix-round probe K).
     add(
       'ROUNDTRIP_RAW_ELEMENT_LOST',
       `<${tag}> count changed across the round trip (${b} -> ${a}). Markdown cannot represent this element, so a transform through it silently drops the whole node.`,
-      { index: before.search(new RegExp(`<${tag}\\b`, 'i')), detail: [tag] },
+      { index: before.search(new RegExp(`<${tag}(?![\\w-])`, 'i')), detail: [tag] },
     );
   }
 }
 
 /**
+ * Count the opening tags of `name` with an EXACT element-name boundary: the character
+ * right after `name` must be neither a word character nor a hyphen. A plain `\b` would
+ * match `<form-row` as a `<form>` (a hyphen is a non-word character, so the word boundary
+ * sits right after `form`); the raw-element count must not.
+ */
+function countTagsExact(html: string, name: string): number {
+  const re = new RegExp(`<${name}(?![\\w-])`, 'gi');
+  let count = 0;
+  for (let m = re.exec(html); m !== null; m = re.exec(html)) {
+    const read = readAttrs(html, m.index + m[0].length);
+    if (read === null) continue;
+    count += 1;
+    // Resume after the tag, so a `<name …>` written inside an attribute value is never
+    // mistaken for markup (same discipline as `openTags`).
+    re.lastIndex = read.end;
+  }
+  return count;
+}
+
+/**
+ * Count `input[type=checkbox]` opening tags that sit inside an OPEN `<li>` at their position —
+ * the GFM/marked task-list shape (`<li><input … type="checkbox">…</li>`). These are exactly
+ * the checkboxes `diffRawElements` subtracts from the raw-element count.
+ *
+ * "Inside an open `<li>`" follows HTML implicit-close semantics (2026-09-17 fix-round, B1-F1).
+ * A single document-wide depth counter would be wrong: neither `</ul>`/`</ol>` nor an
+ * implicitly-closed `<li>` resets it, so a checkbox AFTER the list's end stayed excluded.
+ * So the walk tracks open elements — `<ul>`/`<ol>`/`<li>`/`</li>`/`<input>` in document
+ * order: `ulDepth` counts open lists, and the stack records the `ulDepth` at which each
+ * `<li>` opened. A new `<li>` implicitly closes the previous `<li>` of the SAME list, and
+ * `</ul>`/`</ol>` implicitly closes every item the list still contains. A checkbox is
+ * task-context (excluded from the raw count) iff the `<li>` stack is non-empty at the
+ * checkbox's position; after the list's end it is a raw element again (fix-round probe:
+ * lost `<ul><li>a<li>b</ul><input type="checkbox">` fires `ROUNDTRIP_RAW_ELEMENT_LOST`).
+ *
+ * Each tag's real attributes are read through the quote-aware `readAttrs` and the walk
+ * resumes after the tag's real end, so a `<ul>`, `<li>` or `<input>` written inside an
+ * attribute value is never mistaken for markup. Region-unaware like the module's other
+ * scans: an `<li>` inside a `<pre>` body is taken at face value — a spot-check limitation,
+ * disclosed in the module header.
+ */
+function countTaskContextCheckboxes(html: string): number {
+  let count = 0;
+  let ulDepth = 0;
+  const openLi: number[] = []; // ulDepth recorded at each open <li>, in document order
+  const re = /<(\/?)(ul|ol|li|input)\b/gi;
+  for (let m = re.exec(html); m !== null; m = re.exec(html)) {
+    const closing = m[1] === '/';
+    const name = m[2]?.toLowerCase();
+    if (name === 'ul' || name === 'ol') {
+      if (closing) {
+        // A list close implicitly closes every item it still contains, then the list
+        // itself. The stack is non-decreasing and holds only entries at ulDepth <= the
+        // current one, so those items are the trailing entries; a stray close with no
+        // list open is ignored and ulDepth never goes negative.
+        if (ulDepth > 0) {
+          for (;;) {
+            const last = openLi[openLi.length - 1];
+            if (last === undefined || last < ulDepth) break;
+            openLi.pop();
+          }
+          ulDepth -= 1;
+        }
+        re.lastIndex = m.index + m[0].length;
+      } else {
+        ulDepth += 1;
+        const read = readAttrs(html, m.index + m[0].length);
+        re.lastIndex = read === null ? m.index + m[0].length : read.end;
+      }
+    } else if (name === 'li') {
+      if (closing) {
+        if (openLi.length > 0) openLi.pop();
+        re.lastIndex = m.index + m[0].length;
+      } else {
+        // HTML implicit close: a new <li> in the same list closes the previous one.
+        while (openLi.length > 0 && openLi[openLi.length - 1] === ulDepth) openLi.pop();
+        openLi.push(ulDepth);
+        const read = readAttrs(html, m.index + m[0].length);
+        re.lastIndex = read === null ? m.index + m[0].length : read.end;
+      }
+    } else if (!closing && openLi.length > 0) {
+      const read = readAttrs(html, m.index + m[0].length);
+      if (read !== null && attrOf(read.attrs, 'type') === 'checkbox') count += 1;
+      re.lastIndex = read === null ? m.index + m[0].length : read.end;
+    }
+  }
+  return count;
+}
+
+/**
  * Callouts: counted by the base `callout` class token, order-independent (Hudu legitimately
  * reorders classes and attributes on save; that is not loss).
+ *
+ * The scan is `<div>`-only on purpose: `CALLOUT_NOT_DIV` (Rule 3) already reports a callout
+ * carried by any other element as a validation error, so a non-div callout is a known fault
+ * elsewhere — this count guards the one shape Hudu accepts.
  */
 function countCallouts(html: string): number {
   let count = 0;
@@ -1356,6 +1489,11 @@ function diffCallouts(before: string, after: string, add: Add): void {
  * The exact-token match matters: a body wrapper's `mce-accordion-body` class must never be
  * mistaken for a second accordion, which is exactly what a `\bmce-accordion\b` SUBSTRING test
  * would do (`-` is a non-word character, so that word boundary sits INSIDE `-body` too).
+ *
+ * This predicate is used for the finding's index hint; the counting itself is
+ * `countAccordions`, which applies one further canonical-form rule this predicate does not
+ * see: a `<details>` nested inside a counted `mce-accordion` div is inner markup of that
+ * accordion, not a second one (issue #43).
  */
 function isAccordionTag(tag: OpenTag): boolean {
   return hasClass(classOf(tag.attrs), 'mce-accordion') || /^<details\b/i.test(tag.tag);
@@ -1363,8 +1501,35 @@ function isAccordionTag(tag: OpenTag): boolean {
 
 function countAccordions(html: string): number {
   let count = 0;
-  for (const tag of openTags(html, '(?:div|details)')) {
-    if (isAccordionTag(tag)) count += 1;
+  const openDivs: boolean[] = []; // per open <div>: whether it is a counted mce-accordion div
+  let accordionDepth = 0;
+  const re = /<(\/?)(div|details)\b/gi;
+  for (let m = re.exec(html); m !== null; m = re.exec(html)) {
+    const closing = m[1] === '/';
+    const name = m[2]?.toLowerCase();
+    if (name === 'div') {
+      if (closing) {
+        if (openDivs.pop() === true) accordionDepth -= 1;
+        re.lastIndex = m.index + m[0].length;
+      } else {
+        const read = readAttrs(html, m.index + m[0].length);
+        const isAccordionDiv = hasClass(classOf(read === null ? '' : read.attrs), 'mce-accordion');
+        if (isAccordionDiv) {
+          count += 1;
+          accordionDepth += 1;
+        }
+        openDivs.push(isAccordionDiv);
+        re.lastIndex = read === null ? m.index + m[0].length : read.end;
+      }
+    } else if (!closing && accordionDepth === 0) {
+      // A <details> is an accordion only when no counted mce-accordion div is open: one
+      // nested inside such a div is that accordion's inner markup (the non-canonical
+      // wrapped form), not a second accordion — canonicalising it to a single
+      // <details class="mce-accordion"> must not read as a flattening (issue #43).
+      count += 1;
+      const read = readAttrs(html, m.index + m[0].length);
+      re.lastIndex = read === null ? m.index + m[0].length : read.end;
+    }
   }
   return count;
 }
@@ -1420,6 +1585,10 @@ function countChecked(html: string): number {
 /**
  * Symmetric by construction -- a task item or checked count differing in EITHER direction is
  * reported, because this function may not assume which argument came from Hudu.
+ *
+ * Count-based ceiling (documented per issue #43's ask): a check-state SWAP between two
+ * items — one item flips to checked and another flips to unchecked — is invisible, because
+ * the item count and the checked count both match.
  */
 function diffTaskState(before: string, after: string, add: Add): void {
   const items = { b: countTaskItems(before), a: countTaskItems(after) };
