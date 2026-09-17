@@ -124,7 +124,7 @@ export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
   ttlMs: 10 * 60 * 1000,
   fullRefreshEvery: 6,
   pageSize: 100,
-  maxIndexPages: 100,
+  maxIndexPages: 250,
   maxDocsScored: 2000,
   maxResponseBytes: 8192,
   maxVendorRequests: 8,

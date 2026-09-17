@@ -5,7 +5,7 @@ All notable changes to **node-hudu** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.7.1] — 2026-09-17
+## [0.8.0] — 2026-09-17
 
 ### Fixed
 
@@ -29,6 +29,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `meta.index.docs.assets.totalKnown` no longer accumulates across incremental builds.
   With the asset walk now covering the whole corpus every time, the previous
   `known + walked` arithmetic added the corpus to itself on each refresh.
+- **The `operations.searchKnowledge` capability record declared stale scan bounds.**
+  `capabilities.plan.json` hand-carried `maxScanRecords: 20000` / `maxScanPages: 100` —
+  the old `maxDocs` and `maxIndexPages` values, copied rather than derived, so nothing
+  caught them drifting. They reach MCP clients as the tool's `bounded` annotation
+  ("client scan capped at N records / M pages"), which means agents were told the wrong
+  bound. Corrected to 50000 / 250. **`CATALOG_PLAN_HASH` changes as a result**, so a
+  consumer gating on it must re-bless the catalogue.
+
+### Changed
+
+- **`search.maxIndexPages` default raised from 100 to 250, and `search.maxDocs` from
+  20,000 to 50,000.** The asset walk's reach was `maxIndexPages × indexPageSize` =
+  10,000 records, which on a large tenant is the cap rather than the corpus — assets
+  beyond it were never body-searchable. `maxIndexPages` is a cap, not a fetch count: a
+  walk stops when the collection runs out, so this costs nothing on a tenant smaller
+  than the old bound and only lengthens the build for one that was already being
+  silently truncated. `maxDocs` follows so the store does not become the next limiter.
+  **A tenant with more than 10,000 assets will now see a longer cold build** — the first
+  `tier: 'index'` call blocks on it, so a client with a hard call timeout should either
+  warm out of band or set `search.maxIndexPages` back down.
+- `search.indexPageSize` is deliberately **left at 100**, although raising it would both
+  multiply reach and cut requests. `hasMore` is derived as `items.length === page_size`
+  (`resources/base.ts`), so a server that silently clamps a larger request returns a
+  short first page, which reads as end-of-collection — and a full build's
+  delete-by-absence would then purge everything behind it. Hudu 2.45.1 was measured
+  honouring 200 exactly and returning 466 of a requested 500 (2026-09-17), but never on
+  `/assets` with more than 100 rows available, so the measurement that would justify the
+  change does not exist yet. The reasoning is recorded on the option in `config.ts`.
 
 ## [0.7.0] — 2026-09-17
 
