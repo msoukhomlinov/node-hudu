@@ -629,3 +629,70 @@ describe('G3 — an asset walk stopped by the page cap is visible to the caller'
     expect(result.meta.index.docs.articles?.totalKnown).toBe(1);
   });
 });
+
+describe('G4 — an INCREMENTAL build notices an asset deletion, and only an asset one', () => {
+  it('purges a deleted asset while leaving articles outside the watermark window alone', async () => {
+    const rows = {
+      articles: [1, 2, 3].map((id) => article(id, `zebra ${id}`, 'alpha body')),
+      assets: [1, 2, 3].map((id) => asset(id, `widget ${id}`, `2026-01-0${id}T00:00:00.000Z`)),
+    };
+    const { calls, deps } = recordingHarness(rows);
+    const engine = new KnowledgeSearchEngine(deps, {
+      pageSize: 10, maxIndexPages: 10, maxDocs: 100, ttlMs: 1, maxDocsScored: 2000, maxResponseBytes: BYTES.small,
+    });
+
+    const cold = await engine.search('widget', { tier: 'index' });
+    expect(cold.meta.index.docs.assets?.indexed).toBe(3);
+    expect(cold.meta.index.docs.articles?.indexed).toBe(3);
+
+    // Asset 2 is deleted. `updated_at` cannot express that — only absence from a whole-corpus walk
+    // can, and the asset walk is now one on EVERY build.
+    rows.assets = rows.assets.filter((row) => row.id !== 2);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const incremental = await engine.search('widget', { tier: 'index' });
+
+    expect(incremental.meta.index.docs.assets?.indexed).toBe(2);
+    const gone = await engine.search('widget two', { tier: 'index' });
+    expect(gone.hits.some((hit) => hit.resource === 'assets' && hit.id === 2)).toBe(false);
+
+    // The ARTICLE walk was watermark-filtered — it returned only article 3 — so absence of articles
+    // 1 and 2 from it proves nothing and must NOT be read as a deletion.
+    expect(calls.articles[1]?.updated_at).toBe('2026-01-03T00:00:00.000Z,');
+    expect(incremental.meta.index.docs.articles?.indexed).toBe(3);
+    const kept = await engine.search('zebra one', { tier: 'index' });
+    expect(kept.hits.some((hit) => hit.resource === 'articles' && hit.id === 1)).toBe(true);
+
+    // An incremental still cannot prove the ARTICLE corpus is whole, so the full walk stays due.
+    expect(engine.status().fullWalkDue).toBe(true);
+  });
+
+  it('does not purge when the asset walk was stopped by the page cap', async () => {
+    const rows = {
+      articles: [article(1, 'zebra one', 'alpha body')],
+      assets: [1, 2, 3, 4, 5, 6].map((id) => asset(id, `widget ${id}`, `2026-01-0${id}T00:00:00.000Z`)),
+    };
+    const { deps } = recordingHarness(rows);
+    // pageSize 2, cap 3 = 6 rows, so the FIRST walk reads the whole asset corpus and completes.
+    const engine = new KnowledgeSearchEngine(deps, {
+      pageSize: 2, maxIndexPages: 3, maxDocs: 100, ttlMs: 1, maxDocsScored: 2000, maxResponseBytes: BYTES.small,
+    });
+
+    const cold = await engine.search('widget', { refresh: true });
+    expect(cold.meta.index.docs.assets?.indexed).toBe(6);
+    expect(cold.meta.reasons).not.toContain('index-partial');
+
+    // Asset 1 is deleted AND two arrive, so the next walk needs 4 pages and is stopped at 3: it
+    // reads assets 2..7 and never reaches 8 — nor re-reads 1, which is genuinely gone.
+    rows.assets = [2, 3, 4, 5, 6, 7, 8].map((id) => asset(id, `widget ${id}`, `2026-01-0${id}T00:00:00.000Z`));
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const incremental = await engine.search('widget', { tier: 'index' });
+
+    // Absence from a TRUNCATED walk proves nothing, so asset 1 must survive it even though it really
+    // was deleted — over-retaining is the honest failure here, and the next COMPLETE walk purges it.
+    expect(incremental.meta.reasons).toContain('index-partial');
+    const stillThere = await engine.search('widget one', { tier: 'index' });
+    expect(stillThere.hits.some((hit) => hit.resource === 'assets' && hit.id === 1)).toBe(true);
+    // 1 (stale, retained) + 2..7 (walked) = 7; asset 8 was never reached.
+    expect(incremental.meta.index.docs.assets?.indexed).toBe(7);
+  });
+});

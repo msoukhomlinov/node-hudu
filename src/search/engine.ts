@@ -1024,6 +1024,12 @@ export class KnowledgeSearchEngine {
       // An incremental walk cannot PROVE completeness (records it never fetched stay unknown), so
       // it may raise `partial` but never lower it.
       if (truncated) this.partial = true;
+      // Assets are the exception, and only because they lost their watermark above: their walk is a
+      // WHOLE-corpus walk on every build, so a complete one carries exactly the proof a full walk
+      // carries, and absence from it IS a deletion. `only` is the asset resource alone — the article
+      // walk here is watermark-filtered, so absence from IT proves nothing and must never purge.
+      // (`fullWalkDue` is deliberately untouched: article deletions still need the full re-walk.)
+      if (!assets.truncated) this.index.retain(keys, new Set(['assets']));
       const knownArticles = this.totalKnown.articles;
       this.totalKnown.articles = knownArticles === null || knownArticles === undefined ? null : knownArticles + articleDocs;
       this.totalKnown.assets = assetTotal;

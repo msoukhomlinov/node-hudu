@@ -37,6 +37,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bound. Corrected to 50000 / 250. **`CATALOG_PLAN_HASH` changes as a result**, so a
   consumer gating on it must re-bless the catalogue.
 
+### Added
+
+- **An incremental build now notices a deleted asset.** Because the asset walk lost its
+  watermark and became a whole-corpus walk on every build, a complete one carries the
+  same proof a full walk carries, so absence from it is a deletion. Previously a removed
+  asset stayed searchable until the periodic full re-walk (`indexTtlMs × fullRefreshEvery`,
+  an hour by default); it now goes within `indexTtlMs`. Purging is scoped to assets alone
+  — the article walk is still watermark-filtered, so absence from it proves nothing — and
+  is skipped entirely when the asset walk was stopped by `maxIndexPages`. `fullWalkDue` is
+  unchanged: article deletions still require the full re-walk.
+
 ### Changed
 
 - **`search.maxIndexPages` default raised from 100 to 250, and `search.maxDocs` from
