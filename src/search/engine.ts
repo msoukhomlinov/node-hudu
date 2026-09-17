@@ -402,7 +402,11 @@ export class KnowledgeSearchEngine {
     if (opts.refresh === true) {
       await this.warm({ full: true, downgraded });
     } else if (tier === 'index') {
-      await this.warm({ full: false });
+      // `tier:'index'` promises an INDEX-BACKED answer, not one rebuilt microseconds ago: a build is
+      // a whole walk (measured 134 requests / 30s on a 3k-article, 10k-asset tenant), and paying it
+      // per search put every caller over its own call timeout. A cold index must be built; a stale
+      // one (`indexTtlMs`) is refreshed; a fresh one answers straight away.
+      if (this.builtAt === null || this.isStale()) await this.warm({ full: false });
     } else if (tier === 'auto') {
       if (this.builtAt === null) this.startBackgroundWarm();
       else if (this.isStale()) this.startBackgroundWarm();
@@ -947,8 +951,17 @@ export class KnowledgeSearchEngine {
     // INCLUSIVE. That is what lets an incremental walk re-fetch a record sitting exactly on the
     // watermark instead of losing it, and it bounds the capped-walk purge window: a boundary document
     // dropped by a truncated walk is re-fetched on the next build (`indexTtlMs`).
+    //
+    // That verification was done on `/articles` ONLY, and it does not generalise: measured on Hudu
+    // 2.45.1 (2026-09-17, dev AND production tenants) `/assets?updated_at=<anything>,` answers HTTP
+    // 500 for every value, past or future, while the same query on `/articles` answers 200. The
+    // comma-free form is not a substitute either — `/assets?updated_at=<value>` returned 0 rows of 20
+    // for both a past and a future date, so it filters on something other than a lower bound and
+    // would turn the loud 500 into a silent "no asset ever changed". So the ASSET walk carries no
+    // watermark at all: every build re-walks the whole asset corpus. That is bounded by
+    // `maxIndexPages` and paid at most once per `indexTtlMs` (see the `tier:'index'` gate in
+    // `search`), never per search. Restore the filter only once Hudu accepts a range form here.
     const sinceWatermark = full ? undefined : (this.watermarks.articles ?? undefined);
-    const assetWatermark = full ? undefined : (this.watermarks.assets ?? undefined);
     const requests = { count: 0 };
     const keys = new Set<string>();
     let articleMax: string | null = this.watermarks.articles ?? null;
@@ -974,7 +987,7 @@ export class KnowledgeSearchEngine {
     else articleTotal = full ? articleDocs : null;
 
     const assets = await this.walk(
-      this.deps.listAssetPages({ page_size: this.config.pageSize, ...(assetWatermark ? { updated_at: `${assetWatermark},` } : {}) }),
+      this.deps.listAssetPages({ page_size: this.config.pageSize }),
       requests,
     );
     for (const raw of assets.rows) {
@@ -985,8 +998,10 @@ export class KnowledgeSearchEngine {
       assetDocs += 1;
       if (doc.updated_at > (assetMax ?? '')) assetMax = doc.updated_at;
     }
-    if (assets.truncated) assetTotal = null;
-    else assetTotal = full ? assetDocs : null;
+    // Every asset walk is a WHOLE-corpus walk (no watermark), so a complete one counts the corpus
+    // outright — on a full build and an incremental alike. It must never be ACCUMULATED the way the
+    // article count is, or each incremental build would add the corpus to itself.
+    assetTotal = assets.truncated ? null : assetDocs;
 
     const truncated = articles.truncated || assets.truncated;
     if (full) {
@@ -1010,9 +1025,8 @@ export class KnowledgeSearchEngine {
       // it may raise `partial` but never lower it.
       if (truncated) this.partial = true;
       const knownArticles = this.totalKnown.articles;
-      const knownAssets = this.totalKnown.assets;
       this.totalKnown.articles = knownArticles === null || knownArticles === undefined ? null : knownArticles + articleDocs;
-      this.totalKnown.assets = knownAssets === null || knownAssets === undefined ? null : knownAssets + assetDocs;
+      this.totalKnown.assets = assetTotal;
     }
     this.truncatedDocs = this.index.docs.filter((doc) => doc.longTruncated).length;
     // Reported per answer: the reason belongs to THIS build's walk. The index-level state
@@ -1020,6 +1034,8 @@ export class KnowledgeSearchEngine {
     this.lastBuildTruncated = truncated;
     this.buildError = null;
     this.watermarks.articles = articleMax;
+    // Reported, never sent: the asset walk cannot filter on it (see `build`'s watermark note). It is
+    // the newest `updated_at` the index has SEEN, which is what `status().watermarks` promises.
     this.watermarks.assets = assetMax;
     // The document cap drops the OLDEST records, so a capped index is missing records it knows the
     // vendor has: `partial` is reported, never merely implied.

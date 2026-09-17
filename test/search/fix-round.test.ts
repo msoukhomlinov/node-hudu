@@ -195,10 +195,13 @@ describe('F4 — the automatic path runs the full re-walk when one is due', () =
 describe('F-L2 — a refresh is never served by an in-flight INCREMENTAL build', () => {
   it('runs the full re-walk after awaiting the incremental one', async () => {
     const { harness: h, deps } = harness({ articles: [1, 2, 3, 4].map((id) => article(id, `zebra ${id}`, 'alpha body')), pageSize: 10 });
-    const engine = new KnowledgeSearchEngine(deps, { pageSize: 10, maxIndexPages: 10, maxDocs: 100, maxDocsScored: 2000, maxResponseBytes: BYTES.small });
+    // `ttlMs: 1` so the `tier: 'index'` call below is past the staleness gate and really starts the
+    // in-flight incremental this case needs; a fresh index would answer without one.
+    const engine = new KnowledgeSearchEngine(deps, { pageSize: 10, maxIndexPages: 10, maxDocs: 100, ttlMs: 1, maxDocsScored: 2000, maxResponseBytes: BYTES.small });
     await engine.search('zebra', { refresh: true });
 
     h.corpus.articles = h.corpus.articles.filter((row) => row.id !== 4);
+    await new Promise((resolve) => setTimeout(resolve, 5));
     h.listGate.arm();
     // An incremental build is in flight and BLOCKED on the first list page.
     const incremental = engine.search('zebra', { tier: 'index' });
@@ -473,7 +476,9 @@ describe('full-walk transparency — a caller can tell an incremental warm from 
 describe('F-L3 — the partial REASON belongs to the build, the partial STATE to the index', () => {
   it('stops repeating the truncated-walk reason once a build completes', async () => {
     const { deps } = harness({ articles: [1, 2, 3, 4, 5, 6].map((id) => article(id, `zebra ${id}`, 'alpha body')) });
-    const engine = new KnowledgeSearchEngine(deps, { pageSize: 2, maxIndexPages: 2, maxDocs: 100, maxDocsScored: 2000, maxResponseBytes: BYTES.small });
+    // `ttlMs: 1` so the `tier: 'index'` call below is past the staleness gate and really rebuilds —
+    // a FRESH index answers without a walk, which is a different case (pinned in G2).
+    const engine = new KnowledgeSearchEngine(deps, { pageSize: 2, maxIndexPages: 2, maxDocs: 100, ttlMs: 1, maxDocsScored: 2000, maxResponseBytes: BYTES.small });
 
     // Cap = 4 rows: the full walk truncates, and THAT answer says so.
     const truncated = await engine.search('zebra', { refresh: true });
@@ -482,8 +487,145 @@ describe('F-L3 — the partial REASON belongs to the build, the partial STATE to
 
     // The next build is an incremental that drains in one page: it did not truncate, so the answer
     // does not repeat the reason, while the index keeps the honest `partial` state.
+    await new Promise((resolve) => setTimeout(resolve, 5));
     const incremental = await engine.search('zebra', { tier: 'index' });
     expect(incremental.meta.reasons).not.toContain('index-partial');
     expect(incremental.meta.index.state).toBe('partial');
+  });
+});
+
+/**
+ * Regression pins for the v0.7.0 consumer report (iit-mcp-hudu against a live Hudu 2.45.1 tenant).
+ *
+ * G1 and G2 are the two defects that together made `tier: 'index'` fail on every call after the
+ * first: the asset walk sent a watermark form `/assets` answers 500 to, and `tier: 'index'` rebuilt
+ * on every single search so it hit that 500 constantly. Both are invisible to a mock that does not
+ * assert on the REQUEST, which is how they shipped — so these cases assert on the params.
+ */
+interface CallLog {
+  articles: { page_size: number; updated_at?: string }[];
+  assets: { page_size: number; updated_at?: string }[];
+}
+
+function recordingHarness(rows: { articles: Row[]; assets: Row[] }): { calls: CallLog; deps: EngineDeps } {
+  const calls: CallLog = { articles: [], assets: [] };
+  const window = (all: Row[], params: { updated_at?: string }): Row[] => {
+    if (params.updated_at === undefined) return all;
+    const watermark = params.updated_at.replace(/,$/, '');
+    // The vendor's inclusive lower bound, exactly as the comma form buys it.
+    return all.filter((row) => String(row.updated_at) >= watermark);
+  };
+  const deps: EngineDeps = {
+    listArticlePages: (params) => {
+      calls.articles.push(params as CallLog['articles'][number]);
+      return iterate(paged(window(rows.articles, params), params.page_size ?? 10));
+    },
+    listAssetPages: (params) => {
+      calls.assets.push(params as CallLog['assets'][number]);
+      // `/assets` answers 500 to ANY `updated_at` value carrying the trailing comma. Modelled, so a
+      // revert that reinstates the filter fails here instead of only on a live tenant.
+      if (typeof params.updated_at === 'string' && params.updated_at.endsWith(',')) {
+        return failingPages();
+      }
+      return iterate(paged(window(rows.assets, params), params.page_size ?? 10));
+    },
+    vendorSearch: () => Promise.resolve([]),
+  };
+  return { calls, deps };
+}
+
+function asset(id: number, name: string, updatedAt: string): Row {
+  return {
+    id,
+    name,
+    slug: `s${id}`,
+    url: `https://hudu.example.com/a/${id}`,
+    company_id: 1,
+    updated_at: updatedAt,
+    fields: [{ label: 'Notes', value: 'alpha body' }],
+  };
+}
+
+describe('G1 — the asset walk never sends a watermark `/assets` rejects', () => {
+  it('re-walks assets unfiltered while articles keep the inclusive comma form', async () => {
+    const { calls, deps } = recordingHarness({
+      articles: [1, 2, 3].map((id) => article(id, `zebra ${id}`, 'alpha body')),
+      assets: [1, 2, 3].map((id) => asset(id, `widget ${id}`, `2026-01-0${id}T00:00:00.000Z`)),
+    });
+    const engine = new KnowledgeSearchEngine(deps, {
+      pageSize: 10, maxIndexPages: 10, maxDocs: 100, ttlMs: 1, maxDocsScored: 2000, maxResponseBytes: BYTES.small,
+    });
+
+    // A cold full walk sends no watermark for either resource, so the defect cannot fire on it.
+    await engine.search('zebra', { refresh: true });
+    expect(calls.articles).toHaveLength(1);
+    expect(calls.articles[0]?.updated_at).toBeUndefined();
+    expect(calls.assets[0]?.updated_at).toBeUndefined();
+
+    // The INCREMENTAL build is where it fired. Articles keep the boundary re-fetch the comma buys;
+    // assets carry no `updated_at` at all, because every form of it is unusable on that endpoint.
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const incremental = await engine.search('zebra', { tier: 'index' });
+    expect(calls.articles).toHaveLength(2);
+    expect(calls.articles[1]?.updated_at).toBe('2026-01-03T00:00:00.000Z,');
+    expect(calls.assets).toHaveLength(2);
+    expect(calls.assets[1]?.updated_at).toBeUndefined();
+
+    // …and the build SUCCEEDED, which is the whole point: no 500 out of `search`.
+    expect(incremental.meta.errors).toHaveLength(0);
+    expect(engine.status().lastBuildError).toBeNull();
+    expect(incremental.meta.index.docs.assets?.indexed).toBe(3);
+
+    // A whole-corpus asset walk on every build must not ACCUMULATE into the known total.
+    expect(incremental.meta.index.docs.assets?.totalKnown).toBe(3);
+  });
+});
+
+describe('G2 — `tier: index` answers a FRESH index without re-walking', () => {
+  it('runs one build across two consecutive searches', async () => {
+    const { calls, deps } = recordingHarness({
+      articles: [1, 2, 3].map((id) => article(id, `zebra ${id}`, 'alpha body')),
+      assets: [asset(1, 'widget one', '2026-01-01T00:00:00.000Z')],
+    });
+    const engine = new KnowledgeSearchEngine(deps, {
+      pageSize: 10, maxIndexPages: 10, maxDocs: 100, ttlMs: 60_000, maxDocsScored: 2000, maxResponseBytes: BYTES.small,
+    });
+
+    // Call 1 is cold: it must build, because `tier: 'index'` still promises an index-backed answer.
+    const first = await engine.search('zebra', { tier: 'index' });
+    expect(first.meta.index.state).toBe('warm');
+    const afterFirst = { articles: calls.articles.length, assets: calls.assets.length };
+    expect(afterFirst.articles).toBeGreaterThan(0);
+
+    // Call 2 is inside `indexTtlMs`: it answers from the index and issues NOT ONE request.
+    const second = await engine.search('zebra', { tier: 'index' });
+    expect(second.hits.length).toBeGreaterThan(0);
+    expect(calls.articles).toHaveLength(afterFirst.articles);
+    expect(calls.assets).toHaveLength(afterFirst.assets);
+    expect(second.meta.index.staleness).toBe('fresh');
+  });
+});
+
+describe('G3 — an asset walk stopped by the page cap is visible to the caller', () => {
+  it('reports index-partial and a null asset total when only the ASSET walk truncates', async () => {
+    const { deps } = recordingHarness({
+      articles: [article(1, 'zebra one', 'alpha body')],
+      // 6 assets at pageSize 2 with maxIndexPages 2 = 4 rows read, `hasMore: true` on the last one.
+      assets: [1, 2, 3, 4, 5, 6].map((id) => asset(id, `widget ${id}`, `2026-01-0${id}T00:00:00.000Z`)),
+    });
+    const engine = new KnowledgeSearchEngine(deps, {
+      pageSize: 2, maxIndexPages: 2, maxDocs: 100, ttlMs: 60_000, maxDocsScored: 2000, maxResponseBytes: BYTES.small,
+    });
+
+    const result = await engine.search('widget', { refresh: true });
+
+    // The cap, not the corpus: the answer says so rather than passing 4 of 6 off as everything.
+    expect(result.meta.reasons).toContain('index-partial');
+    expect(result.meta.index.state).toBe('partial');
+    expect(result.meta.index.docs.assets?.indexed).toBe(4);
+    expect(result.meta.index.docs.assets?.totalKnown).toBeNull();
+    // The ARTICLE walk completed, so its own total stays a real number — the partial state is not
+    // smeared across resources.
+    expect(result.meta.index.docs.articles?.totalKnown).toBe(1);
   });
 });

@@ -242,9 +242,11 @@ export interface KnowledgeSearchOptions {
   exact_only?: boolean;
   /**
    * Which tier answers: `'auto'` (the default) uses the body index when it is warm and the
-   * vendor-only tier otherwise; `'vendor'` forces the vendor tier; `'index'` builds the index
-   * before answering, so the FIRST call already has body recall (it can take seconds on a large
-   * tenant, which is exactly why the default does not do it).
+   * vendor-only tier otherwise; `'vendor'` forces the vendor tier; `'index'` guarantees the answer
+   * is index-backed, so the FIRST call already has body recall (that build can take seconds on a
+   * large tenant, which is exactly why the default does not do it). It guarantees an index-backed
+   * answer, NOT a freshly rebuilt one: a cold index is built and a stale one refreshed, but an
+   * index within `search.indexTtlMs` answers immediately. Use `refresh: true` to force a re-walk.
    */
   tier?: 'auto' | 'vendor' | 'index';
   /** Re-walk every source before answering, dropping documents the walk no longer sees. */

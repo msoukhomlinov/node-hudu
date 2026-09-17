@@ -1,6 +1,6 @@
 {
   "name": "node-hudu",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Fully-typed TypeScript SDK for the Hudu IT documentation API. Built for building MCP servers and integrations.",
   "type": "module",
   "sideEffects": false,

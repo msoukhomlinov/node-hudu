@@ -5,6 +5,31 @@ All notable changes to **node-hudu** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] — 2026-09-17
+
+### Fixed
+
+- **The incremental index build no longer sends `/assets` a watermark that endpoint
+  rejects.** `searchKnowledge({ tier: 'index' })` failed with `SERVER_ERROR` on every
+  call after the first: the asset walk reused the trailing-comma `updated_at` form that
+  `/articles` accepts, and Hudu 2.45.1 answers HTTP 500 to it on `/assets` for every
+  value, past or future (measured against live dev and production tenants, 2026-09-17).
+  The comma-free form is not a substitute — it returns zero rows for both a past and a
+  future date, so adopting it would have turned the 500 into a silent "no asset ever
+  changed". The asset walk therefore carries **no** watermark and re-walks the whole
+  asset corpus on each build, bounded by `search.maxIndexPages`. The article walk keeps
+  its inclusive comma form and its boundary re-fetch, unchanged. Reported upstream to
+  Hudu separately.
+- **`tier: 'index'` no longer rebuilds the index on every search.** `warm()` never
+  consulted `search.indexTtlMs`, so the `'index'` tier paid a full walk per call
+  (measured 134 requests / 30s on a 3,122-article, 10,000-asset tenant) — which is also
+  what made the defect above fire on every search rather than once per TTL. A cold index
+  is still built and a stale one refreshed; a **fresh** index now answers immediately.
+  `tier: 'index'` guarantees an index-backed answer, not a just-rebuilt one.
+- `meta.index.docs.assets.totalKnown` no longer accumulates across incremental builds.
+  With the asset walk now covering the whole corpus every time, the previous
+  `known + walked` arithmetic added the corpus to itself on each refresh.
+
 ## [0.7.0] — 2026-09-17
 
 ### Added
