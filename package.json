@@ -58,6 +58,16 @@
         "default": "./dist/capabilities.cjs"
       }
     },
+    "./content": {
+      "import": {
+        "types": "./dist/content/index.d.ts",
+        "default": "./dist/content/index.js"
+      },
+      "require": {
+        "types": "./dist/content/index.d.cts",
+        "default": "./dist/content/index.cjs"
+      }
+    },
     "./operations": {
       "import": {
         "types": "./dist/operations/index.d.ts",
@@ -136,6 +146,7 @@
     "@eslint/js": "^9.17.0",
     "@modelcontextprotocol/server": "^2.0.0",
     "@types/node": "^22.10.0",
+    "@types/turndown": "^5.0.6",
     "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^9.17.0",
     "globals": "^15.14.0",
@@ -148,5 +159,10 @@
   },
   "overrides": {
     "esbuild": "^0.28.1"
+  },
+  "dependencies": {
+    "@joplin/turndown-plugin-gfm": "^1.0.68",
+    "marked": "^18.0.13",
+    "turndown": "^7.2.4"
   }
 }

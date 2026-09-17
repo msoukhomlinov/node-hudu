@@ -5,8 +5,7 @@
 **Fully-typed TypeScript SDK for the [Hudu IT documentation API](https://hudu.com).**
 Designed from the ground up for building **MCP servers**, integrations, and ETL pipelines.
 
-- **Zero runtime dependencies.** Uses only native platform APIs (`fetch`, `FormData`,
-  `URLSearchParams`, `AbortSignal`).
+- **Three runtime dependencies.** `turndown`, `@joplin/turndown-plugin-gfm` and `marked`, all used only by the `./content` Markdown converter. Every other path uses native platform APIs alone.
 - **35 typed resource clients**, each exposing full CRUD plus Hudu's special operations.
 - **Plain typed data** — every read returns concrete JSON-serialisable arrays and objects,
   ready to feed into zod output schemas, MCP tools, or downstream sinks.
@@ -211,8 +210,8 @@ patterns, list-nesting limits) is deliberately **not** encoded: that belongs to 
 
 1. **`listAll()` returns plain `T[]`.** MCP tool output schemas need concrete, serialisable
    data — not streaming handles or `this`. One call, ready to map to your output schema.
-2. **Zero runtime deps.** MCP runtimes bundle their own validation (e.g. `zod`). The SDK
-   never ships a conflicting copy, so there is no dependency mismatch.
+2. **`zod` is never a dependency of the SDK.** MCP runtimes bundle their own validation
+   (e.g. `zod`). The SDK never ships a conflicting copy, so there is no dependency mismatch.
 3. **Typed errors** with machine-readable `code` values let your MCP tool report failures
    back to the model for self-correction (see Error handling below).
 

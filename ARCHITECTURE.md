@@ -9,7 +9,7 @@
 
 ## 1. Overview
 
-`node-hudu` is a **fully-typed**, zero-runtime-dependency TypeScript SDK for the
+`node-hudu` is a **fully-typed**, TypeScript SDK with three runtime dependencies, all confined to the Markdown converter for the
 [Hudu IT documentation API](https://hudu.com). It exposes one resource client class per
 Hudu resource. Resource methods return **plain typed data** (arrays and resource objects)
 — not `this`, not wrappers — so results can be fed directly into zod schemas, MCP tools,
@@ -386,7 +386,7 @@ private async fetchPage<T>(page: number, pageSize: number): Promise<Page<T>> {
 
 ## 8. HTTP transport (`http.ts`)
 
-- Uses the **native global `fetch`** (Node ≥ 18). **No runtime dependencies.**
+- Uses the **native global `fetch`** (Node ≥ 18). **Three runtime dependencies, confined to one module.** `src/content/` uses `turndown`, `@joplin/turndown-plugin-gfm` and `marked`. Nothing outside `src/content/` imports them, and no type of theirs appears in an exported signature. Every other subsystem — HTTP, auth, pagination, search, MCP — still uses native platform APIs alone.
 - `HttpClient.request<T>(opts): Promise<T>` is the single transport primitive.
 
 ```ts
@@ -904,8 +904,9 @@ export const NoopLogger: Logger = {};
 
 ## 15. Dependency & build decisions
 
-- **Runtime deps: none.** Native `fetch`, `AbortSignal.timeout`, `URLSearchParams`,
-  `FormData`, `Blob` are all platform (Node ≥ 18).
+- **Runtime deps: three, confined to `src/content/`.** `turndown`, `@joplin/turndown-plugin-gfm`
+  and `marked` power the Markdown converter (see §15.1). Everywhere else — native `fetch`,
+  `AbortSignal.timeout`, `URLSearchParams`, `FormData`, `Blob` are all platform (Node ≥ 18).
 - **`zod` is never a dependency.** It may appear only as a *dev* dependency of the
   consumer, never of the SDK.
 - **Dev deps** (already scaffolded): `typescript`, `tsup`, `vitest` + `@vitest/coverage-v8`,
@@ -916,6 +917,33 @@ export const NoopLogger: Logger = {};
   presence), `declaration` on.
 - **tsup**: dual ESM+CJS, `target: 'node24'`, `dts: true`. Add the subpath entries from §5
   if deep imports are adopted.
+
+### 15.1 Why the zero-dependency property was retired (2026-09-17)
+
+HTML↔Markdown conversion for article bodies broke it, deliberately. The property was
+worth keeping while every subsystem could be written against native platform APIs.
+Correct GFM table conversion and Markdown parsing are not in that category: turndown
+does not convert tables without a plugin, and a hand-rolled converter would be a
+standing correctness liability on the one path that can overwrite a customer's
+documentation.
+
+Three alternatives were weighed and rejected:
+
+- **A separate `hudu-markdown` companion package** (the design's "approach C"), leaving
+  this SDK zero-dep. Rejected: it splits the guard from the resource that needs it, and
+  the loss check must run inside `articles.update` to be safe by default.
+- **The unified/remark/rehype route.** Rejected: 5+ packages, every one ESM-only.
+- **`@xberg-io/html-to-markdown`** — zero JS dependencies, byte-identical output to
+  turndown on a tables/code/list fixture, 2000 conversions in 16ms, and structured
+  `warnings`/`tables` output that would have suited the loss guard well. Rejected on
+  maturity alone: created 2026-06-26, 27 versions to 3.14.0 in twelve weeks, ~4k weekly
+  downloads against turndown's 6.65M, one maintainer, and 8 native `.node` binaries in
+  an otherwise pure-JS SDK. On a watchlist for mid-2027; `src/content/turndown-engine.ts`
+  exists as a one-file swap unit precisely for that.
+
+The containment rule that makes this acceptable: the dependencies live behind
+`src/content/`, no type of theirs appears in an exported signature, and every other
+subsystem remains dependency-free.
 
 ---
 
