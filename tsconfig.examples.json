@@ -1,0 +1,30 @@
+{
+  // Gate for examples/** (issue #42): the same strictness as the root tsconfig (strict,
+  // noUncheckedIndexedAccess, noUnusedLocals/noUnusedParameters, verbatimModuleSyntax),
+  // typechecking the examples against the SOURCE entries via `paths` — never against dist,
+  // so the gate does not depend on a build step. Build-only bits are overridden: this config
+  // only typechecks and emits nothing.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    "outDir": "./dist-examples",
+    "declaration": false,
+    "sourceMap": false,
+    "paths": {
+      "node-hudu": ["./src/index.ts"],
+      "node-hudu/resources": ["./src/resources/index.ts"],
+      "node-hudu/types": ["./src/types/index.ts"],
+      "node-hudu/errors": ["./src/errors.ts"],
+      "node-hudu/capabilities": ["./src/capabilities.ts"],
+      "node-hudu/content": ["./src/content/index.ts"],
+      "node-hudu/operations": ["./src/operations/index.ts"],
+      "node-hudu/mcp": ["./src/mcp/index.ts"]
+    }
+  },
+  // src/**/*.d.ts: the root program's ambient module declarations (e.g. the hand-written
+  // '@joplin/turndown-plugin-gfm' types). Ambient .d.ts files carry declarations only — no
+  // implementation code joins the program.
+  "include": ["examples/**/*.ts", "src/**/*.d.ts"],
+  "exclude": ["dist", "dist-examples", "node_modules", "test"]
+}
