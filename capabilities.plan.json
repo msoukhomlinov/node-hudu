@@ -13227,8 +13227,8 @@
       "compact": "KnowledgeSearchResult",
       "resolution": {
         "basis": "client-scan",
-        "maxScanRecords": 20000,
-        "maxScanPages": 100
+        "maxScanRecords": 50000,
+        "maxScanPages": 250
       },
       "staleCheck": null,
       "redaction": "credentials",

@@ -88,7 +88,7 @@ export interface IndexBounds {
 export const DEFAULT_INDEX_BOUNDS: IndexBounds = {
   maxDocBytes: 256 * 1024,
   maxIndexTextBytes: 64 * 1024 * 1024,
-  maxDocs: 20_000,
+  maxDocs: 50_000,
 };
 
 /** One postings list: parallel arrays, so 6 bytes per posting instead of an object map. */

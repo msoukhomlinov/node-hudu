@@ -30,15 +30,34 @@ export interface SearchConfig {
   maxDocBytes?: number;
   /** Total extracted text held in memory, in bytes. Default 67108864 (64 MB). */
   maxIndexTextBytes?: number;
-  /** Maximum indexed documents; above it the freshest are kept. Default 20000. */
+  /** Maximum indexed documents; above it the freshest are kept. Default 50000. */
   maxDocs?: number;
   /** Index age after which an answer is marked stale (still answered). Default 600000 (10 min). */
   indexTtlMs?: number;
   /** A full re-walk every N TTLs, because deletes are invisible to `updated_at`. Default 6. */
   fullRefreshEvery?: number;
-  /** Records per index page. Default 100. */
+  /**
+   * Records per index page. Default 100.
+   *
+   * Raising this multiplies reach AND cuts requests, so it looks like the better lever than
+   * `maxIndexPages` — but it is only safe for a value the endpoint honours EXACTLY. `hasMore` is
+   * derived as `items.length === page_size` (`resources/base.ts`), so a server that silently clamps
+   * a larger request returns a short first page, which reads as "end of collection": the walk then
+   * reports complete, and a FULL build's delete-by-absence purges everything behind it. Hudu 2.45.1
+   * was measured honouring 200 exactly and at least 466 of a requested 500 (2026-09-17), but never
+   * on `/assets` with more than 100 rows available — so the default stays at the value with a
+   * measured exact match on every endpoint. Raise it only against a tenant where you have seen
+   * `/assets` return a FULL page at the larger size.
+   */
   indexPageSize?: number;
-  /** Maximum pages walked per resource per build. Default 100. */
+  /**
+   * Maximum pages walked per resource per build. Default 250.
+   *
+   * This is a CAP, not a fetch count: a walk stops when the collection runs out, so raising it costs
+   * nothing on a tenant smaller than the bound and only lengthens the build for one that was being
+   * silently truncated before. It has no interaction with `hasMore`, which is why it, and not
+   * `indexPageSize`, is the bound raised by default.
+   */
   maxIndexPages?: number;
   /** Maximum candidate documents scored per query. Default 2000. */
   maxDocsScored?: number;
@@ -125,11 +144,11 @@ export const DEFAULT_CONCURRENCY = 4;
 export const DEFAULT_SEARCH_CONFIG: Required<SearchConfig> = {
   maxDocBytes: 256 * 1024,
   maxIndexTextBytes: 64 * 1024 * 1024,
-  maxDocs: 20_000,
+  maxDocs: 50_000,
   indexTtlMs: 10 * 60 * 1000,
   fullRefreshEvery: 6,
   indexPageSize: 100,
-  maxIndexPages: 100,
+  maxIndexPages: 250,
   maxDocsScored: 2000,
   maxResponseBytes: 8192,
   fuzzyBody: true,

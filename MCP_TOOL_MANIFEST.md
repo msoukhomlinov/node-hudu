@@ -1,7 +1,7 @@
 # MCP_TOOL_MANIFEST.md
 
 > **Machine-generated** by `scripts/project-mcp-tools.mjs` (`npm run mcp:project`) from
-> `capabilities.json` (planHash `1f70bf1588591292bba40219a515c04af73977a3c89a963f4d924be3089052a3`, generatedAt `2026-09-17T09:16:13.537Z`).
+> `capabilities.json` (planHash `e1acbd550e64cfe3409b39aa487c53eabd26aedaa3c4b0624ce350f7bb5742b3`, generatedAt `2026-09-17T12:17:21.129Z`).
 > Do not hand-edit. Curation is recorded in `MCP_TOOL_OVERRIDES.json` and re-applied by the script.
 
 ## Projection summary
@@ -11,7 +11,7 @@
 - excluded by rule: 22
 - excluded by curation: 66 (dropped through `MCP_TOOL_OVERRIDES.json` — one tool kept per distinct outcome)
 - overrides applied: 667
-- projection timestamp: 2026-09-17T09:16:13.771Z
+- projection timestamp: 2026-09-17T12:17:31.000Z
 
 > 139 projected tools is a projection, not a shipped tool list. MCP servers are
 > token-budgeted: tiering (core / extended) and trimming are curation, recorded in
