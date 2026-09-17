@@ -11,6 +11,9 @@
  *
  * Usage:
  *   node scripts/derive-plan.mjs                    # whole plan
+ *   node scripts/derive-plan.mjs --out <path>       # write to <path> instead of capabilities.plan.json
+ *                                                   # (the committed plan still supplies the preserved
+ *                                                   # judgement columns; default is unchanged)
  *   node scripts/derive-plan.mjs --resource companies --resource assets
  *                                                   # rewrite only those resources' rows,
  *                                                   # all other rows copied through verbatim
@@ -21,12 +24,12 @@
  */
 import { readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { join, dirname } from 'node:path';
+import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SPEC_PATH = join(ROOT, 'api-docs.json');
-const PLAN_PATH = join(ROOT, 'capabilities.plan.json');
+const PLAN_PATH = join(ROOT, 'capabilities.plan.json'); // read base: prior state / judgement columns
 const RES_DIR = join(ROOT, 'src', 'resources');
 
 const spec = JSON.parse(readFileSync(SPEC_PATH, 'utf8'));
@@ -301,6 +304,11 @@ function preserve(row) {
 const args = process.argv.slice(2);
 const only = [];
 for (let i = 0; i < args.length; i++) if (args[i] === '--resource') only.push(args[++i]);
+// --out redirects ONLY the write target. The read base stays the committed plan, so a redirected
+// re-derive is a pure function of (api-docs.json, source tree, committed plan). capabilities:check
+// uses this to re-derive into a temp dir without touching the committed plan.
+const OUT_I = args.indexOf('--out');
+const PLAN_OUT = OUT_I === -1 ? PLAN_PATH : resolve(ROOT, args[OUT_I + 1]);
 
 let prior = null;
 if (existsSync(PLAN_PATH)) prior = JSON.parse(readFileSync(PLAN_PATH, 'utf8'));
@@ -368,7 +376,7 @@ const priorHash = prior ? createHash('sha256').update(strip(prior)).digest('hex'
 // Keep generatedAt stable when nothing else changed: a re-run must be a no-op in git.
 head.generatedAt = contentHash === priorHash && prior?.generatedAt ? prior.generatedAt : new Date().toISOString();
 const out = `${JSON.stringify(head, null, 2)}\n`;
-writeFileSync(PLAN_PATH, out);
+writeFileSync(PLAN_OUT, out);
 
 /* ------------------------------------------------------------------ *
  * 9. Report
@@ -380,7 +388,7 @@ const notFound = rows.filter((r) => r.status === 'planned');
 const perGroup = {};
 for (const r of derived) perGroup[r.group] = (perGroup[r.group] ?? 0) + 1;
 const preserved = preservedCount;
-console.log(`plan:derive -> capabilities.plan.json`);
+console.log(`plan:derive -> ${PLAN_OUT === PLAN_PATH ? 'capabilities.plan.json' : PLAN_OUT}`);
 console.log(`  spec                 : ${SPEC_PATH} (swagger ${spec.swagger}, ${Object.keys(spec.paths).length} paths)`);
 console.log(`  operations           : ${operations.length} rows (${derived.length} derived from the spec, ${operations.filter((r) => r.helper).length} authored helper rows preserved)`);
 console.log(`  per group           : ${Object.entries(perGroup).map(([g, n]) => `${g}=${n}`).join(' ')}`);

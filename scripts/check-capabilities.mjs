@@ -109,10 +109,38 @@
 // PASS/FAIL summary with counts.
 //
 // Flags: --group <A|B|C|D|operations>  --ship  --plan <path>  --registry <path>  --manifest <path>
+//
+// Drift detection (rebuild-diff, issue #38): the rules above validate the committed artifacts
+// against the committed plan — but a whole artifact that has drifted from its SOURCE still
+// passes, because a stale artifact is still self-consistent (main's capabilities.json stayed
+// stale for ~3 days after PR #28 and the gate kept reporting PASS). So, with the default plan,
+// the check ALSO rebuilds the generated chain into a temp dir and diffs each rebuilt file
+// against its committed counterpart:
+//   1. node scripts/derive-plan.mjs --out <tmp>/capabilities.plan.json
+//      (re-derive; the committed plan supplies the preserved judgement columns)
+//   2. node scripts/generate-capabilities.mjs --plan <tmp>/capabilities.plan.json
+//      --out <tmp> --src-out <tmp>/src.capabilities.ts
+// Normalisation: the generatedAt timestamp VALUE is replaced by the fixed placeholder
+// '__GENERATED_AT__' on BOTH sides before comparing (line-based; the key syntax is kept, only
+// the ISO-8601 value moves). The three stamped forms are the "generatedAt" JSON field
+// (capabilities.json, capabilities.plan.json), the `// generatedAt:` comment and the
+// `CAPABILITIES_GENERATED_AT` const (src/capabilities.ts). Any OTHER difference —
+// whitespace, ordering, content, planHash —
+// is a failure, reported with the first differing lines from both sides:
+//   rebuild-plan   capabilities.plan.json drifted from api-docs.json + source —
+//                  run `npm run plan:derive`, then `npm run capabilities:build`
+//   rebuild-diff   capabilities.json / capabilities.schema.json / src/capabilities.ts
+//                  drifted from source — run `npm run capabilities:build`
+// The self-consistency rules above still run and must also pass; the rebuild-diff is additive,
+// not a replacement. Skipped (with a note) when --plan points at a fixture, exactly like the
+// emission-planhash rule. The rebuild is fully local (api-docs.json + src/** on disk, no
+// network). The temp dir (os.tmpdir()) is removed on both success and failure.
 
-import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync, statSync, mkdtempSync, rmSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
+import { tmpdir } from 'node:os';
 import ts from 'typescript';
 
 const ROOT = process.cwd();
@@ -1197,6 +1225,81 @@ for (const spec of INCLUDE_OPERATIONS) {
       fail('include-groups', `${where}.outputSchema`, `${spec.name}: publishes \`include\` but not the expanded output variant "${expected}" (got ${JSON.stringify(publishedVariants)}), so a caller cannot see what the groups add`);
     }
   }
+}
+
+// ---------------------------------------------------------------- rebuild-diff (drift detection)
+// The self-consistency rules cannot fail when the committed artifact is stale relative to the
+// source it describes: a drifted artifact is still self-consistent (issue #38). With the default
+// plan, rebuild the chain into a temp dir and diff against the committed files. generatedAt is
+// normalised on both sides (value -> '__GENERATED_AT__'); everything else must be identical.
+// See the header for the normalisation rule, the skip condition and the cleanup guarantee.
+// The generators stamp generatedAt in these exact forms (and ONLY these — verified against the
+// committed artifacts): the "generatedAt" field in capabilities.json / capabilities.plan.json,
+// the `// generatedAt:` header comment AND the `CAPABILITIES_GENERATED_AT` const in
+// src/capabilities.ts. Each value is replaced by the placeholder, quote style preserved.
+const STAMP_KEY_RE = /(generatedAt\s*["']?\s*[:=]\s*)(["']?)([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?Z)/;
+const STAMP_CONST_RE = /(GENERATED_AT\s*=\s*)(["'])([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?Z)\2/;
+function normaliseStamps(text) {
+  return text
+    .split('\n')
+    .map((l) => l.replace(STAMP_KEY_RE, '$1$2__GENERATED_AT__$2').replace(STAMP_CONST_RE, '$1$2__GENERATED_AT__$2'))
+    .join('\n');
+}
+// Position-aligned line diff (the generators emit stable line-structured files: one operation
+// per line in capabilities.json). Not a merge tool — enough to name and show what drifted.
+function lineDiff(committed, rebuilt, maxHunks = 10, maxLen = 240) {
+  const a = committed.split('\n');
+  const b = rebuilt.split('\n');
+  const n = Math.max(a.length, b.length);
+  const idx = [];
+  for (let i = 0; i < n; i += 1) if (a[i] !== b[i]) idx.push(i);
+  const clip = (s) => (s === undefined ? '<no line>' : s.length > maxLen ? s.slice(0, maxLen) + '…' : s);
+  return {
+    count: idx.length,
+    total: n,
+    hunks: idx.slice(0, maxHunks).map((i) => `      line ${i + 1}\n      committed: ${clip(a[i])}\n      rebuilt:   ${clip(b[i])}`),
+  };
+}
+if (IS_DEFAULT_PLAN) {
+  let tmp = null;
+  try {
+    tmp = mkdtempSync(path.join(tmpdir(), 'hudu-capcheck-'));
+    const runRebuild = (args) => {
+      try {
+        execFileSync(process.execPath, args, { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'] });
+        return true;
+      } catch (err) {
+        const out = `${err.stdout ?? ''}${err.stderr ?? ''}`.trim();
+        fail('rebuild-diff', 'rebuild', `rebuild step failed (node ${args.join(' ')}):\n${out.split('\n').slice(-15).join('\n')}`);
+        return false;
+      }
+    };
+    const planTmp = path.join(tmp, 'capabilities.plan.json');
+    const srcTmp = path.join(tmp, 'src.capabilities.ts');
+    const planOk = runRebuild(['scripts/derive-plan.mjs', '--out', planTmp]);
+    const genOk = planOk && runRebuild(['scripts/generate-capabilities.mjs', '--plan', planTmp, '--out', tmp, '--src-out', srcTmp]);
+    if (planOk && genOk) {
+      const pairs = [
+        { rule: 'rebuild-plan', file: 'capabilities.plan.json', rebuilt: planTmp, fix: 'run `npm run plan:derive`, then `npm run capabilities:build`' },
+        { rule: 'rebuild-diff', file: 'capabilities.json', rebuilt: path.join(tmp, 'capabilities.json'), fix: 'run `npm run capabilities:build`' },
+        { rule: 'rebuild-diff', file: 'capabilities.schema.json', rebuilt: path.join(tmp, 'capabilities.schema.json'), fix: 'run `npm run capabilities:build`' },
+        { rule: 'rebuild-diff', file: 'src/capabilities.ts', rebuilt: srcTmp, fix: 'run `npm run capabilities:build`' },
+      ];
+      for (const p of pairs) {
+        const committedPath = path.join(ROOT, p.file);
+        if (!existsSync(committedPath)) continue; // emission-missing already reports absent artifacts
+        const committed = normaliseStamps(readFileSync(committedPath, 'utf8'));
+        const rebuilt = normaliseStamps(readFileSync(p.rebuilt, 'utf8'));
+        if (committed === rebuilt) continue;
+        const d = lineDiff(committed, rebuilt);
+        fail(p.rule, p.file, `drifted from source: ${d.count} of ${d.total} line(s) differ (generatedAt normalised) — ${p.fix}\n${d.hunks.join('\n')}${d.count > 10 ? `\n      … and ${d.count - 10} more differing line(s)` : ''}`);
+      }
+    }
+  } finally {
+    if (tmp) rmSync(tmp, { recursive: true, force: true });
+  }
+} else {
+  console.log(`capabilities:check — rebuild-diff SKIPPED: --plan ${PLAN_ARG} is not the committed plan (fixture mode); committed artifacts are not re-verified against source.`);
 }
 
 // ---------------------------------------------------------------- report

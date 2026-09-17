@@ -25,7 +25,11 @@
 //
 // Flags:
 //   --plan <path>   plan to read          (default: capabilities.plan.json)
-//   --out <dir>     output directory      (default: repo root; src/capabilities.ts always src/)
+//   --out <dir>     output directory for capabilities.json / capabilities.schema.json
+//                   (default: repo root)
+//   --src-out <p>   output path of src/capabilities.ts (default: src/capabilities.ts).
+//                   capabilities:check uses this to rebuild the registry into a temp dir
+//                   without touching src/
 //   --no-src        do not write src/capabilities.ts (verification aid)
 //
 // Exit codes: 0 ok, 1 plan missing/unreadable or emission failed, 2 malformed plan.
@@ -45,6 +49,7 @@ function argValue(flag, fallback) {
 }
 const PLAN_PATH = path.resolve(ROOT, argValue('--plan', 'capabilities.plan.json'));
 const OUT_DIR = path.resolve(ROOT, argValue('--out', '.'));
+const SRC_OUT = path.resolve(ROOT, argValue('--src-out', 'src/capabilities.ts'));
 const WRITE_SRC = !argv.includes('--no-src');
 
 // ---------------------------------------------------------------- plan
@@ -938,7 +943,8 @@ function writeDataJson(file, doc) {
   writeFileSync(file, head + '  "operations": [\n' + body + '\n  ]\n}\n');
 }
 if (WRITE_SRC) {
-  writeFileSync(path.join(ROOT, 'src', 'capabilities.ts'), registryTs);
+  mkdirSync(path.dirname(SRC_OUT), { recursive: true });
+  writeFileSync(SRC_OUT, registryTs);
 }
 mkdirSync(OUT_DIR, { recursive: true });
 writeDataJson(path.join(OUT_DIR, 'capabilities.json'), dataDoc);
@@ -946,7 +952,7 @@ writeJson(path.join(OUT_DIR, 'capabilities.schema.json'), schemaDoc);
 
 console.log(`capabilities:build — plan ${path.relative(ROOT, PLAN_PATH)} planHash=${planHash}`);
 console.log(`capabilities:build — spec ${plan.spec ? plan.spec.source + ' v' + plan.spec.version : 'unknown'}; rows=${operations.length}; records emitted=${records.length}`);
-console.log(`capabilities:build — wrote ${WRITE_SRC ? 'src/capabilities.ts, ' : ''}${path.relative(ROOT, path.join(OUT_DIR, 'capabilities.json'))}, ${path.relative(ROOT, path.join(OUT_DIR, 'capabilities.schema.json'))}`);
+console.log(`capabilities:build — wrote ${WRITE_SRC ? path.relative(ROOT, SRC_OUT) + ', ' : ''}${path.relative(ROOT, path.join(OUT_DIR, 'capabilities.json'))}, ${path.relative(ROOT, path.join(OUT_DIR, 'capabilities.schema.json'))}`);
 // Evidence line for the operation-conditional field rule (F1): a record may advertise
 // expectedUpdatedAt only when the operation is update-shaped.
 const advertisesExpected = (rec) => JSON.stringify(rec.inputSchema ?? {}).includes('expectedUpdatedAt');
