@@ -30,12 +30,20 @@ describe('a whole Hudu article', () => {
 
   it('does not let literal Markdown characters in prose turn into markup', () => {
     expect(htmlToText(rebuilt)).toContain('*not emphasis*');
+    expect(htmlToText(rebuilt)).toContain('_not italic_');
     expect(htmlToText(rebuilt)).toContain('# not a heading');
+    expect(htmlToText(rebuilt)).toContain('a pipe | in prose');
     expect(rebuilt).not.toMatch(/<em>not emphasis<\/em>/);
+    expect(rebuilt).not.toMatch(/<em>not italic<\/em>/);
   });
 
   it('keeps the table, the code fence and its language', () => {
-    expect(rebuilt).toContain('<table>');
+    // Presence of the element is what matters here, not its attributes -- a replacement
+    // engine emitting <table class="..."> or <table role="table"> loses nothing.
+    expect(rebuilt).toMatch(/<table[\s>]/);
+    // Exact shape IS load-bearing (mirrors test/content/markdown.test.ts:83-87): Hudu's
+    // CODE_LANGUAGE_CLASS_MISSING_ON_CODE is an error-severity content rule that requires
+    // the language-X class to sit on <code> itself, not only on <pre>.
     expect(rebuilt).toMatch(/<code[^>]*class="[^"]*language-bash/);
   });
 
