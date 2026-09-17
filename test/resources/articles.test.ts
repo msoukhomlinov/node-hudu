@@ -6,7 +6,8 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { HuduClient } from '../../src/client.js';
 import { stubFetch, json, empty, clearFetch } from '../helpers.js';
 import type { AuditEvent } from '../../src/types/common.js';
-import { HuduContentLossError, StaleObjectError } from '../../src/errors.js';
+import { HuduConfigError, HuduContentLossError, NotFoundError, StaleObjectError } from '../../src/errors.js';
+import type { Article } from '../../src/types/index.js';
 import { diffArticleRoundTrip, type ArticleHtmlFinding } from '../../src/resources/article-html.js';
 
 // Wraps the REAL diffArticleRoundTrip so every other test in this file still exercises the
@@ -527,14 +528,46 @@ describe('writing an article as Markdown', () => {
     expect(spy.calls[0].init.method).toBe('GET');
   });
 
-  it('allows the same update with allowLossyMarkdown', async () => {
-    const spy = stubFetch((_url, init) => {
-      if (init.method === 'GET') {
-        return json({ article: { ...article, content: '<div class="callout callout-warning"><p>Back up first.</p></div>' } });
-      }
-      return json({ article });
-    });
+  it('issues ONE fetch with allowLossyMarkdown and no expectedUpdatedAt (SANCTIONED change, issue #43 B2 #2)', async () => {
+    // EXPECTATION CHANGED BY DESIGN (issue #43, Batch 2 #2): with the loss guard skipped by
+    // intent and no expectedUpdatedAt to check, the guard's GET would feed nothing, so it is
+    // skipped -- this test used to assert 2 calls (GET + PUT); the GET is gone, so the PUT is
+    // the single fetch. (allowLossyMarkdown WITH expectedUpdatedAt still fetches once, pinned
+    // below.)
+    const spy = stubFetch(() => json({ article }));
     await makeClient().articles.update(1, { content: '## New' }, { format: 'markdown', allowLossyMarkdown: true });
+    expect(spy.calls).toHaveLength(1);
+    expect(spy.calls[0].init.method).toBe('PUT');
+    expect(sentBody(spy).content).toContain('<h2');
+  });
+
+  it('still fetches ONCE when allowLossyMarkdown is set with expectedUpdatedAt (the stale check consumes the fetch)', async () => {
+    const spy = stubFetch((_url, init) => (init.method === 'GET' ? json({ article }) : json({ article })));
+    await makeClient().articles.update(
+      1,
+      { content: '## New' },
+      { format: 'markdown', allowLossyMarkdown: true, expectedUpdatedAt: article.updated_at },
+    );
+    expect(spy.calls).toHaveLength(2); // the stale-check GET, then the PUT
+    expect(spy.calls[0].init.method).toBe('GET');
+    expect(spy.calls[1].init.method).toBe('PUT');
+    expect(sentBody(spy, 1).content).toContain('<h2');
+  });
+
+  it('allowLossyMarkdown suppresses the total-loss case when the guard does run', async () => {
+    // A stored body that converts to EMPTY Markdown is HuduContentLossError (issue #43,
+    // Batch 2 #4) -- and the intent flag applies to it: with expectedUpdatedAt the fetch
+    // still runs (stale check), the guard block is skipped by intent, and the PUT is issued.
+    const spy = stubFetch((_url, init) =>
+      init.method === 'GET'
+        ? json({ article: { ...article, content: '<!-- invisible to the converter -->' } })
+        : json({ article }),
+    );
+    await makeClient().articles.update(
+      1,
+      { content: '## New' },
+      { format: 'markdown', allowLossyMarkdown: true, expectedUpdatedAt: article.updated_at },
+    );
     expect(spy.calls).toHaveLength(2);
     expect(spy.calls[1].init.method).toBe('PUT');
     expect(sentBody(spy, 1).content).toContain('<h2');
@@ -628,5 +661,186 @@ describe('writing an article as Markdown', () => {
     await makeClient().articles.update(1, { content: '<p>x</p>' });
     expect(spy.calls).toHaveLength(1);
     expect(sentBody(spy).content).toBe('<p>x</p>');
+  });
+
+  it('treats format: "html" as the plain path: no guard fetch, no conversion', async () => {
+    // issue #43, Batch 2 #7: an explicit non-Markdown format takes the updateOne path --
+    // the guard fetch never happens and the content is sent byte-for-byte.
+    const spy = stubFetch(() => json({ article }));
+    await makeClient().articles.update(1, { content: '<p>plain</p>' }, { format: 'html' });
+    expect(spy.calls).toHaveLength(1);
+    expect(spy.calls[0].init.method).toBe('PUT');
+    expect(sentBody(spy).content).toBe('<p>plain</p>');
+  });
+
+  it('sends an explicit empty Markdown body as-is (the guard still judges the STORED body)', async () => {
+    // issue #43, Batch 2 #7: '' is typeof string, so the Markdown path runs; the guard
+    // judges the STORED body (probe-confirmed independent of the submitted payload), and
+    // markdownToHtml('') returns '' without throwing -- an explicit empty is the caller's
+    // intent, not a converter accident, so it is written as sent.
+    const spy = stubFetch((_url, init) => (init.method === 'GET' ? json({ article }) : json({ article })));
+    await makeClient().articles.update(1, { content: '' }, { format: 'markdown' });
+    expect(spy.calls).toHaveLength(2);
+    expect(sentBody(spy, 1).content).toBe('');
+  });
+
+  it('still refuses via the stored-body guard when the submitted body is an explicit empty', async () => {
+    // The other side of the '' pin: the guard is about the STORED body, so a lossy stored
+    // body refuses even when the caller explicitly sent an empty body.
+    const spy = stubFetch(() =>
+      json({ article: { ...article, content: '<div class="callout callout-warning"><p>Back up first.</p></div>' } }),
+    );
+    await expect(
+      makeClient().articles.update(1, { content: '' }, { format: 'markdown' }),
+    ).rejects.toThrow(HuduContentLossError);
+    expect(spy.calls).toHaveLength(1); // the GET only; no PUT was issued
+  });
+
+  it('propagates the converter cap error cleanly from the STORED body, before any PUT', async () => {
+    // issue #43, Batch 2 #7: a stored body over the document cap makes htmlToMarkdown throw
+    // HuduConfigError; it must propagate unchanged (NOT re-typed as content loss), with the
+    // PUT never issued -- no half-state.
+    const big = `<p>${'x'.repeat(300 * 1024)}</p>`;
+    const spy = stubFetch(() => json({ article: { ...article, content: big } }));
+    const err = (await makeClient().articles
+      .update(1, { content: '## New' }, { format: 'markdown' })
+      .catch((e: unknown) => e)) as HuduConfigError;
+    expect(err).toBeInstanceOf(HuduConfigError);
+    expect(err.message).toContain('over the');
+    expect(spy.calls).toHaveLength(1); // the guard's GET ran; no PUT was issued
+  });
+
+  it('propagates the converter cap error cleanly from the SUBMITTED body with zero fetches', async () => {
+    // allowLossyMarkdown + no expectedUpdatedAt: the zero-fetch branch converts before
+    // updateOne, so an over-cap submitted body throws with NO request at all.
+    const spy = stubFetch(() => json({ article }));
+    const err = (await makeClient()
+      .articles.update(1, { content: 'x'.repeat(300 * 1024) }, { format: 'markdown', allowLossyMarkdown: true })
+      .catch((e: unknown) => e)) as HuduConfigError;
+    expect(err).toBeInstanceOf(HuduConfigError);
+    expect(err.message).toContain('content.markdownToHtml');
+    expect(spy.calls).toHaveLength(0);
+  });
+
+  it('reports a stored body that converts to EMPTY Markdown as HuduContentLossError (total loss)', async () => {
+    // issue #43, Batch 2 #4: a non-empty stored body that htmlToMarkdown empties used to
+    // surface as HuduConfigError; it is unambiguous total loss, so it is CONTENT_LOSS now,
+    // with the rule-table finding that names exactly this shape (ROUNDTRIP_BODY_EMPTY).
+    const spy = stubFetch(() => json({ article: { ...article, content: '<!-- invisible to the converter -->' } }));
+    const err = (await makeClient()
+      .articles.update(1, { content: '## New' }, { format: 'markdown' })
+      .catch((e: unknown) => e)) as HuduContentLossError;
+    expect(err).toBeInstanceOf(HuduContentLossError);
+    expect(err.findings).toHaveLength(1);
+    expect(err.findings[0]!.code).toBe('ROUNDTRIP_BODY_EMPTY');
+    expect(err.findings[0]!.impact).toBe('content');
+    expect(spy.calls).toHaveLength(1); // the guard's GET ran; no PUT was issued
+  });
+
+  it('names articles.update when the guard fetch 404s (wire)', async () => {
+    // issue #43, Batch 2 #6: the guard fetch is an internal step of the update, so its miss
+    // names the operation the caller invoked in the structured error (pre-fix it named
+    // articles.get).
+    const spy = stubFetch(() => json({ error: 'no' }, 404));
+    const err = (await makeClient()
+      .articles.update(99, { content: '## New' }, { format: 'markdown' })
+      .catch((e: unknown) => e)) as NotFoundError;
+    expect(err).toBeInstanceOf(NotFoundError);
+    expect(err.code).toBe('NOT_FOUND');
+    expect(err.operation).toBe('articles.update');
+    expect(err.message).not.toContain('articles.get');
+    expect(spy.calls).toHaveLength(1); // the guard's GET; no PUT was issued
+  });
+
+  it('names articles.update when the guard fetch answers 200 with an empty body', async () => {
+    // The 200-with-null-body shape (live-verified vendor behaviour) is the second NotFound
+    // source; its message names the operation too.
+    stubFetch(() => json(null));
+    const err = (await makeClient()
+      .articles.update(99, { content: '## New' }, { format: 'markdown' })
+      .catch((e: unknown) => e)) as NotFoundError;
+    expect(err).toBeInstanceOf(NotFoundError);
+    expect(err.operation).toBe('articles.update');
+    expect(err.message).toContain('articles.update');
+    expect(err.message).not.toContain('articles.get');
+  });
+
+  it('audits the guard fetch as articles.update (one entry, correct operation)', async () => {
+    // issue #43, Batch 2 #6: the single audit entry for a failed guard fetch is named after
+    // the operation the caller invoked, not the fetch primitive.
+    const { client, events } = auditedClient();
+    stubFetch(() => json({ error: 'no' }, 404));
+    await expect(
+      client.articles.update(99, { content: '## New' }, { format: 'markdown' }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+    expect(events).toHaveLength(1);
+    expect(events[0]!.operation).toBe('articles.update');
+    expect(events[0]!.outcome).toBe('error');
+  });
+
+  it('dry-run markdown update checks staleness and throws (stricter than the plain path, by design)', async () => {
+    // issue #43, Batch 2 #3: the deliberate divergence documented on update() -- the
+    // Markdown path checks expectedUpdatedAt even in a dry run (and issues the guard's GET),
+    // so a stale expectedUpdatedAt rejects before any description is built.
+    const spy = stubFetch(() => json({ article: { ...article, updated_at: '2030-01-01T00:00:00.000Z' } }));
+    await expect(
+      makeClient().articles.update(1, { content: '## New' }, { format: 'markdown', dryRun: true, expectedUpdatedAt: article.updated_at }),
+    ).rejects.toThrow(StaleObjectError);
+    expect(spy.calls).toHaveLength(1); // the guard's GET ran; no PUT followed
+  });
+
+  it('dry-run HTML update with a stale expectedUpdatedAt neither fetches nor throws (updateOne short-circuits)', async () => {
+    // The other side of the deliberate divergence (issue #43, Batch 2 #3): probe-confirmed
+    // before the change and pinned here -- updateOne's dry-run returns BEFORE its own stale
+    // check, so no GET is issued and no StaleObjectError is thrown.
+    const spy = stubFetch(() => json({ article: { ...article, updated_at: '2030-01-01T00:00:00.000Z' } }));
+    const result = (await makeClient().articles.update(1, { content: '<p>x</p>' }, {
+      dryRun: true,
+      expectedUpdatedAt: article.updated_at,
+    })) as Record<string, unknown>;
+    expect(result.simulated).toBe(true);
+    expect(result.operation).toBe('articles.update');
+    expect(spy.calls).toHaveLength(0); // no GET, no PUT
+  });
+
+  it('types a non-dryRun Markdown create as the plain Article return (issue #43 B2 #5 overload)', async () => {
+    // The create overload set now mirrors update's `dryRun?: false` counterpart, so a
+    // Markdown create without dryRun type-checks to Article with no narrowing. This line is
+    // the compile-time pin; the gate is tsc.
+    const spy = stubFetch(() => json(article, 201));
+    const created: Article = await makeClient().articles.create(
+      { name: 'N', content: '## Setup', folder_id: 5 },
+      { format: 'markdown' },
+    );
+    expect(created.id).toBe(1);
+    expect(spy.calls).toHaveLength(1);
+    expect(spy.calls[0].init.method).toBe('POST');
+  });
+
+  it('describes a Markdown create on dry run: no fetch, no POST, simulated result', async () => {
+    // issue #43, Batch 2 #7: a create has no stored body, so even the Markdown path issues
+    // no fetch on dry run -- the description covers the POST that would carry the
+    // converted HTML payload.
+    const spy = stubFetch(() => json(article, 201));
+    const result = (await makeClient().articles.create(
+      { name: 'N', content: '## Setup', folder_id: 5 },
+      { format: 'markdown', dryRun: true },
+    )) as Record<string, unknown>;
+    expect(result.simulated).toBe(true);
+    expect(result.operation).toBe('articles.create');
+    expect(result.request).toEqual({ method: 'POST', path: '/articles' });
+    expect(spy.calls).toHaveLength(0);
+  });
+
+  it('converts before describing: an over-cap Markdown body throws on a dry-run create', async () => {
+    // The described payload is the CONVERTED one -- the conversion runs before the dry-run
+    // short-circuit, so a body the converter refuses is refused even when nothing is sent
+    // (issue #43, Batch 2 #7).
+    const spy = stubFetch(() => json(article, 201));
+    const err = (await makeClient()
+      .articles.create({ name: 'N', content: 'x'.repeat(300 * 1024) }, { format: 'markdown', dryRun: true })
+      .catch((e: unknown) => e)) as HuduConfigError;
+    expect(err).toBeInstanceOf(HuduConfigError);
+    expect(spy.calls).toHaveLength(0);
   });
 });
