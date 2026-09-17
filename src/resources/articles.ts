@@ -8,8 +8,9 @@ import type { ListParams, Page } from '../pagination.js';
 import type { Article, ArticleCreate, ArticleUpdate } from '../types/index.js';
 import type { ArticleContext, ArticleContextExpand, ArticleIdentifier, ArticleSummary } from '../types/article.js';
 import type { ContentFormat, DryRunResult, HelperOptions, MutationOptions, Resolution, ResolutionCandidate } from '../types/common.js';
-import { HuduConfigError, HuduError, ResolutionError } from '../errors.js';
-import { htmlToMarkdown } from '../content/markdown.js';
+import { HuduConfigError, HuduContentLossError, HuduError, ResolutionError } from '../errors.js';
+import { htmlToMarkdown, markdownToHtml } from '../content/markdown.js';
+import { diffArticleRoundTrip } from './article-html.js';
 import { CompaniesResource, toCompanySummary } from './companies.js';
 import { FoldersResource } from './folders.js';
 
@@ -36,6 +37,8 @@ export interface ArticleSearchOptions {
  */
 export interface WriteOptions {
   dryRun?: boolean;
+  /** Interpret `data.content` as Markdown and convert it to HTML before sending. */
+  format?: ContentFormat;
 }
 
 /** Options for reading a single article. */
@@ -175,15 +178,23 @@ export class ArticlesResource extends BaseResource<Article> {
 
   async create(data: ArticleCreate): Promise<Article>;
   /** Dry-run: describe the create without issuing it. */
-  async create(data: ArticleCreate, opts: { dryRun: true }): Promise<DryRunResult<Article>>;
+  async create(data: ArticleCreate, opts: WriteOptions & { dryRun: true }): Promise<DryRunResult<Article>>;
   async create(data: ArticleCreate, opts?: WriteOptions): Promise<Article | DryRunResult<Article>>;
   /**
    * POST /articles. `{ dryRun: true }` describes the create without issuing it.
    * A create has no prior revision, so there is no `expectedUpdatedAt` guard and
    * the option is not part of this signature.
+   *
+   * `{ format: 'markdown' }` converts `data.content` (Markdown) to HTML before sending.
+   * A create has no STORED body to destroy, so unlike `update` this runs no loss guard
+   * and issues no extra fetch.
    */
   async create(data: ArticleCreate, opts?: WriteOptions): Promise<Article | DryRunResult<Article>> {
-    return this.createOne<Article>(data, undefined, opts);
+    const payload =
+      opts?.format === 'markdown' && typeof data.content === 'string'
+        ? { ...data, content: markdownToHtml(data.content) }
+        : data;
+    return this.createOne<Article>(payload, undefined, opts);
   }
 
   async update(id: number, data: ArticleUpdate): Promise<Article>;
@@ -192,8 +203,45 @@ export class ArticlesResource extends BaseResource<Article> {
   /** Live update, optionally with the opt-in `expectedUpdatedAt` stale guard. */
   async update(id: number, data: ArticleUpdate, opts: MutationOptions & { dryRun?: false }): Promise<Article>;
   async update(id: number, data: ArticleUpdate, opts?: MutationOptions): Promise<Article | DryRunResult<Article>>;
+  /**
+   * PUT /articles/:id. `{ format: 'markdown' }` interprets `data.content` as Markdown.
+   *
+   * Writing Markdown is lossy -- callouts, accordions and task lists have no Markdown
+   * representation -- so before converting anything this asks whether the article
+   * ALREADY STORED survives an HTML -> Markdown -> HTML round trip. That framing catches
+   * destruction of regions the caller never touched, independent of what they submitted.
+   * A round trip that would lose content throws {@link HuduContentLossError} unless the
+   * caller passes `allowLossyMarkdown: true`.
+   *
+   * The guard's fetch is reused for the `expectedUpdatedAt` stale check (at most ONE
+   * extra GET beyond the PUT, and zero when `format` is not `'markdown'` or `data` carries
+   * no `content`).
+   */
   async update(id: number, data: ArticleUpdate, opts?: MutationOptions): Promise<Article | DryRunResult<Article>> {
-    return this.updateOne<Article>(id, data, undefined, opts);
+    if (opts?.format !== 'markdown' || typeof data.content !== 'string') {
+      return this.updateOne<Article>(id, data, undefined, opts);
+    }
+
+    // ONE fetch serves both the loss guard and the stale check. updateOne would issue its
+    // own for expectedUpdatedAt, so the guard is run here and expectedUpdatedAt is consumed
+    // here too -- assertNotStale takes the fetch as a callback, so the same record feeds both.
+    const current = await this.getOne<Article>(id);
+    await this.assertNotStale('articles.update', this.resourcePath, id, opts.expectedUpdatedAt, () =>
+      Promise.resolve(current),
+    );
+
+    if (opts.allowLossyMarkdown !== true && typeof current.content === 'string') {
+      // The question is whether the STORED body survives the round trip: that catches
+      // destruction of the regions the caller never touched, independent of what they sent.
+      const findings = diffArticleRoundTrip(current.content, markdownToHtml(htmlToMarkdown(current.content)));
+      if (findings.some((f) => f.impact === 'content')) {
+        throw new HuduContentLossError('articles.update', findings);
+      }
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructured only to drop it from `rest`
+    const { expectedUpdatedAt: _checked, ...rest } = opts;
+    return this.updateOne<Article>(id, { ...data, content: markdownToHtml(data.content) }, undefined, rest);
   }
 
   async delete(id: number): Promise<void>;

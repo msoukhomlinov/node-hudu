@@ -167,5 +167,13 @@ export interface MutationOptions {
   dryRun?: boolean;
   /** Opt-in stale-object guard: the `updated_at` the caller last read for this record. */
   expectedUpdatedAt?: string;
+  /** Interpret `data.content` as Markdown and convert it to HTML before sending. */
+  format?: ContentFormat;
+  /**
+   * Proceed with a Markdown update that would destroy content in the STORED article.
+   * Read the `findings` on the {@link HuduContentLossError} first -- this is how a
+   * region the caller never edited gets overwritten.
+   */
+  allowLossyMarkdown?: boolean;
 }
 
