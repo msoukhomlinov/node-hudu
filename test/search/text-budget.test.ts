@@ -137,15 +137,17 @@ describe('text budget: per-resource shares (issue #46)', () => {
   });
 
   it('gives an assets-only tenant its whole budget, not half of it', async () => {
-    // No articles at all: `limit(assets)` must be the full bound (the article share is unused), so
-    // roughly 22 of these 40 ~890-byte asset texts stay in memory. Cutting a single-resource tenant
-    // to its own share would keep ~11 and evict ~29.
+    // No articles at all: `limit(assets)` must be the full bound (the article share is unused), so 22
+    // of these 40 ~893-byte asset texts stay in memory - 19.6 KiB held out of 20. An implementation
+    // that cut a resource to its own share instead would keep ~11 and evict ~29, which this exact
+    // count rules out. HEAD satisfies this too (a single resource always had the whole budget): it is
+    // a REVERSIBILITY guard on the borrowing rule, not evidence for the fix.
     const search = engine({ articles: [], assets: assets(40) }, { bounds: bounds(20_000) });
     const result = await search.search('needlebody', { tier: 'index' });
 
     const evicted = result.meta.index.docs.assets?.bodiesEvicted ?? 0;
-    expect(evicted).toBeGreaterThan(10);
-    expect(evicted).toBeLessThanOrEqual(25);
+    expect(evicted).toBe(18);
+    expect(result.meta.index.docs.assets?.indexed).toBe(40);
     expect(result.meta.index.docs.articles?.bodiesEvicted).toBe(0);
     expect(result.meta.index.docs.articles?.indexed).toBe(0);
   });
@@ -153,6 +155,8 @@ describe('text budget: per-resource shares (issue #46)', () => {
   it('evicts an article corpus that overflows its own share, and touches no asset text', async () => {
     // Articles only, over the bound: the single declared long-text source gets the whole budget, so
     // the articles evict THEMSELVES down to it (the borrowing rule must not disable self-eviction).
+    // HEAD satisfies this as well: a guard that the new eligibility predicate did not turn into
+    // "never evict the inserting resource", not evidence for the fix.
     const search = engine({ articles: articles(40), assets: [] }, { bounds: bounds(20_000) });
     const result = await search.search('needlebody', { tier: 'index' });
 
@@ -187,14 +191,26 @@ describe('text budget: per-resource shares (issue #46)', () => {
     const search = engine({ articles: articleRows, assets: assetRows }, { bounds: bounds(), ttlMs: 0 });
     await search.search('needlebody', { tier: 'index' });
 
-    // One article changes and grows (the article walk is watermark-filtered; the asset walk is not).
+    // One article changes and grows ~3.9x (the article walk is watermark-filtered; the asset walk is
+    // not), so the re-insert alone pushes the account back over the 20 KiB bound.
     articleRows[4] = article(5, 3, `${'needlechanged '.repeat(200)}${BIG}`);
     articleRows[4].updated_at = '2026-03-01T00:00:00.000Z';
     const rebuilt = await search.search('needlechanged', { tier: 'index' });
 
-    expect(rebuilt.meta.index.docs.articles?.bodiesIndexed).toBeGreaterThan(0);
+    // The EXACT outcome, not "some body survived": the 10 bodies plus the grown one are ~12 KiB
+    // against a 10 KiB article share, so the two OLDEST article bodies pay for the re-insert and the
+    // other 8 - the changed one among them - stay. On HEAD all 10 bodies are gone (`bodiesIndexed 0`),
+    // so a regression that lost 9 of them must fail this too.
+    expect(rebuilt.meta.index.docs.articles?.bodiesIndexed).toBe(8);
+    expect(rebuilt.meta.index.docs.articles?.bodiesEvicted).toBe(2);
+    expect(rebuilt.meta.index.docs.assets?.bodiesEvicted).toBeGreaterThan(0);
     expect(rebuilt.meta.degraded).toBeNull();
+
+    // ...and the changed article's OWN body is reachable through the index, which `> 0` above
+    // deliberately cannot show. `needlechanged` occurs in that body only.
     const hit = rebuilt.hits.find((candidate) => candidate.resource === 'articles' && candidate.id === 5);
+    expect(hit).toBeDefined();
     expect(hit?.match.fields).toContain('body');
+    expect(hit?.snippet?.text.toLowerCase()).toContain('needlechanged');
   });
 });

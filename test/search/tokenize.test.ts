@@ -231,6 +231,10 @@ describe('text shares per declared long-text source (issue #46)', () => {
   });
 
   it('reclaims an article body inserted last by evicting an ASSET that was borrowing the article share', () => {
+    // HEAD satisfies this one too, and only by index order: the article is inserted LAST, so HEAD's
+    // empty-clock tie-break (lowest index wins) also lands on an asset. Kept as the plain
+    // borrow/reclaim guard - the staged-read test at the end of this block is the same property with
+    // that coincidence removed.
     const index = new KnowledgeIndex({ maxDocBytes: 1024, maxIndexTextBytes: 2000, maxDocs: 10 });
     // Assets alone borrow the unused article share: with no article text, `limit(assets)` is the
     // whole bound, so three 800-byte texts leave the account at 1600 (above the 1000-byte share).
@@ -253,13 +257,16 @@ describe('text shares per declared long-text source (issue #46)', () => {
     index.upsert(assetDoc(3, 800));
 
     // limit(assets) = share + the WHOLE unused article share = 2000 = the bound, so two of the three
-    // texts stay. Cutting the resource to its own 1000-byte share would leave 800.
+    // texts stay. Cutting the resource to its own 1000-byte share would leave 800. HEAD satisfies
+    // this as well: a REVERSIBILITY guard on the borrowing rule, not evidence for the fix.
     expect(index.textBytesHeld).toBe(1600);
     expect(index.textBytesHeld).toBeGreaterThan(index.bounds.maxIndexTextBytes / 2);
     expect(index.evicted).toBe(1);
   });
 
   it('still evicts an article corpus that overflows the bound on its own, and touches no asset text', () => {
+    // HEAD satisfies this as well: a guard that the narrowed predicate did not turn into "never
+    // evict the inserting source", not evidence for the fix.
     const index = new KnowledgeIndex({ maxDocBytes: 1024, maxIndexTextBytes: 2000, maxDocs: 10 });
     index.upsert(articleDoc(1, 800));
     index.upsert(articleDoc(2, 800));
@@ -272,6 +279,9 @@ describe('text shares per declared long-text source (issue #46)', () => {
   });
 
   it('never evicts unreleasable `title` long text, and lets the account stay above the bound when it is the only text left', () => {
+    // HEAD satisfies this as well - it also never evicted an undeclared source. It pins the
+    // undeclared-source branch of the accounting (`creditText` charges it to no share), not the
+    // victim rule.
     const index = new KnowledgeIndex({ maxDocBytes: 1024, maxIndexTextBytes: 100, maxDocs: 10 });
     index.upsert(titleLongDoc(1, 500)); // no separate field string: evicting it would free nothing
     index.upsert(assetDoc(1, 800));
@@ -285,6 +295,8 @@ describe('text shares per declared long-text source (issue #46)', () => {
   });
 
   it('does not double-count a two-phase re-hold, and matches a fresh index built from the same documents', () => {
+    // HEAD satisfies this as well: it pins the `replaceDocs` accounting site of the per-source
+    // account (the fourth site that must move with `textBytes`), not the victim rule.
     const index = new KnowledgeIndex({ maxDocBytes: 1024, maxIndexTextBytes: 2000, maxDocs: 10 });
     index.upsert(articleDoc(1, 800));
     index.upsert(assetDoc(1, 800));
@@ -302,6 +314,8 @@ describe('text shares per declared long-text source (issue #46)', () => {
   });
 
   it('keeps the in-resource LRU order: a touched document is not the next victim', () => {
+    // HEAD satisfies this by design: it pins D5 - the order INSIDE the eligible set is unchanged, so
+    // the rule that decides which over-limit document goes first is the one HEAD already had.
     const index = new KnowledgeIndex({ maxDocBytes: 1024, maxIndexTextBytes: 2400, maxDocs: 10 });
     index.upsert(articleDoc(1, 800));
     index.upsert(articleDoc(2, 800));
@@ -317,5 +331,48 @@ describe('text shares per declared long-text source (issue #46)', () => {
     expect(index.docs[2]?.longText).not.toBeNull();
     expect(index.docs[3]?.longText).not.toBeNull();
     expect(index.evicted).toBe(1);
+  });
+
+  it('pays for an article insert from the OVER-LIMIT source even when the article is what an empty clock would pick', () => {
+    // HEAD's only rule is "least recently read over EVERY evictable document", and a document that
+    // was never read has no clock entry at all (it counts as -1, the oldest possible), so a document
+    // inserted last is the FIRST victim unless something else was read. Here the two surviving assets
+    // are marked read first, exactly as a search hit would mark them (`touchDocument`, the documented
+    // LRU path), so on HEAD the freshly inserted article body is the victim. The share rule must
+    // refuse it: the article holds less than its limit, and the ASSETS are the source over theirs.
+    const index = new KnowledgeIndex({ maxDocBytes: 1024, maxIndexTextBytes: 2000, maxDocs: 10 });
+    index.upsert(assetDoc(1, 800));
+    index.upsert(assetDoc(2, 800));
+    index.upsert(assetDoc(3, 800)); // 2400 > 2000 -> one asset pays, and both rules agree so far
+    expect(index.evicted).toBe(1);
+    expect(index.textBytesHeld).toBe(1600);
+    index.touchDocument('assets', 2);
+    index.touchDocument('assets', 3);
+
+    index.upsert(articleDoc(1, 800)); // 2400 > 2000 again, with the article indexed LAST
+
+    expect(index.docs[3]?.longText).not.toBeNull();
+    expect(index.docs[3]?.fields.body).toBeDefined();
+    expect(index.textBytesHeld).toBe(1600); // the asset paid, and the account is back inside the bound
+    expect(index.docs.filter((doc) => doc.resource === 'assets' && doc.longText === null).length).toBe(2);
+  });
+
+  it('does not evict a body that is inside its share to pay for UNCHARGED `title` text', () => {
+    // `'title'` holds no field string of its own: it is charged to no share and can never be a
+    // victim, which makes it the ONE thing that can leave the account above the bound (the engine
+    // emits no such document - `articleDoc`/`assetDoc` use the two declared sources). A source inside
+    // its limit must not be drained to compensate for text eviction cannot free; HEAD drains it,
+    // because its rule saw only "evictable".
+    const index = new KnowledgeIndex({ maxDocBytes: 1024, maxIndexTextBytes: 2000, maxDocs: 10 });
+    index.upsert(titleLongDoc(1, 1500));
+    // A DIFFERENT id: `articles:1` is already the key of the uncharged document above, and a repeat
+    // key would REPLACE it (releasing its text) instead of adding a second document.
+    index.upsert(articleDoc(2, 900)); // 900 bytes of article body, inside the 1000-byte article share
+
+    // ABOVE the 2000-byte bound, and honestly so: nothing left in the index may be released.
+    expect(index.textBytesHeld).toBe(2400);
+    expect(index.docs[1]?.longText).not.toBeNull();
+    expect(index.docs[1]?.fields.body).toBeDefined();
+    expect(index.evicted).toBe(0);
   });
 });

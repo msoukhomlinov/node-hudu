@@ -60,11 +60,24 @@ export const INDEX_FIELDS: readonly IndexField[] = ['title', 'slug', 'ident', 'c
 export type LongTextSource = 'article.content' | 'asset.fields' | 'title';
 
 /**
+ * The long-text sources that hold NO field string of their own, so their text cannot be released as
+ * a unit and is charged to no share. `'title'` is the only one, and the engine emits neither.
+ */
+type UnbackedLongTextSource = 'title';
+
+/**
  * The field that holds the same string as `longText` for each long-text source. Eviction and
  * re-index must treat the two as one unit: a document cannot hold its body text in a field while
  * claiming no body text is held.
+ *
+ * EXHAUSTIVENESS GUARD, compile time only. The intersection adds a REQUIRED property for every
+ * `LongTextSource` that is neither unbacked nor declared below, so a third source that carries a
+ * field string cannot be declared without this map — and therefore without `LONG_TEXT_SOURCE_COUNT`,
+ * the share divisor — noticing. While the map is complete the intersection is `{}`, so the lookups
+ * below still see the `Partial<Record<LongTextSource, IndexField>>` they need.
  */
-const LONG_TEXT_FIELD: Partial<Record<LongTextSource, IndexField>> = {
+const LONG_TEXT_FIELD: Partial<Record<LongTextSource, IndexField>> &
+  Record<Exclude<LongTextSource, UnbackedLongTextSource | 'article.content' | 'asset.fields'>, never> = {
   'article.content': 'body',
   'asset.fields': 'cfield',
 };
@@ -529,6 +542,12 @@ export class KnowledgeIndex {
    * An undeclared source (`'title'`) holds no field string of its own, so it is charged to NO share:
    * it is never a victim either (`isEvictable`), and letting it widen a limit would hand eviction a
    * budget it can never actually free.
+   *
+   * The per-source floor mirrors the global one (`textBytes` is clamped at 0 on the same release
+   * paths). Both are defensive: with the two accounts moving at the same four sites, a source with
+   * `held(R) > 0` always owns an evictable document, so every release has a charge behind it and the
+   * clamp is not reached. It stays because a NEGATIVE share would silently widen that source's limit
+   * — the failure would be a quieter index, not a louder error.
    */
   private creditText(source: LongTextSource, bytes: number): void {
     if (LONG_TEXT_FIELD[source] === undefined) return;
@@ -644,8 +663,20 @@ export class KnowledgeIndex {
    * its tie-break, so in-resource LRU behaviour and the store-level tests that pin it are intact).
    *
    * The bound is a limit on what eviction may TAKE, not a promise that the account ends inside it:
-   * when no document of an over-limit source remains, the loop stops and the account may stay above
-   * the bound — unreleasable `'title'` text, or a source that cannot be drained any further.
+   * the loop stops as soon as no document of an over-limit source is left, and the account can then
+   * sit above the bound for exactly ONE reason — long text that is charged to no share at all, i.e.
+   * an undeclared source (`'title'`), which holds no field string of its own and therefore cannot be
+   * released as a unit.
+   *
+   * For a DECLARED source that state is unreachable, and by algebra rather than by luck: a source
+   * with `held(R) > 0` always owns an evictable document (only `creditText`/`withoutText` move the
+   * charge, and they move it together with the document's text), so at loop exit every declared
+   * source is either inside its limit or holds nothing — and then
+   * `held(A) + held(B) <= limit(A) + limit(B) <= maxIndexTextBytes`. The unreachability is exactly
+   * what makes stopping safe: the loop can never exit with releasable text still sitting in a source
+   * that is over its limit. It is NOT a licence to read the bound as soft, and the engine cannot
+   * produce the one state that does exceed it: `articleDoc` emits `article.content` and `assetDoc`
+   * emits `asset.fields`, never an unbacked source.
    */
   private ensureTextBudget(): void {
     while (this.textBytes > this.bounds.maxIndexTextBytes) {
