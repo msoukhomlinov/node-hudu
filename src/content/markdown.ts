@@ -40,6 +40,10 @@ function assertNotEmptied(op: string, input: string, output: string): void {
       `${op}: non-empty input converted to empty output. Writing this would replace the stored body with nothing.`,
       {
         operation: op,
+        // Distinct from the sibling cap error's CONFIG_ERROR (issue #43, Batch 2 fix-round
+        // N1): articles.update matches on this code to re-type total loss as CONTENT_LOSS,
+        // so the match survives a message reword.
+        code: 'CONVERSION_EMPTY_OUTPUT',
         suggestedAction: 'Send the content as HTML instead; it holds nothing this converter can represent.',
       },
     );

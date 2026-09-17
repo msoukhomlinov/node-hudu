@@ -255,7 +255,10 @@ export class HuduConfigError extends HuduError {
   constructor(message: string, options?: HuduErrorOptions) {
     super(message, {
       ...options,
-      code: 'CONFIG_ERROR',
+      // Overridable so a single throw site can carry its own code (the converter's
+      // empty-output refusal -> CONVERSION_EMPTY_OUTPUT, issue #43, Batch 2 fix-round N1);
+      // every site that passes no code keeps the default exactly.
+      code: options?.code ?? 'CONFIG_ERROR',
       category: 'validation',
       retryable: false,
       suggestedAction: options?.suggestedAction ?? 'Fix the client configuration; the message names the invalid option.',
@@ -422,14 +425,30 @@ export class PolicyDeniedError extends HuduError {
 }
 
 /**
+ * How many findings the message lists before eliding the rest with "...and N more". The
+ * FULL list is always on `findings` -- the message is the human channel, `findings` the
+ * machine-readable one (issue #43, Batch 2 #9).
+ */
+const MAX_MESSAGE_FINDINGS = 3;
+
+/**
  * A Markdown write would have destroyed content in the STORED article.
  *
  * Thrown by `articles.update` when the current body does not survive an HTML -> Markdown
- * -> HTML round trip. The question it answers is "does what is already there survive",
- * which is why it catches destruction of regions the caller never edited.
+ * -> HTML round trip -- including the total-loss case where a non-empty stored body
+ * converts to EMPTY Markdown (finding code `ROUNDTRIP_BODY_EMPTY`). The question it
+ * answers is "does what is already there survive", which is why it catches destruction
+ * of regions the caller never edited.
  *
  * Presentation-impact findings never cause this throw; they are carried in `findings` so
- * a caller can report them.
+ * a caller can report them, and they are EXCLUDED from the message. When more than
+ * {@link MAX_MESSAGE_FINDINGS} content-impact findings exist, the message lists the first
+ * three and then an elision marker; `findings` keeps the full list.
+ *
+ * Constructing one without a content-impact finding is a caller bug: it throws
+ * `HuduConfigError` rather than produce a message claiming a loss that was not found
+ * (defence in depth -- the call site only throws this error when a content finding
+ * exists).
  */
 export class HuduContentLossError extends HuduError {
   readonly code = 'CONTENT_LOSS';
@@ -437,9 +456,24 @@ export class HuduContentLossError extends HuduError {
 
   constructor(operation: string, findings: readonly ArticleHtmlFinding[]) {
     const lost = findings.filter((f) => f.impact === 'content');
+    // Defence in depth (issue #43, Batch 2 #8): with no content-impact finding the message
+    // would falsely claim a loss that did not happen -- a content-loss error must name at
+    // least one, so a caller bug is reported as one instead of laundered into a lie.
+    if (lost.length === 0) {
+      throw new HuduConfigError(
+        `HuduContentLossError: no content-impact finding to report for ${operation} -- ` +
+          'a loss error requires at least one finding with impact === "content".',
+        { operation },
+      );
+    }
+    // Cap the message (issue #43, Batch 2 #9): at most MAX_MESSAGE_FINDINGS findings inline,
+    // then an elision marker; `findings` keeps the full list for machines.
+    const listed = lost.slice(0, MAX_MESSAGE_FINDINGS);
+    const elision = lost.length - listed.length;
+    const elisionMarker = elision > 0 ? ` ...and ${elision} more` : '';
     super(
       `${operation}: this article cannot be edited as Markdown without losing content. ` +
-        lost.map((f) => `${f.code} (${f.element}): ${f.message}`).join(' ') +
+        listed.map((f) => `${f.code} (${f.element}): ${f.message}`).join(' ') + elisionMarker +
         ' Send the update as HTML to keep everything, or pass allowLossyMarkdown: true to accept the loss.',
       {
         operation,

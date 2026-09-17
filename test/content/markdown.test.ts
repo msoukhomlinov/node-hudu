@@ -63,7 +63,17 @@ describe('htmlToMarkdown', () => {
 
   it('refuses input over the shared 256 KiB document cap instead of truncating', () => {
     const huge = `<p>${'x'.repeat(DEFAULT_MAX_DOC_BYTES + 1)}</p>`;
-    expect(() => htmlToMarkdown(huge)).toThrow(HuduConfigError);
+    // The cap error keeps code CONFIG_ERROR (issue #43, Batch 2 fix-round N1): only the
+    // empty-output refusal moved to CONVERSION_EMPTY_OUTPUT, so the articles.update
+    // total-loss guard still lets this one propagate unchanged.
+    let err: unknown;
+    try {
+      htmlToMarkdown(huge);
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(HuduConfigError);
+    expect((err as HuduConfigError).code).toBe('CONFIG_ERROR');
   });
 
   it('refuses to turn non-empty input into empty output', () => {
@@ -71,6 +81,28 @@ describe('htmlToMarkdown', () => {
     // turndown drops comments entirely (unlike `<script>`, whose text content survives
     // as plain text), so a comment-only document is the case that genuinely empties.
     expect(() => htmlToMarkdown('<!-- just a comment -->')).toThrow(HuduConfigError);
+  });
+
+  it('tags the empty-output refusal with CONVERSION_EMPTY_OUTPUT, distinct from the cap code', () => {
+    // issue #43, Batch 2 fix-round N1: articles.update matches on this code (not the
+    // message text) to re-type total loss as CONTENT_LOSS. Both directions of the seam
+    // share assertNotEmptied, so both must carry the code.
+    let htmlErr: unknown;
+    try {
+      htmlToMarkdown('<!-- just a comment -->');
+    } catch (e) {
+      htmlErr = e;
+    }
+    expect(htmlErr).toBeInstanceOf(HuduConfigError);
+    expect((htmlErr as HuduConfigError).code).toBe('CONVERSION_EMPTY_OUTPUT');
+    let mdErr: unknown;
+    try {
+      markdownToHtml('[foo]: /url "title"');
+    } catch (e) {
+      mdErr = e;
+    }
+    expect(mdErr).toBeInstanceOf(HuduConfigError);
+    expect((mdErr as HuduConfigError).code).toBe('CONVERSION_EMPTY_OUTPUT');
   });
 
   it('returns empty for empty input', () => {

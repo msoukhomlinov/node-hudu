@@ -10,6 +10,7 @@ import {
   UnprocessableEntityError, RateLimitError, ServerError, errorFromStatus, isHuduError,
   ValidationFailedError, parseFieldErrors, UNKNOWN_FIELD, HuduContentLossError,
 } from '../src/errors.js';
+import type { ArticleHtmlFinding } from '../src/resources/article-html.js';
 
 describe('errorFromStatus', () => {
   it('maps 400 -> BadRequestError', () => {
@@ -296,5 +297,53 @@ describe('HuduContentLossError', () => {
     const err = new HuduContentLossError('articles.update', [finding, second]);
     expect(err.message).toContain('ROUNDTRIP_CALLOUT_FLATTENED');
     expect(err.message).toContain('ROUNDTRIP_TASK_STATE_LOST');
+  });
+
+  it('throws HuduConfigError when constructed without a content-impact finding (issue #43 B2 #8)', () => {
+    // Defence in depth: an empty findings list (or a presentation-only one) must not
+    // produce a message claiming a loss that was never found.
+    expect(() => new HuduContentLossError('articles.update', [])).toThrow(HuduConfigError);
+    const presentationOnly = { ...finding, code: 'CALLOUT_TYPE_UNKNOWN' as const, impact: 'presentation' as const };
+    expect(() => new HuduContentLossError('articles.update', [presentationOnly])).toThrow(HuduConfigError);
+  });
+
+  it('lists at most 3 findings in the message and keeps the full list on findings (issue #43 B2 #9)', () => {
+    const five: ArticleHtmlFinding[] = [
+      { code: 'ROUNDTRIP_BODY_EMPTY', severity: 'error', impact: 'content', element: 'body', message: 'loss one' },
+      { code: 'ROUNDTRIP_LINK_LOST', severity: 'error', impact: 'content', element: 'link', message: 'loss two' },
+      { code: 'ROUNDTRIP_CALLOUT_FLATTENED', severity: 'error', impact: 'content', element: 'callout', message: 'loss three' },
+      { code: 'ROUNDTRIP_TASK_STATE_LOST', severity: 'error', impact: 'content', element: 'taskList', message: 'loss four' },
+      { code: 'ROUNDTRIP_IMG_LOST', severity: 'error', impact: 'content', element: 'img', message: 'loss five' },
+    ];
+    const err = new HuduContentLossError('articles.update', five);
+    // The machine-readable channel keeps the full list.
+    expect(err.findings).toHaveLength(5);
+    // The human channel lists the first three, then the elision marker.
+    expect(err.message).toContain('ROUNDTRIP_BODY_EMPTY');
+    expect(err.message).toContain('ROUNDTRIP_LINK_LOST');
+    expect(err.message).toContain('ROUNDTRIP_CALLOUT_FLATTENED');
+    expect(err.message).not.toContain('ROUNDTRIP_TASK_STATE_LOST');
+    expect(err.message).not.toContain('ROUNDTRIP_IMG_LOST');
+    expect(err.message).toContain('...and 2 more');
+    // Exactly three findings listed: the marker counts the elided tail only.
+    expect(err.message.match(/loss [a-z]+/g)).toHaveLength(3);
+  });
+
+  it('excludes presentation-impact findings from the message (issue #43 B2 #10)', () => {
+    // A presentation finding riding alongside a content one is carried on `findings` but
+    // must not appear in the message (the guard itself never throws on a
+    // presentation-only set -- pinned in test/resources/articles.test.ts).
+    const presentation = {
+      code: 'CALLOUT_TYPE_UNKNOWN' as const,
+      severity: 'error' as const,
+      impact: 'presentation' as const,
+      element: 'callout' as const,
+      message: 'cosmetic only',
+    };
+    const err = new HuduContentLossError('articles.update', [finding, presentation]);
+    expect(err.findings).toHaveLength(2);
+    expect(err.message).toContain('ROUNDTRIP_CALLOUT_FLATTENED');
+    expect(err.message).not.toContain('cosmetic only');
+    expect(err.message).not.toContain('CALLOUT_TYPE_UNKNOWN');
   });
 });

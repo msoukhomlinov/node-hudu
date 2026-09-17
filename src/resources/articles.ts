@@ -204,6 +204,8 @@ export class ArticlesResource extends BaseResource<Article> {
   async create(data: ArticleCreate): Promise<Article>;
   /** Dry-run: describe the create without issuing it. */
   async create(data: ArticleCreate, opts: ArticleCreateOptions & { dryRun: true }): Promise<DryRunResult<Article>>;
+  /** Live create, mirroring `update`'s `dryRun?: false` overload: the plain `Article` return. */
+  async create(data: ArticleCreate, opts: ArticleCreateOptions & { dryRun?: false }): Promise<Article>;
   async create(data: ArticleCreate, opts?: ArticleCreateOptions): Promise<Article | DryRunResult<Article>>;
   /**
    * POST /articles. `{ dryRun: true }` describes the create without issuing it.
@@ -236,29 +238,97 @@ export class ArticlesResource extends BaseResource<Article> {
    * ALREADY STORED survives an HTML -> Markdown -> HTML round trip. That framing catches
    * destruction of regions the caller never touched, independent of what they submitted.
    * A round trip that would lose content throws {@link HuduContentLossError} unless the
-   * caller passes `allowLossyMarkdown: true`.
+   * caller passes `allowLossyMarkdown: true`. A stored body that converts to EMPTY
+   * Markdown (non-empty HTML holding nothing the converter can represent) is unambiguous
+   * total loss: it throws the SAME {@link HuduContentLossError} (finding code
+   * `ROUNDTRIP_BODY_EMPTY`), and `allowLossyMarkdown: true` applies to it.
    *
    * The guard's fetch is reused for the `expectedUpdatedAt` stale check (at most ONE
-   * extra GET beyond the PUT, and zero when `format` is not `'markdown'` or `data` carries
-   * no `content`).
+   * extra GET beyond the PUT, and zero when `format` is not `'markdown'`, when `data`
+   * carries no `content`, or when `allowLossyMarkdown: true` is set without an
+   * `expectedUpdatedAt` -- then nothing consumes the fetched record, so the fetch is
+   * skipped). On the plain path with `expectedUpdatedAt`, the stale check still runs
+   * inside `updateOne` and issues its own GET; that GET is not the guard's.
+   *
+   * A miss on the guard fetch surfaces as a `NotFoundError` naming `articles.update`,
+   * not `articles.get`: the fetch is an internal step of the update, and the single audit
+   * entry for it is likewise `articles.update`.
+   *
+   * Dry-run staleness diverges by format, deliberately: the Markdown path checks
+   * `expectedUpdatedAt` (and runs the loss guard) even when `dryRun: true` -- the
+   * unconditional check is the intended, stricter behaviour, and it issues the guard's
+   * GET. The plain path goes straight to `updateOne`, whose dry-run returns BEFORE its
+   * own stale check, so a dry-run HTML update with a stale `expectedUpdatedAt` neither
+   * fetches nor throws.
    */
   async update(id: number, data: ArticleUpdate, opts?: ArticleUpdateOptions): Promise<Article | DryRunResult<Article>> {
     if (opts?.format !== 'markdown' || typeof data.content !== 'string') {
       return this.updateOne<Article>(id, data, undefined, opts);
     }
 
+    // Two distinct reasons the loss guard is skipped (issue #43, Batch 2 #1):
+    const guardSkippedByIntent = opts.allowLossyMarkdown === true; // (a) the caller declared intent to accept loss
+    const staleCheckNeeded = opts.expectedUpdatedAt !== undefined;
+
+    // Zero-fetch case (issue #43, Batch 2 #2): the guard is skipped by intent AND there is
+    // no stale check to run, so the fetched record would feed NOTHING -- skip the fetch.
+    // (The second skip reason -- stored content absent/null/not a string, i.e. nothing to
+    // destroy -- can only be decided after the fetch, because only the fetch reveals the
+    // stored body; it is applied below where the record is in hand.)
+    if (guardSkippedByIntent && !staleCheckNeeded) {
+      return this.updateOne<Article>(id, { ...data, content: markdownToHtml(data.content) }, undefined, opts);
+    }
+
     // ONE fetch serves both the loss guard and the stale check. updateOne would issue its
     // own for expectedUpdatedAt, so the guard is run here and expectedUpdatedAt is consumed
     // here too -- assertNotStale takes the fetch as a callback, so the same record feeds both.
-    const current = await this.getOne<Article>(id);
+    // The fetch is issued AS `articles.update` (not `articles.get`): a miss -- 404 or
+    // 200-with-empty-body -- names the operation the caller invoked, in the structured
+    // error and in the single audit entry for the request (issue #43, Batch 2 #6).
+    const ids = [id];
+    const body = await this.request<unknown>({
+      method: 'GET',
+      path: `/${this.resourcePath}/${id}`,
+      operation: 'articles.update',
+      resourceIds: ids,
+    });
+    const current = this.assertSingleFound<Article>(this.unwrapSingle<Article>(body), 'articles.update', ids);
     await this.assertNotStale('articles.update', this.resourcePath, id, opts.expectedUpdatedAt, () =>
       Promise.resolve(current),
     );
 
-    if (opts.allowLossyMarkdown !== true && typeof current.content === 'string') {
+    // Guard skip reason (b): the stored content is absent/null/not a string -- there is
+    // nothing to destroy, so the round-trip question is moot.
+    if (!guardSkippedByIntent && typeof current.content === 'string') {
       // The question is whether the STORED body survives the round trip: that catches
       // destruction of the regions the caller never touched, independent of what they sent.
-      const findings = diffArticleRoundTrip(current.content, markdownToHtml(htmlToMarkdown(current.content)));
+      let storedMarkdown: string;
+      try {
+        storedMarkdown = htmlToMarkdown(current.content);
+      } catch (err) {
+        // A non-empty stored body that converts to EMPTY Markdown is unambiguous total
+        // loss, not a configuration slip (issue #43, Batch 2 #4): surface it as
+        // CONTENT_LOSS so the caller reads findings, and `allowLossyMarkdown` applies to
+        // it (this whole block is skipped when the flag is set). The match is on the
+        // converter's CONVERSION_EMPTY_OUTPUT code, not the message text (issue #43,
+        // Batch 2 fix-round N1), so the sibling over-cap HuduConfigError (code
+        // CONFIG_ERROR) and every other converter error propagate unchanged.
+        if (err instanceof HuduConfigError && err.code === 'CONVERSION_EMPTY_OUTPUT') {
+          throw new HuduContentLossError('articles.update', [
+            {
+              code: 'ROUNDTRIP_BODY_EMPTY',
+              severity: 'error',
+              impact: 'content',
+              element: 'body',
+              change: 'stripped',
+              message:
+                'the stored body is non-empty but converts to empty Markdown, so a Markdown update would replace it with nothing (total loss)',
+            },
+          ]);
+        }
+        throw err;
+      }
+      const findings = diffArticleRoundTrip(current.content, markdownToHtml(storedMarkdown));
       if (findings.some((f) => f.impact === 'content')) {
         throw new HuduContentLossError('articles.update', findings);
       }
