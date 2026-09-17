@@ -5,7 +5,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { HuduClient } from '../../src/client.js';
 import { stubFetch, json, empty, clearFetch } from '../helpers.js';
-import type { AuditEvent } from '../../src/types/common.js';
+import type { AuditEvent, ContentFormat } from '../../src/types/common.js';
 import { HuduConfigError, HuduContentLossError, NotFoundError, StaleObjectError } from '../../src/errors.js';
 import type { Article } from '../../src/types/index.js';
 import { diffArticleRoundTrip, type ArticleHtmlFinding } from '../../src/resources/article-html.js';
@@ -503,6 +503,19 @@ describe('reading an article as Markdown', () => {
     expect(asRecord(ctx.article).content).toBeUndefined();
   });
 
+  it('ignores a non-markdown format on getContext -- parity with the resolve invalid-value test', async () => {
+    // issue #43 B4 review N2: invalid-value parity was pinned for resolve only; this
+    // mirrors it for getContext (the plain HTML path, no error).
+    stubFetch((url) => {
+      if (url.includes('/articles/1')) return json({ article: { ...article, content: '<h2>Setup</h2>' } });
+      if (url.includes('/companies/7')) return json({ company });
+      return json({ folder });
+    });
+    const bogus = 'pdf' as unknown as ContentFormat;
+    const ctx = await makeClient().articles.getContext(1, { expand: true, format: bogus });
+    expect(asRecord(ctx.article).content).toBe('<h2>Setup</h2>');
+  });
+
   // issue #43 #18: projectContent's behaviour on absent/null/empty content, and its
   // non-mutation property, rested on inspection alone -- the verifying tests were
   // throwaway and deleted before commit (never in git history). Re-added 2026-09-17;
@@ -544,6 +557,34 @@ describe('reading an article as Markdown', () => {
     expect(rest(asRecord(result))).toEqual(rest(asRecord(payload)));
     // ...and the stored (stubbed) record is left untouched by the inspection.
     expect(payload.content).toBe('<h2>Setup</h2><p>Run it.</p>');
+  });
+
+  // issue #43 Batch 4 (#22): `articles.resolve` (the hudu_get_article tool) gains the same
+  // `format` option as `articles.getContext` -- mirrored test-by-test.
+  it('returns HTML from resolve by default -- no conversion, same as getContext', async () => {
+    stubFetch(() => json({ article: { ...article, content: '<h2>Setup</h2>' } }));
+    const result = (await makeClient().articles.resolve(1, { expand: true })) as Record<string, unknown>;
+    expect(result.content).toBe('<h2>Setup</h2>');
+  });
+
+  it('converts inside resolve when expand is set', async () => {
+    stubFetch(() => json({ article: { ...article, content: '<h2>Setup</h2><p>Run it.</p>' } }));
+    const result = (await makeClient().articles.resolve(1, { expand: true, format: 'markdown' })) as Record<string, unknown>;
+    expect(result.content).toBe('## Setup\n\nRun it.');
+  });
+
+  it('leaves the compact resolve tier alone -- it already drops content', async () => {
+    stubFetch(() => json({ article: { ...article, content: '<h2>Setup</h2>' } }));
+    const result = (await makeClient().articles.resolve(1, { format: 'markdown' })) as Record<string, unknown>;
+    expect(result.content).toBeUndefined();
+    expect(result.id).toBe(1);
+  });
+
+  it('ignores a non-markdown format on resolve -- the plain HTML path, the same shape getContext gives', async () => {
+    stubFetch(() => json({ article: { ...article, content: '<h2>Setup</h2>' } }));
+    const bogus = 'pdf' as unknown as ContentFormat;
+    const result = (await makeClient().articles.resolve(1, { expand: true, format: bogus })) as Record<string, unknown>;
+    expect(result.content).toBe('<h2>Setup</h2>');
   });
 });
 

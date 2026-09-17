@@ -75,6 +75,27 @@ export interface ArticleGetOptions {
   format?: ContentFormat;
 }
 
+/**
+ * Options of `articles.resolve`. Extends the shared helper options with the read-side
+ * `format` that `articles.get` and `articles.getContext` already accept. It is kept OFF the
+ * shared {@link HelperOptions} so the other resources' `resolve` tools (companies, assets,
+ * ...) keep their published schema unchanged.
+ */
+export interface ArticleResolveOptions extends HelperOptions {
+  /**
+   * Return `content` as Markdown instead of HTML. Converts the article body only: with
+   * `expand: true` (alone or together with `resolutionDetails`) the full record's `content`
+   * is converted via the shared HTML-to-Markdown converter; the compact `ArticleSummary`
+   * drops `content`, so nothing is converted on the default (compact) path, and no
+   * metadata field (id, name, slug, timestamps, ...) is ever converted. A read destroys
+   * nothing, so no loss is reported here -- the guard belongs on the write path. A
+   * non-Markdown value takes the plain HTML path without error; the MCP boundary
+   * (input schema enum) refuses a value outside 'html' | 'markdown' before it reaches
+   * this call.
+   */
+  format?: ContentFormat;
+}
+
 /** Convert `content` in place when the caller asked for Markdown. */
 function projectContent<T extends { content?: string }>(record: T, format?: ContentFormat): T {
   if (format !== 'markdown' || typeof record.content !== 'string') return record;
@@ -384,19 +405,25 @@ export class ArticlesResource extends BaseResource<Article> {
    */
   async resolve(identifier: number | string | ArticleIdentifier): Promise<ArticleSummary | null>;
   /** `expand: true` returns the full record. */
-  async resolve(identifier: number | string | ArticleIdentifier, opts: HelperOptions & { expand: true }): Promise<Article | null>;
+  async resolve(identifier: number | string | ArticleIdentifier, opts: ArticleResolveOptions & { expand: true }): Promise<Article | null>;
   /** `resolutionDetails: true` returns the `Resolution<T>` wrapper. */
-  async resolve(identifier: number | string | ArticleIdentifier, opts: HelperOptions & { resolutionDetails: true }): Promise<Resolution<ArticleSummary>>;
+  async resolve(identifier: number | string | ArticleIdentifier, opts: ArticleResolveOptions & { resolutionDetails: true }): Promise<Resolution<ArticleSummary>>;
   async resolve(
     identifier: number | string | ArticleIdentifier,
-    opts?: HelperOptions,
+    opts?: ArticleResolveOptions,
   ): Promise<ArticleSummary | Article | null | Resolution<ArticleSummary>>;
   async resolve(
     identifier: number | string | ArticleIdentifier,
-    opts?: HelperOptions,
+    opts?: ArticleResolveOptions,
   ): Promise<ArticleSummary | Article | null | Resolution<ArticleSummary>> {
     const resolution = await this.resolveRecord(identifier, opts);
-    return projectResolution(resolution, opts, toArticleSummary) as ArticleSummary | Article | null | Resolution<ArticleSummary>;
+    // `format` applies to the full record exactly like `articles.get` / `articles.getContext`:
+    // the compact projection drops `content`, so converting before the projection is a no-op on
+    // the default (compact) path -- calls without `format` are byte-identical to the old
+    // behaviour.
+    const resolved =
+      resolution.value === null ? resolution : { ...resolution, value: projectContent(resolution.value, opts?.format) };
+    return projectResolution(resolved, opts, toArticleSummary) as ArticleSummary | Article | null | Resolution<ArticleSummary>;
   }
 
   /**
