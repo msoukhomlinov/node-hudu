@@ -166,7 +166,18 @@
       "name": "opts",
       "type": "object",
       "required": false,
-      "fields": []
+      "fields": [
+        {
+          "name": "format",
+          "type": "string",
+          "enum": [
+            "html",
+            "markdown"
+          ],
+          "typeName": "ContentFormat",
+          "required": false
+        }
+      ]
     },
     "reason": "Dry-run appears once per tool: the injected top-level dry_run is the tool affordance, so the registry opts.dryRun entry is removed as its duplicate."
   },
@@ -365,6 +376,21 @@
         {
           "name": "expectedUpdatedAt",
           "type": "string",
+          "required": false
+        },
+        {
+          "name": "format",
+          "type": "string",
+          "enum": [
+            "html",
+            "markdown"
+          ],
+          "typeName": "ContentFormat",
+          "required": false
+        },
+        {
+          "name": "allowLossyMarkdown",
+          "type": "boolean",
           "required": false
         }
       ]

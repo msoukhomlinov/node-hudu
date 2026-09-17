@@ -230,6 +230,14 @@ function projectItems(it) {
 }
 function jsonType(typeText) {
   let t = typeText.replace(/\s+/g, ' ');
+  // TypeScript's `readonly` array modifier (`readonly string[]`) carries no JSON-Schema-relevant
+  // information — it is a mutability annotation, not part of the element type. Left in place it
+  // defeats the `[]`/`Array<>` branches below (the element text becomes "readonly string", which
+  // resolves to nothing) and the field falls to the unresolved-name fallback instead of being
+  // recognised as an array. Stripping it here, before every other branch, is what lets a
+  // `readonly T[]` parameter (e.g. assets.ts's `include?: readonly string[]`) resolve the same as
+  // `T[]` would.
+  t = t.replace(/^readonly\s+/, '');
   // A single pair of wrapping parens carries no type information: `("A" | "B")` is the same type
   // as "A" | "B", but the wrapped form defeats every branch below and falls to the unresolved
   // fallback (label_types' `("Article" | ...)` union items). Strip the wrap and re-enter the

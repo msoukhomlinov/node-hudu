@@ -15,7 +15,7 @@ Designed from the ground up for building **MCP servers**, integrations, and ETL 
 npm install node-hudu
 ```
 
-> **Node.js ≥ 18** is required (native `fetch`).
+> **Node.js ≥ 24** is required.
 
 ---
 
@@ -203,6 +203,36 @@ editor's compiled schema. `ARTICLE_HTML_PROVENANCE` and the per-rule dates in `A
 are public API so you can check the age before trusting them — especially before letting
 `normalizeArticleHtml` rewrite real articles. Editorial house style (section structure, tone, title
 patterns, list-nesting limits) is deliberately **not** encoded: that belongs to your style guide.
+
+### Reading and writing articles as Markdown
+
+An article body is HTML. `format: 'markdown'` converts it in both directions, which is
+materially cheaper to put in an LLM's context and far more reliable for one to edit.
+
+```ts
+const article = await hudu.articles.get(42, { format: 'markdown' });
+// article.content is Markdown
+
+await hudu.articles.update(42, { content: '## Updated\n\nNew steps.' }, { format: 'markdown' });
+```
+
+A Markdown **write** is refused when the *stored* article would not survive the round
+trip — a callout, an accordion or a task list, none of which Markdown can express. The
+check runs against what is already in Hudu, so it catches destruction of the regions you
+never edited:
+
+```ts
+try {
+  await hudu.articles.update(42, { content: md }, { format: 'markdown' });
+} catch (err) {
+  if (err instanceof HuduContentLossError) {
+    console.error(err.findings.filter((f) => f.impact === 'content'));
+    // Send HTML to keep everything, or pass { allowLossyMarkdown: true } to accept the loss.
+  }
+}
+```
+
+Reads are never refused — a read destroys nothing.
 
 ## Model Context Protocol (MCP) motivation
 

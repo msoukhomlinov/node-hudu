@@ -5,6 +5,29 @@ All notable changes to **node-hudu** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- **Article bodies as Markdown.** `articles.get(id, { format: 'markdown' })` and
+  `getContext(id, { expand: true, format: 'markdown' })` return `content` as Markdown;
+  `articles.create` and `articles.update` accept it with the same option. A new
+  `./content` subpath exports `htmlToMarkdown` and `markdownToHtml` directly.
+- `HuduContentLossError`, thrown when a Markdown update would destroy content in the
+  stored article. Override with `{ allowLossyMarkdown: true }`.
+- `diffArticleRoundTrip` now also reports raw elements, Hudu callouts, Hudu accordions
+  and task-list check state.
+
+### Changed
+
+- **The zero-runtime-dependency property is retired.** `turndown`,
+  `@joplin/turndown-plugin-gfm` and `marked` are now runtime dependencies, confined to
+  `src/content/`. No type of theirs appears in an exported signature. Rationale and the
+  rejected alternatives are recorded in ARCHITECTURE.md §15.1.
+- **Behaviour change:** because `diffArticleRoundTrip` detects four more families, a
+  caller gating a write on `findings.some(f => f.impact === 'content')` may now refuse a
+  write that previously passed. The previous silence was a missed loss, not a permission.
+
 ## [0.6.0] — 2026-09-17
 
 ### Changed
