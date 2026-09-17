@@ -744,6 +744,69 @@ describe('diffArticleRoundTrip', () => {
   });
 });
 
+describe('round-trip diff: the families a Markdown converter destroys', () => {
+  it('reports a raw element that vanished', () => {
+    const sent = '<p>Watch this</p><iframe src="https://video.example.com/1"></iframe>';
+    const f = diffArticleRoundTrip(sent, '<p>Watch this</p>');
+    expect(has(f, 'ROUNDTRIP_RAW_ELEMENT_LOST')).toBe(true);
+    expect(find(f, 'ROUNDTRIP_RAW_ELEMENT_LOST')?.impact).toBe('content');
+    expect(find(f, 'ROUNDTRIP_RAW_ELEMENT_LOST')?.detail).toContain('iframe');
+  });
+
+  it('is symmetric: a raw element appearing from nowhere is also reported', () => {
+    // The contract forbids assuming which side came from Hudu. Both directions are loss.
+    const f = diffArticleRoundTrip('<p>Watch this</p>', '<p>Watch this</p><script>x()</script>');
+    expect(has(f, 'ROUNDTRIP_RAW_ELEMENT_LOST')).toBe(true);
+  });
+
+  it('does not report a raw element that survived', () => {
+    const html = '<p>a</p><iframe src="https://video.example.com/1"></iframe>';
+    expect(has(diffArticleRoundTrip(html, html), 'ROUNDTRIP_RAW_ELEMENT_LOST')).toBe(false);
+  });
+
+  it('reports a callout flattened to plain prose', () => {
+    const sent = '<div class="callout callout-warning"><p>Back up first.</p></div>';
+    const f = diffArticleRoundTrip(sent, '<p>Back up first.</p>');
+    expect(has(f, 'ROUNDTRIP_CALLOUT_FLATTENED')).toBe(true);
+    expect(find(f, 'ROUNDTRIP_CALLOUT_FLATTENED')?.impact).toBe('content');
+  });
+
+  it('tolerates a callout Hudu reordered or restyled', () => {
+    // Hudu legitimately reorders attributes and rewrites class order; that is not loss.
+    const sent = '<div class="callout callout-info"><p>FYI</p></div>';
+    const back = '<div data-type="callout" class="callout-info callout"><p>FYI</p></div>';
+    expect(has(diffArticleRoundTrip(sent, back), 'ROUNDTRIP_CALLOUT_FLATTENED')).toBe(false);
+  });
+
+  it('reports an accordion flattened away', () => {
+    const sent = '<div class="mce-accordion"><summary>More</summary><div class="mce-accordion-body"><p>Detail</p></div></div>';
+    const f = diffArticleRoundTrip(sent, '<p>More</p><p>Detail</p>');
+    expect(has(f, 'ROUNDTRIP_ACCORDION_FLATTENED')).toBe(true);
+    expect(find(f, 'ROUNDTRIP_ACCORDION_FLATTENED')?.impact).toBe('content');
+  });
+
+  it('reports task-list check state that did not survive', () => {
+    const sent = '<ul data-type="taskList"><li data-checked="true">done</li><li data-checked="false">todo</li></ul>';
+    const f = diffArticleRoundTrip(sent, '<ul><li>done</li><li>todo</li></ul>');
+    expect(has(f, 'ROUNDTRIP_TASK_STATE_LOST')).toBe(true);
+    expect(find(f, 'ROUNDTRIP_TASK_STATE_LOST')?.impact).toBe('content');
+  });
+
+  it('does not report a task list whose checked count survived', () => {
+    const sent = '<ul data-type="taskList"><li data-checked="true">done</li></ul>';
+    const back = '<ul data-type="taskList"><li data-checked="true">done</li></ul>';
+    expect(has(diffArticleRoundTrip(sent, back), 'ROUNDTRIP_TASK_STATE_LOST')).toBe(false);
+  });
+
+  it('leaves an ordinary article with only class and style attributes clean', () => {
+    // The load-bearing calibration case: if ordinary articles report content loss, every
+    // Markdown update refuses and the feature is useless.
+    const sent = '<h2 class="text-left">Setup</h2><p style="color:#333">Run it.</p>';
+    const back = '<h2>Setup</h2><p>Run it.</p>';
+    expect(diffArticleRoundTrip(sent, back).filter((f) => f.impact === 'content')).toEqual([]);
+  });
+});
+
 describe('the module is reachable from the package barrels', () => {
   it('is exported from the root barrel and the resources barrel', async () => {
     const root = await import('../../src/index.js');
