@@ -102,6 +102,12 @@ describe('markdownToHtml', () => {
     expect(() => markdownToHtml('| broken |\n| --')).not.toThrow();
   });
 
+  it('refuses to turn non-empty markdown into empty HTML', () => {
+    // A body of only link-reference definitions renders to nothing. Writing it would
+    // replace a stored article with a blank body.
+    expect(() => markdownToHtml('[foo]: /url "title"')).toThrow(HuduConfigError);
+  });
+
   it('returns empty for empty input', () => {
     expect(markdownToHtml('')).toBe('');
   });
