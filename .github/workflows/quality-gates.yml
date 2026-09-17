@@ -1,0 +1,38 @@
+name: Quality gates
+
+# Issue #44 (T7): no CI exists - every gate is manual. This workflow runs the
+# seven existing quality gates (package.json scripts) on every push and PR.
+# Deliberate omissions, per the issue's "minimal" ask:
+#   - no npm cache actions (npm ci runs uncached)
+#   - no concurrency block
+#   - no branch filters, tags, or schedule triggers (all branches, push + PR)
+#   - no secrets, no publish or publish-adjacent steps
+
+on: [push, pull_request]
+
+jobs:
+  quality-gates:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24 # matches engines.node: ">=24.0.0"
+      - name: Install (npm ci)
+        run: npm ci
+      - name: Typecheck (root + examples tsconfigs)
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Test
+        run: npm test
+      - name: Capabilities check
+        run: npm run capabilities:check
+      - name: Catalog check
+        run: npm run catalog:check
+      - name: MCP example check (mcp:project --check-example)
+        run: npm run mcp:project -- --check-example
+      - name: Verify pack
+        run: npm run verify:pack
