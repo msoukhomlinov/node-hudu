@@ -13,6 +13,20 @@ import { htmlToText } from '../../src/search/html.js';
 
 const original = readFileSync(new URL('../fixtures/hudu-article.html', import.meta.url), 'utf8');
 
+/**
+ * Set-equality that itemises the diff on failure. A bare `expect(set).toEqual(set)` prints
+ * both Sets compressed -- at this size that does not say WHICH code is missing or which is
+ * extra (issue #43 #20b).
+ */
+function expectSameCodes(actual: Set<string>, expected: Set<string>, label: string): void {
+  const missing = [...expected].filter((c) => !actual.has(c));
+  const extra = [...actual].filter((c) => !expected.has(c));
+  expect(
+    { missing, extra },
+    `${label}: expected exactly { ${[...expected].sort().join(', ')} } -- missing: [${missing.join(', ')}], extra: [${extra.join(', ')}]`,
+  ).toEqual({ missing: [], extra: [] });
+}
+
 describe('a whole Hudu article', () => {
   const md = htmlToMarkdown(original);
   const rebuilt = markdownToHtml(md);
@@ -26,6 +40,32 @@ describe('a whole Hudu article', () => {
     ]) {
       expect(htmlToText(rebuilt), `lost: ${phrase}`).toContain(phrase);
     }
+  });
+
+  it('keeps each piece of prose in the structure the round trip preserves (collapse-sensitive)', () => {
+    // issue #43 #20c: the phrase test above normalises whitespace, so flattening every
+    // element into a single <p> would still pass it. Probed 2026-09-17 (HTML -> MD ->
+    // HTML of this fixture): the heading, list, table, fence, link and image survive as
+    // structure; the callout, the accordion and the task check-state are the KNOWN
+    // accepted losses, so those phrases legitimately sit in plain <p>/<li> here --
+    // pinned as the collapsed form, not the lost wrapper. Flattening the article
+    // further into one <p> fails this test.
+    expect(rebuilt).toMatch(/<h2[^>]*>[^<]*VPN rollout/); // title stays a heading
+    expect(rebuilt).toMatch(/<li[^>]*>Export the current profile<\/li>/); // items stay list items
+    expect(rebuilt).toMatch(/<li[^>]*>Push the new profile<\/li>/);
+    expect(rebuilt).toMatch(/<td[^>]*>\s*vpn1\s*<\/td>/); // table cells stay cells
+    expect(rebuilt).toMatch(/<td[^>]*>\s*10\.0\.0\.2\s*<\/td>/);
+    expect(rebuilt).toMatch(/<pre>\s*<code[^>]*language-bash[^>]*>sudo systemctl restart openvpn/); // fence stays a fence
+    expect(rebuilt).toMatch(/<a[^>]*>[^<]*runbook[^<]*<\/a>/); // link stays a link
+    expect(rebuilt).toMatch(/<img[^>]*alt="Topology"/); // image + alt stay
+    // The known losses flatten to exactly this form -- prose kept, wrapper gone...
+    expect(rebuilt).toMatch(/<p>Back up the config before you start\.<\/p>/);
+    expect(rebuilt).toMatch(/<p>Advanced options<\/p>/);
+    expect(rebuilt).toMatch(/<p>Set MTU to 1400\.<\/p>/);
+    // ...and no lost wrapper survives in any form.
+    expect(rebuilt).not.toContain('callout-warning');
+    expect(rebuilt).not.toContain('mce-accordion');
+    expect(rebuilt).not.toContain('data-type="taskList"');
   });
 
   it('does not let literal Markdown characters in prose turn into markup', () => {
@@ -50,14 +90,21 @@ describe('a whole Hudu article', () => {
   it('reports exactly the structures Markdown cannot hold, and no others', () => {
     // These three are known, accepted losses -- a Markdown editor cannot express them.
     // The point of the assertion is that the list does not GROW when the engine is swapped.
-    expect(new Set(findings.filter((f) => f.impact === 'content').map((f) => f.code))).toEqual(
+    // expectSameCodes itemises missing/extra on failure (issue #43 #20b).
+    const gotCodes = new Set(findings.filter((f) => f.impact === 'content').map((f) => f.code));
+    expectSameCodes(
+      gotCodes,
       new Set(['ROUNDTRIP_CALLOUT_FLATTENED', 'ROUNDTRIP_ACCORDION_FLATTENED', 'ROUNDTRIP_TASK_STATE_LOST']),
+      'content-impact findings',
     );
   });
 
-  it('is therefore an article the SDK refuses to edit as Markdown by default', () => {
-    expect(findings.some((f) => f.impact === 'content')).toBe(true);
-  });
+  // issue #43 #20a: the former test "is therefore an article the SDK refuses to edit as
+  // Markdown by default" (asserting findings.some(f.impact === 'content')) was logically
+  // subsumed by the findings-set test above -- that exact non-empty three-code set implies
+  // it -- and was dropped 2026-09-17. The refusal itself is pinned in
+  // test/resources/articles.test.ts ("refuses an update when the STORED article would
+  // lose content").
 });
 
 describe('the semantic-stability property', () => {

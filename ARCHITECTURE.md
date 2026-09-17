@@ -9,9 +9,9 @@
 
 ## 1. Overview
 
-`node-hudu` is a **fully-typed**, TypeScript SDK with three runtime dependencies, all confined to the Markdown converter for the
-[Hudu IT documentation API](https://hudu.com). It exposes one resource client class per
-Hudu resource. Resource methods return **plain typed data** (arrays and resource objects)
+`node-hudu` is a **fully-typed** TypeScript SDK for the [Hudu IT documentation API](https://hudu.com); its only
+runtime dependencies are the three confined to the Markdown converter it ships for article bodies. It exposes one
+resource client class per Hudu resource. Resource methods return **plain typed data** (arrays and resource objects)
 — not `this`, not wrappers — so results can be fed directly into zod schemas, MCP tools,
 or downstream ETL without friction.
 
@@ -38,7 +38,7 @@ The SDK is built to be consumed by **Model Context Protocol (MCP) servers**. Con
 | License | MIT |
 | Engines | `node >= 24.0.0` |
 | Module | Dual ESM + CJS via `tsup` (`dist/index.js` ESM, `dist/index.cjs` CJS, `.d.ts`/`.d.cts`) |
-| Runtime deps | **none** (native `fetch`) |
+| Runtime deps | **three**, confined to the Markdown converter (`src/content/`) — see S15.1; HTTP itself uses native `fetch` |
 | Type runtime | TypeScript strict; no `zod` at runtime (`zod` is **never** a dependency; MCP consumers supply their own zod) |
 
 ---

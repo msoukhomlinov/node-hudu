@@ -502,6 +502,49 @@ describe('reading an article as Markdown', () => {
     const ctx = await makeClient().articles.getContext(1, { format: 'markdown' });
     expect(asRecord(ctx.article).content).toBeUndefined();
   });
+
+  // issue #43 #18: projectContent's behaviour on absent/null/empty content, and its
+  // non-mutation property, rested on inspection alone -- the verifying tests were
+  // throwaway and deleted before commit (never in git history). Re-added 2026-09-17;
+  // they pin the INTENT (probed against current src), not observed output.
+  it('handles absent content with format markdown -- no conversion, correct shape', async () => {
+    // JSON.stringify drops the undefined content key: the record the API returned has none.
+    stubFetch(() => json({ article: { ...article, content: undefined } }));
+    const result = await makeClient().articles.get(1, { format: 'markdown' });
+    expect(asRecord(result).content).toBeUndefined();
+    // Still a full article, not a partial one.
+    expect(asRecord(result).id).toBe(1);
+    expect(asRecord(result).name).toBe('VPN Setup');
+  });
+
+  it('handles null content with format markdown -- returned as-is, no crash', async () => {
+    stubFetch(() => json({ article: { ...article, content: null } }));
+    const result = await makeClient().articles.get(1, { format: 'markdown' });
+    expect(asRecord(result).content).toBeNull();
+  });
+
+  it('handles empty-string content with format markdown -- stays empty, no crash', async () => {
+    stubFetch(() => json({ article: { ...article, content: '' } }));
+    const result = await makeClient().articles.get(1, { format: 'markdown' });
+    expect(asRecord(result).content).toBe('');
+  });
+
+  it('projects only content; every other field survives inspection unchanged', async () => {
+    const payload = { ...article, content: '<h2>Setup</h2><p>Run it.</p>' };
+    stubFetch(() => json({ article: payload }));
+    const result = await makeClient().articles.get(1, { format: 'markdown' });
+    // content is projected to Markdown...
+    expect(result.content).toBe('## Setup\n\nRun it.');
+    // ...and the rest of the record is value-identical to what the API returned.
+    const rest = (r: Record<string, unknown>) => {
+      const kept: Record<string, unknown> = { ...r };
+      delete kept.content;
+      return kept;
+    };
+    expect(rest(asRecord(result))).toEqual(rest(asRecord(payload)));
+    // ...and the stored (stubbed) record is left untouched by the inspection.
+    expect(payload.content).toBe('<h2>Setup</h2><p>Run it.</p>');
+  });
 });
 
 describe('writing an article as Markdown', () => {

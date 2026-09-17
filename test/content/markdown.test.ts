@@ -140,6 +140,25 @@ describe('markdownToHtml', () => {
     expect(() => markdownToHtml('[foo]: /url "title"')).toThrow(HuduConfigError);
   });
 
+  it('refuses input over the shared 256 KiB document cap instead of truncating', () => {
+    // Sibling of the htmlToMarkdown cap test above: the markdownToHtml call site of
+    // assertWithinCap had no test of its own (issue #43 #19). The cap applies to the
+    // INPUT document before conversion (src/content/markdown.ts:65); the operation name
+    // in the refusal pins THIS call site against the htmlToMarkdown sibling. Same
+    // refusal, same code.
+    const huge = `# Title\n\n${'x'.repeat(DEFAULT_MAX_DOC_BYTES + 1)}`;
+    let err: unknown;
+    try {
+      markdownToHtml(huge);
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(HuduConfigError);
+    expect((err as HuduConfigError).code).toBe('CONFIG_ERROR');
+    // The op name in the message pins the CALL SITE, not just the shared helper.
+    expect(String((err as HuduConfigError).message)).toContain('content.markdownToHtml');
+  });
+
   it('returns empty for empty input', () => {
     expect(markdownToHtml('')).toBe('');
   });
