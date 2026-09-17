@@ -16,6 +16,7 @@ import {
   HUDU_CALLOUT_TYPES,
 } from '../../src/resources/article-html.js';
 import type { ArticleHtmlFinding } from '../../src/resources/article-html.js';
+import { htmlToMarkdown, markdownToHtml } from '../../src/content/markdown.js';
 
 const codes = (findings: readonly ArticleHtmlFinding[]): string[] => findings.map((f) => f.code);
 const has = (findings: readonly ArticleHtmlFinding[], code: string): boolean => codes(findings).includes(code);
@@ -704,6 +705,75 @@ describe('diffArticleRoundTrip', () => {
     const sent = '<p>Sample: &lt;div&gt;</p><div class="callout callout-info"><p>real</p></div>';
     const readBack = '<p>Sample: &lt;div&gt;</p>&lt;div class="callout callout-info"&gt;&lt;p&gt;real&lt;/p&gt;&lt;/div&gt;';
     expect(has(diffArticleRoundTrip(sent, readBack), 'ROUNDTRIP_CONTENT_ESCAPED')).toBe(true);
+    // F2 regression pin: the increase-direction message must stay byte-for-byte the pre-fix text.
+    expect(find(diffArticleRoundTrip(sent, readBack), 'ROUNDTRIP_CONTENT_ESCAPED')?.message).toBe(
+      'Hudu returned escaped text where markup was submitted: <div>, <p>. The body was stored as text, not HTML.',
+    );
+  });
+  it('flags an escaped prose sample that re-materialises as a live <div> (issue #40, probe escaped_missed_div)', () => {
+    // The materialisation direction the pre-flip guard missed: turndown un-escapes the sample
+    // in the text node and marked re-materialises the raw tag, so the sample the reader is
+    // meant to read and copy becomes live (unclosed) markup — escaped 1->0 while the real
+    // <div> count goes 0->1.
+    const html = '<p>Use &lt;div class="x"&gt; for layout.</p><p>more text</p>';
+    const readBack = markdownToHtml(htmlToMarkdown(html));
+    expect(readBack).toMatch(/<div\b/); // the pipeline premise the guard is closing
+    const finding = find(diffArticleRoundTrip(html, readBack), 'ROUNDTRIP_CONTENT_ESCAPED');
+    expect(finding?.impact).toBe('content');
+  });
+
+  it('flags an escaped table sample that re-materialises as a live table (issue #40, probe escaped_missed_table)', () => {
+    // Sharpest case: the escaped sample now RENDERS as a live table — escaped 2->0 while the
+    // real <table> count goes 0->1.
+    const html = '<p>Example:</p><p>&lt;table&gt;&lt;tr&gt;&lt;td&gt;1&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</p>';
+    const readBack = markdownToHtml(htmlToMarkdown(html));
+    expect(readBack).toMatch(/<table\b/);
+    const finding = find(diffArticleRoundTrip(html, readBack), 'ROUNDTRIP_CONTENT_ESCAPED');
+    expect(finding?.impact).toBe('content');
+  });
+
+  it('reports nothing when the escaped sample sits inside a <pre>/<code> fence (probe escaped_in_pre)', () => {
+    // The fence keeps the raw text and marked re-escapes it inside the code: the escaped
+    // count round-trips identity, so the materialisation flip must not fire here.
+    const html = '<pre><code>&lt;div&gt;</code></pre>';
+    const readBack = markdownToHtml(htmlToMarkdown(html));
+    expect(diffArticleRoundTrip(html, readBack)).toEqual([]);
+  });
+
+  it('does not flag an escaped sample lost from a dropped attribute while the real tag count is unchanged (issue #40 gate pin)', () => {
+    // The flip fires on a decrease only WITH a real-tag count increase for the same name.
+    // An escaped sample sitting in a non-essential attribute the converter drops is churn,
+    // not loss: the real <div> survives with the same count, so the widened gate must not
+    // turn this into a spurious CONTENT_ESCAPED.
+    const sent = '<p>note</p><div class="callout callout-info" data-note="&lt;div&gt;">body</div>';
+    const readBack = '<p>note</p><div class="callout callout-info">body</div>';
+    expect(diffArticleRoundTrip(sent, readBack)).toEqual([]);
+  });
+
+  it('pins the materialisation finding at the escaped sample in the sent body (issue #40, F3 index)', () => {
+    // F3: on the new (materialisation) direction no real tag exists in the sent body, so the
+    // finding is positioned at the escaped entity there (first `&lt;/?div` match) instead of
+    // carrying no index at all.
+    const html = '<p>Use &lt;div class="x"&gt; for layout.</p><p>more text</p>';
+    const readBack = markdownToHtml(htmlToMarkdown(html));
+    const finding = find(diffArticleRoundTrip(html, readBack), 'ROUNDTRIP_CONTENT_ESCAPED');
+    expect(finding?.index).toBeGreaterThanOrEqual(0);
+    expect(finding?.index).toBe(html.indexOf('&lt;div'));
+  });
+
+  it('states observed counts without a mechanism claim for a conflated synthetic pair (issue #40, F2; synthetic)', () => {
+    // F2 count-honesty (F4 absorption): the escaped sample is DROPPED — not materialised — while
+    // an unrelated real <div> appears in the read-back. Counts alone cannot attribute which
+    // happened, so the message must state only the observed counts. Not constructible through
+    // the real md path (turndown un-escapes a prose sample rather than dropping it, so the same
+    // shape materialises instead) — hence a synthetic before/after pair against diffArticleRoundTrip.
+    const sent = '<p>Sample: &lt;div&gt; dropped here</p>';
+    const readBack = '<p>Sample: dropped here</p><div>unrelated live tag</div>';
+    const finding = find(diffArticleRoundTrip(sent, readBack), 'ROUNDTRIP_CONTENT_ESCAPED');
+    expect(finding?.impact).toBe('content');
+    expect(finding?.message).toContain('escaped count 1->0');
+    expect(finding?.message).toContain('real tag count 0->1');
+    expect(finding?.message.toLowerCase()).not.toMatch(/re-materialis|stored as text/);
   });
 
   it('is clean for any byte-identical round trip', () => {

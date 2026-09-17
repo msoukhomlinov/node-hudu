@@ -34,6 +34,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   accordions, task-list check state — and does not cover inline presentational markup
   such as `<kbd>`, `<u>` or `align-*` classes, which the conversion changes or removes
   with zero findings.
+- **The Markdown round-trip guard closes a fail-open direction, and its symmetry contract
+  is amended to a per-code direction policy (issue #40).** `diffArticleRoundTrip` now also
+  reports an escaped prose sample re-materialising as live markup — an escaped-count
+  decrease accompanied by a real-tag count increase for the same element
+  (`ROUNDTRIP_CONTENT_ESCAPED`) — and the blanket "keep every check symmetric" contract
+  line is replaced by the per-code direction policy the contract states for each check.
 
 ## [0.6.0] — 2026-09-17
 

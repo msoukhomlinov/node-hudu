@@ -996,8 +996,42 @@ function unwrapTableScroll(html: string): string {
  * This constraint is load-bearing because its failure mode fails OPEN. An "optimisation"
  * reasoning that Hudu would never return shape X would quietly stop detecting that same
  * shape coming out of a converter, and a caller gating a destructive write on an empty
- * result would be told nothing was lost. Keep every check symmetric in the two arguments
- * and free of assumptions about their provenance.
+ * result would be told nothing was lost.
+ * Every check is free of assumptions about the two arguments' provenance, and each carries a
+ * per-code direction policy stated in its own comment: a check that fires only when a count
+ * or set present in `sent` shrinks in `readBack` is safe ONLY because its missed (increase)
+ * class is normalisation or presentation in BOTH supported contexts — the local Markdown
+ * round trip and the Hudu read-back — and a check whose missed direction can hide content
+ * loss must fire in either direction. As of 2026-09-17 (issue #40), per-code:
+ *
+ * - `diffEscaped` — symmetric (increase: markup stored as escaped text; decrease WITH a
+ *   real-tag count increase: an escaped prose sample re-materialising as live markup; both
+ *   are content loss in either context). Prose samples inside `<pre>`/`<code>` round-trip
+ *   identity (2026-09-17 probes `escaped_missed_div`, `escaped_missed_table`,
+ *   `escaped_in_pre`).
+ * - `diffTables` — structural (table/tr/th/td) DECREASE-only: marked's GFM output preserves
+ *   plain-table row/cell counts (2026-09-17 probe `tables_missed_nothead`); KNOWN GAP:
+ *   merged-cell (rowspan/colspan) tables flatten with the span silently lost (probe
+ *   `tables_missed_merged`) — a spot-check limitation, not a direction. Thead check is DECREASE-only:
+ *   marked adds a thead 0→1 (probe `tables_missed_nothead`) and the editor has no thead node
+ *   (2026-09-16 editor table extension), so the increase direction is normalisation on the
+ *   Markdown path and unreachable on read-back.
+ * - `diffCodeBlocks` — DECREASE-only / before-set-only: every `<code>` and language class in
+ *   `sent` re-materialises (fence info-strings derive from `sent`'s own classes; 2026-09-17
+ *   probes `code_missed`, `code_missed_nolang`); neither the converter nor the editor
+ *   fabricates blocks or languages.
+ * - `diffLinks` — before-set-only (every href in `sent` must come back): marked GFM autolinks
+ *   bare URLs, adding hrefs that were never submitted — the URL text survives, so an added
+ *   href is presentation, not loss (2026-09-17 probe `links_missed_autolink`).
+ * - `diffImages` — DECREASE-only / before-set-only: img and alt are identity-stable across
+ *   the round trip (2026-09-17 probe `images_missed`); `src` is never compared (2026-09-16,
+ *   Hudu rewrites it on write).
+ * - Raw elements, callouts, accordions, task state — symmetric by construction
+ *   (`diffRawElements` / `diffCallouts` / `diffAccordions` / `diffTaskState` — a count
+ *   differing in EITHER direction is loss).
+ *
+ * The fail-open duty is unchanged: a missed direction is safe ONLY because the class it
+ * misses is presentation/normalisation in BOTH contexts, per the per-code lines above.
  *
  * ## What the Markdown loss guard covers — and what it does not
  *
@@ -1013,8 +1047,10 @@ function unwrapTableScroll(html: string): string {
  * `align-*` classes on headings and images are removed — all with zero findings. For
  * example, `<p>Press <kbd>Ctrl</kbd></p>` round-trips to `<p>Press Ctrl</p>` and the
  * guard reports nothing. Image `src` values are never compared (Hudu rewrites them on
- * write), and a bare `<pre>` without a `<code>` child is not counted. A clean result
- * means "no structural loss detected", not "lossless".
+ * write), and a bare `<pre>` without a `<code>` child is not counted. Merged-cell
+ * (rowspan/colspan) tables flatten across the round trip with the span silently lost —
+ * a spot-check limitation, not a direction (2026-09-17 probe `tables_missed_merged`).
+ * A clean result means "no structural loss detected", not "lossless".
  *
  * @param sent the HTML submitted in `content`
  * @param readBack the `content` Hudu returned (remember: the compact article summary drops
@@ -1054,25 +1090,68 @@ export function diffArticleRoundTrip(sent: string, readBack: string): ArticleHtm
  * Markup that came back as escaped text (`&lt;table&gt;`) was not stored as markup.
  *
  * An article about HTML legitimately contains escaped samples of the very elements it also
- * uses for real, so the mere presence of `&lt;div` proves nothing: only an INCREASE in a
- * name's escaped count is evidence that real markup was escaped on this trip. Counting
- * (rather than blanking code regions) also covers a sample written outside `<pre>`.
+ * uses for real, so the mere presence of `&lt;div` proves nothing: a name is only in scope
+ * when a real `<name` tag exists in either argument. Direction policy (2026-09-17, issue
+ * #40): the escaped count is compared in BOTH directions, because both directions hide
+ * content loss — an INCREASE means real markup was stored as escaped text, and a DECREASE
+ * accompanied by a real-tag count increase for the same name means an escaped prose sample
+ * re-materialised as live markup (2026-09-17 probes `escaped_missed_div`,
+ * `escaped_missed_table`). Prose samples inside `<pre>`/`<code>` round-trip identity
+ * (probe `escaped_in_pre`), so a bare decrease never fires. Counting (rather than blanking
+ * code regions) also covers a sample written outside `<pre>`.
  */
 function diffEscaped(before: string, after: string, add: Add): void {
   const escapedCount = (html: string, name: string): number =>
     (html.match(new RegExp(`&lt;/?${name}\\b`, 'gi')) ?? []).length;
+  const realCount = (html: string, name: string): number =>
+    (html.match(new RegExp(`<${name}\\b`, 'gi')) ?? []).length;
+  const scoped = new Set<string>();
+  for (const m of before.matchAll(/&lt;\/?([a-z][a-z0-9-]*)\b/gi)) scoped.add((m[1] ?? '').toLowerCase());
+  for (const m of after.matchAll(/&lt;\/?([a-z][a-z0-9-]*)\b/gi)) scoped.add((m[1] ?? '').toLowerCase());
   const escaped = new Set<string>();
-  for (const m of after.matchAll(/&lt;\/?([a-z][a-z0-9-]*)\b/gi)) {
-    const name = (m[1] ?? '').toLowerCase();
-    if (!new RegExp(`<${name}\\b`, 'i').test(before)) continue;
-    if (escapedCount(after, name) > escapedCount(before, name)) escaped.add(name);
+  const increased = new Set<string>();
+  const decreased = new Set<string>();
+  const escPair = new Map<string, [number, number]>();
+  for (const name of scoped) {
+    if (!new RegExp(`<${name}\\b`, 'i').test(before) && !new RegExp(`<${name}\\b`, 'i').test(after)) continue;
+    const a = escapedCount(before, name);
+    const b = escapedCount(after, name);
+    if (b > a || (a > b && realCount(after, name) > realCount(before, name))) {
+      escaped.add(name);
+      escPair.set(name, [a, b]);
+      (b > a ? increased : decreased).add(name);
+    }
   }
   if (escaped.size > 0) {
     const names = [...escaped];
+    if (decreased.size === 0) {
+      // Increase-only direction: byte-for-byte the pre-fix message and index (F2 pin).
+      add(
+        'ROUNDTRIP_CONTENT_ESCAPED',
+        `Hudu returned escaped text where markup was submitted: ${names.map((n) => `<${n}>`).join(', ')}. The body was stored as text, not HTML.`,
+        { index: before.indexOf(`<${names[0]}`), detail: names },
+      );
+      return;
+    }
+    // Materialisation direction (F2/F3): position the finding at the escaped sample in `before`
+    // (the real tag it points at does not exist there), and state ONLY the observed counts — a
+    // sample dropped while unrelated real tags were added is indistinguishable from one that
+    // re-materialised by count alone (F4), so no mechanism is claimed.
+    const countNote = (n: string): string => {
+      const [a, b] = escPair.get(n) ?? [0, 0];
+      const real = decreased.has(n)
+        ? `, real tag count ${realCount(before, n)}->${realCount(after, n)}`
+        : '';
+      return `<${n}> (escaped count ${a}->${b}${real})`;
+    };
+    const sentences = [
+      ...[...increased].map((n) => `Escaped text increased for ${countNote(n)}`),
+      `Escaped sample count decreased while live tags increased in the read-back: ${[...decreased].map(countNote).join(', ')}`,
+    ];
     add(
       'ROUNDTRIP_CONTENT_ESCAPED',
-      `Hudu returned escaped text where markup was submitted: ${names.map((n) => `<${n}>`).join(', ')}. The body was stored as text, not HTML.`,
-      { index: before.indexOf(`<${names[0]}`), detail: names },
+      `${sentences.join('. ')}. Content may have been lost — verify before accepting the write.`,
+      { index: before.search(new RegExp(`&lt;/?${[...decreased][0]}\\b`, 'i')), detail: names },
     );
   }
 }
@@ -1082,6 +1161,14 @@ function diffEscaped(before: string, after: string, add: Add): void {
  * known Tiptap behaviour (its schema has no `thead` node) and is PRESENTATION — the header
  * cells, which carry the semantics and the styling, survive.
  * Evidence: 2026-09-16, editor table extension.
+ *
+ * Direction policy (2026-09-17, issue #40): structural (table/tr/th/td) DECREASE-only — marked's
+ * GFM output preserves plain-table row/cell counts (2026-09-17 probe `tables_missed_nothead`);
+ * KNOWN GAP: merged-cell (rowspan/colspan) tables flatten with the span silently lost (probe
+ * `tables_missed_merged`) — a spot-check limitation, not a direction. Thead check is
+ * DECREASE-only: marked adds a thead 0→1 (probe `tables_missed_nothead`) and the editor has no
+ * thead node, so the increase direction is normalisation on the Markdown path and unreachable
+ * on read-back.
  */
 function diffTables(before: string, after: string, add: Add): void {
   const counts = (html: string) => ({
@@ -1111,7 +1198,12 @@ function diffTables(before: string, after: string, add: Add): void {
   }
 }
 
-/** Code blocks: block count first, then the language classes (rule 2's failure mode). */
+/**
+ * Code blocks: block count first, then the language classes (rule 2's failure mode).
+ * DECREASE-only / before-set-only: every `<code>` and language class in `sent` re-materialises
+ * (fence info-strings derive from `sent`'s own classes; 2026-09-17 probes `code_missed`,
+ * `code_missed_nolang`); neither the converter nor the editor fabricates blocks or languages.
+ */
 function diffCodeBlocks(before: string, after: string, add: Add): void {
   const sentBlocks = countTags(before, 'code');
   const backBlocks = countTags(after, 'code');
@@ -1146,6 +1238,10 @@ function diffCodeBlocks(before: string, after: string, add: Add): void {
  * Links: every href submitted must come back (order and surrounding markup may differ).
  * The change kind distinguishes a dropped anchor from an anchor that kept its text and
  * lost its href, because the two are different repairs.
+ *
+ * Direction policy (2026-09-17, issue #40): before-set-only — every href in `sent` must come
+ * back; marked GFM autolinks bare URLs, adding hrefs that were never submitted (the URL text
+ * survives, so an added href is presentation, not loss; 2026-09-17 probe `links_missed_autolink`).
  */
 function diffLinks(before: string, after: string, findings: ArticleHtmlFinding[], source: string): void {
   const hrefs = (html: string): string[] => {
@@ -1172,6 +1268,10 @@ function diffLinks(before: string, after: string, findings: ArticleHtmlFinding[]
 /**
  * Images: presence and `alt` only. `src` is deliberately not compared — Hudu rewrites it to
  * `/public_photo/<slug>` on write, which is expected behaviour, not corruption.
+ *
+ * Direction policy (2026-09-17, issue #40): DECREASE-only / before-set-only — img and alt are
+ * identity-stable across the round trip (2026-09-17 probe `images_missed`); `src` is never
+ * compared (2026-09-16, Hudu rewrites it on write).
  */
 function diffImages(before: string, after: string, add: Add): void {
   const sentImgs = countTags(before, 'img');
@@ -1231,6 +1331,10 @@ function countCallouts(html: string): number {
   return count;
 }
 
+/**
+ * Symmetric by construction -- a callout count differing in EITHER direction is reported,
+ * because this function may not assume which argument came from Hudu.
+ */
 function diffCallouts(before: string, after: string, add: Add): void {
   const b = countCallouts(before);
   const a = countCallouts(after);
@@ -1265,6 +1369,10 @@ function countAccordions(html: string): number {
   return count;
 }
 
+/**
+ * Symmetric by construction -- an accordion count differing in EITHER direction is reported,
+ * because this function may not assume which argument came from Hudu.
+ */
 function diffAccordions(before: string, after: string, add: Add): void {
   const b = countAccordions(before);
   const a = countAccordions(after);
@@ -1309,6 +1417,10 @@ function countChecked(html: string): number {
   return count;
 }
 
+/**
+ * Symmetric by construction -- a task item or checked count differing in EITHER direction is
+ * reported, because this function may not assume which argument came from Hudu.
+ */
 function diffTaskState(before: string, after: string, add: Add): void {
   const items = { b: countTaskItems(before), a: countTaskItems(after) };
   const checked = { b: countChecked(before), a: countChecked(after) };

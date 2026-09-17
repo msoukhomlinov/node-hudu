@@ -244,8 +244,10 @@ markup: `<kbd>` is dropped, `<u>` is dropped, `<s>` becomes `<del>`, and `align-
 classes on headings and images are removed — all with zero findings. For example,
 `<p>Press <kbd>Ctrl</kbd></p>` round-trips to `<p>Press Ctrl</p>` and the guard
 reports nothing. Image `src` values are never compared (Hudu rewrites them on write),
-and a bare `<pre>` without a `<code>` child is not counted. A clean result means
-"no structural loss detected", not "lossless".
+and a bare `<pre>` without a `<code>` child is not counted. Merged-cell
+(rowspan/colspan) tables flatten across the round trip with the span silently lost —
+a spot-check limitation, not a direction (2026-09-17 probe `tables_missed_merged`).
+A clean result means "no structural loss detected", not "lossless".
 
 Reads are never refused — a read destroys nothing.
 
