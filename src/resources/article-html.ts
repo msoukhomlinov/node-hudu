@@ -143,6 +143,10 @@ export const ARTICLE_HTML_CODES = [
   'ROUNDTRIP_LINK_LOST',
   'ROUNDTRIP_IMG_LOST',
   'ROUNDTRIP_IMG_ALT_LOST',
+  'ROUNDTRIP_RAW_ELEMENT_LOST',
+  'ROUNDTRIP_CALLOUT_FLATTENED',
+  'ROUNDTRIP_ACCORDION_FLATTENED',
+  'ROUNDTRIP_TASK_STATE_LOST',
 ] as const;
 
 /** One of {@link ARTICLE_HTML_CODES}. */
@@ -257,6 +261,10 @@ export const ARTICLE_HTML_RULES: Readonly<Record<ArticleHtmlCode, ArticleHtmlRul
   ROUNDTRIP_LINK_LOST: { severity: 'error', impact: 'content', element: 'link', change: 'stripped', verifiedOn: '2026-09-16' },
   ROUNDTRIP_IMG_LOST: { severity: 'error', impact: 'content', element: 'img', change: 'stripped', verifiedOn: '2026-09-16' },
   ROUNDTRIP_IMG_ALT_LOST: { severity: 'error', impact: 'content', element: 'img', change: 'attribute-lost', verifiedOn: '2026-09-16' },
+  ROUNDTRIP_RAW_ELEMENT_LOST: { severity: 'error', impact: 'content', element: 'markup', change: 'stripped', verifiedOn: '2026-09-17' },
+  ROUNDTRIP_CALLOUT_FLATTENED: { severity: 'error', impact: 'content', element: 'callout', change: 'restructured', verifiedOn: '2026-09-17' },
+  ROUNDTRIP_ACCORDION_FLATTENED: { severity: 'error', impact: 'content', element: 'accordion', change: 'restructured', verifiedOn: '2026-09-17' },
+  ROUNDTRIP_TASK_STATE_LOST: { severity: 'error', impact: 'content', element: 'taskList', change: 'attribute-lost', verifiedOn: '2026-09-17' },
 };
 
 /**
@@ -965,10 +973,10 @@ function unwrapTableScroll(html: string): string {
  * list, never a verdict: the caller decides what is acceptable — for example, refusing a
  * lossy transform only when `findings.some((f) => f.impact === 'content')`.
  *
- * This is a lightweight spot-check across the four families that actually break in
- * practice — tables, code blocks, links, images — not a byte diff. Hudu legitimately
- * reformats whitespace, reorders attributes and drops a `<thead>` wrapper, and none of
- * that costs the reader anything.
+ * This is a lightweight spot-check across the families that actually break in practice --
+ * tables, code blocks, links, images, raw elements, callouts, accordions and task-list
+ * state -- not a byte diff. Hudu legitimately reformats whitespace, reorders attributes
+ * and drops a `<thead>` wrapper, and none of that costs the reader anything.
  *
  * The `src` rewrite to `/public_photo/<slug>` is **expected behaviour**: on write, Hudu
  * turns embedded and remote images into PublicPhoto records and rewrites the reference.
@@ -1018,6 +1026,10 @@ export function diffArticleRoundTrip(sent: string, readBack: string): ArticleHtm
   diffCodeBlocks(before, after, add);
   diffLinks(before, after, findings, before);
   diffImages(before, after, add);
+  diffRawElements(before, after, add);
+  diffCallouts(before, after, add);
+  diffAccordions(before, after, add);
+  diffTaskState(before, after, add);
   return findings;
 }
 
@@ -1163,4 +1175,133 @@ function diffImages(before: string, after: string, add: Add): void {
       detail: [alt],
     });
   }
+}
+
+/**
+ * Elements Markdown cannot represent at all. Counted, not matched positionally: Hudu and
+ * a converter both reorder freely, and a count change is the loss that matters.
+ *
+ * Symmetric by construction -- a count differing in EITHER direction is reported, because
+ * this function may not assume which argument came from Hudu.
+ */
+const RAW_ELEMENTS = [
+  'script', 'style', 'iframe', 'noscript', 'svg', 'math', 'form', 'input', 'button',
+  'select', 'textarea', 'object', 'embed', 'video', 'audio', 'canvas',
+] as const;
+
+function diffRawElements(before: string, after: string, add: Add): void {
+  for (const tag of RAW_ELEMENTS) {
+    const b = countTags(before, tag);
+    const a = countTags(after, tag);
+    if (b === a) continue;
+    add(
+      'ROUNDTRIP_RAW_ELEMENT_LOST',
+      `<${tag}> count changed across the round trip (${b} -> ${a}). Markdown cannot represent this element, so a transform through it silently drops the whole node.`,
+      { index: before.search(new RegExp(`<${tag}\\b`, 'i')), detail: [tag] },
+    );
+  }
+}
+
+/**
+ * Callouts: counted by the base `callout` class token, order-independent (Hudu legitimately
+ * reorders classes and attributes on save; that is not loss).
+ */
+function countCallouts(html: string): number {
+  let count = 0;
+  for (const tag of openTags(html, 'div')) {
+    if (hasClass(classOf(tag.attrs), 'callout')) count += 1;
+  }
+  return count;
+}
+
+function diffCallouts(before: string, after: string, add: Add): void {
+  const b = countCallouts(before);
+  const a = countCallouts(after);
+  if (b === a) return;
+  add(
+    'ROUNDTRIP_CALLOUT_FLATTENED',
+    `Callout count changed across the round trip (${b} -> ${a}). A flattened callout keeps its words and loses the signal that they are a warning.`,
+    { index: indexOfTag(before, 'div', (t) => hasClass(classOf(t.attrs), 'callout')), detail: [`callout: ${b} -> ${a}`] },
+  );
+}
+
+/**
+ * Whether an already-scanned `<div>`/`<details>` tag counts as an accordion: a `<div>` needs
+ * the exact `mce-accordion` class token, and a `<details>` counts either way (Hudu's own
+ * check only warns when it lacks the class, it does not disqualify the element). One
+ * predicate checked once per tag -- rather than two additive passes -- so there is no way for
+ * a details element to be matched by both and double-counted.
+ *
+ * The exact-token match matters: a body wrapper's `mce-accordion-body` class must never be
+ * mistaken for a second accordion, which is exactly what a `\bmce-accordion\b` SUBSTRING test
+ * would do (`-` is a non-word character, so that word boundary sits INSIDE `-body` too).
+ */
+function isAccordionTag(tag: OpenTag): boolean {
+  return hasClass(classOf(tag.attrs), 'mce-accordion') || /^<details\b/i.test(tag.tag);
+}
+
+function countAccordions(html: string): number {
+  let count = 0;
+  for (const tag of openTags(html, '(?:div|details)')) {
+    if (isAccordionTag(tag)) count += 1;
+  }
+  return count;
+}
+
+function diffAccordions(before: string, after: string, add: Add): void {
+  const b = countAccordions(before);
+  const a = countAccordions(after);
+  if (b === a) return;
+  add(
+    'ROUNDTRIP_ACCORDION_FLATTENED',
+    `Accordion count changed across the round trip (${b} -> ${a}). Flattening one reveals collapsed content and loses the summary/body split.`,
+    { index: indexOfTag(before, '(?:div|details)', isAccordionTag), detail: [`accordion: ${b} -> ${a}`] },
+  );
+}
+
+/**
+ * Task-list check state: item count and checked count. Read through `attrOf` (quote-aware,
+ * and bounded by the tag's real end) rather than a `[^>]*`-spanning regex, so a preceding
+ * attribute's `>` or a single-quoted `data-checked`/`type` value cannot hide the state.
+ *
+ * `data-checked` is compared case-insensitively (`data-checked="TRUE"` still counts, and
+ * still counts as checked) -- Hudu itself always emits lower case, but the brief's own regex
+ * carried `/i`, and a value comparison that silently stopped matching on case would be exactly
+ * the kind of silent miss this guard exists to prevent.
+ */
+function countTaskItems(html: string): number {
+  let count = 0;
+  for (const tag of openTags(html, 'li')) {
+    const state = attrOf(tag.attrs, 'data-checked')?.toLowerCase();
+    if (state === 'true' || state === 'false') count += 1;
+  }
+  for (const tag of openTags(html, 'input')) {
+    if (attrOf(tag.attrs, 'type') === 'checkbox') count += 1;
+  }
+  return count;
+}
+
+function countChecked(html: string): number {
+  let count = 0;
+  for (const tag of openTags(html, 'li')) {
+    if (attrOf(tag.attrs, 'data-checked')?.toLowerCase() === 'true') count += 1;
+  }
+  for (const tag of openTags(html, 'input')) {
+    if (attrOf(tag.attrs, 'type') === 'checkbox' && attrOf(tag.attrs, 'checked') !== undefined) count += 1;
+  }
+  return count;
+}
+
+function diffTaskState(before: string, after: string, add: Add): void {
+  const items = { b: countTaskItems(before), a: countTaskItems(after) };
+  const checked = { b: countChecked(before), a: countChecked(after) };
+  if (items.b === items.a && checked.b === checked.a) return;
+  add(
+    'ROUNDTRIP_TASK_STATE_LOST',
+    `Task-list state changed across the round trip (${items.b} item(s)/${checked.b} checked -> ${items.a}/${checked.a}). Which steps are done is content, not decoration.`,
+    {
+      index: indexOfTag(before, 'li', (t) => attrOf(t.attrs, 'data-checked') !== undefined),
+      detail: [`taskItems: ${items.b} -> ${items.a}; checked: ${checked.b} -> ${checked.a}`],
+    },
+  );
 }

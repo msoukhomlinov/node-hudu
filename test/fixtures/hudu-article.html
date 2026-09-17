@@ -1,0 +1,17 @@
+<h2>VPN rollout</h2>
+<p>Run the steps below. Literal Markdown characters must survive: *not emphasis*, _not italic_, # not a heading, and a pipe | in prose.</p>
+<div class="callout callout-warning"><p>Back up the config before you start.</p></div>
+<ul data-type="taskList">
+  <li data-checked="true">Export the current profile</li>
+  <li data-checked="false">Push the new profile</li>
+</ul>
+<div class="mce-accordion">
+  <summary>Advanced options</summary>
+  <div class="mce-accordion-body"><p>Set <kbd>MTU</kbd> to 1400.</p></div>
+</div>
+<table>
+  <thead><tr><th>Host</th><th>IP</th></tr></thead>
+  <tbody><tr><td>vpn1</td><td>10.0.0.1</td></tr><tr><td>vpn2</td><td>10.0.0.2</td></tr></tbody>
+</table>
+<pre><code class="language-bash">sudo systemctl restart openvpn</code></pre>
+<p>See the <a href="https://example.com/kb/vpn">runbook</a> and <img src="/public_photo/topology-9f2" alt="Topology"> for detail.</p>

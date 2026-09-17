@@ -7,6 +7,7 @@
  * `suggestedAction`, `correlationId` and `operation` where they are known.
  */
 import { isRecord } from './utils.js';
+import type { ArticleHtmlFinding } from './resources/article-html.js';
 
 export type ErrorCategory =
   | 'auth'
@@ -417,6 +418,36 @@ export class PolicyDeniedError extends HuduError {
       retryable: false,
       suggestedAction: options?.suggestedAction ?? 'Bound the operation with explicit ids, or run it with { dryRun: true } first.',
     });
+  }
+}
+
+/**
+ * A Markdown write would have destroyed content in the STORED article.
+ *
+ * Thrown by `articles.update` when the current body does not survive an HTML -> Markdown
+ * -> HTML round trip. The question it answers is "does what is already there survive",
+ * which is why it catches destruction of regions the caller never edited.
+ *
+ * Presentation-impact findings never cause this throw; they are carried in `findings` so
+ * a caller can report them.
+ */
+export class HuduContentLossError extends HuduError {
+  readonly code = 'CONTENT_LOSS';
+  readonly findings: readonly ArticleHtmlFinding[];
+
+  constructor(operation: string, findings: readonly ArticleHtmlFinding[]) {
+    const lost = findings.filter((f) => f.impact === 'content');
+    super(
+      `${operation}: this article cannot be edited as Markdown without losing content. ` +
+        lost.map((f) => `${f.code} (${f.element}): ${f.message}`).join(' ') +
+        ' Send the update as HTML to keep everything, or pass allowLossyMarkdown: true to accept the loss.',
+      {
+        operation,
+        suggestedAction:
+          'Send the update as HTML, or pass { allowLossyMarkdown: true } having read the findings on this error.',
+      },
+    );
+    this.findings = findings;
   }
 }
 

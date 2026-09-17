@@ -7,8 +7,10 @@ import { BaseResource } from './base.js';
 import type { ListParams, Page } from '../pagination.js';
 import type { Article, ArticleCreate, ArticleUpdate } from '../types/index.js';
 import type { ArticleContext, ArticleContextExpand, ArticleIdentifier, ArticleSummary } from '../types/article.js';
-import type { DryRunResult, HelperOptions, MutationOptions, Resolution, ResolutionCandidate } from '../types/common.js';
-import { HuduConfigError, HuduError, ResolutionError } from '../errors.js';
+import type { ContentFormat, DryRunResult, HelperOptions, MutationOptions, Resolution, ResolutionCandidate } from '../types/common.js';
+import { HuduConfigError, HuduContentLossError, HuduError, ResolutionError } from '../errors.js';
+import { htmlToMarkdown, markdownToHtml } from '../content/markdown.js';
+import { diffArticleRoundTrip } from './article-html.js';
 import { CompaniesResource, toCompanySummary } from './companies.js';
 import { FoldersResource } from './folders.js';
 
@@ -35,6 +37,48 @@ export interface ArticleSearchOptions {
  */
 export interface WriteOptions {
   dryRun?: boolean;
+}
+
+/**
+ * Options of `create` only. `format: 'markdown'` converts `data.content` to HTML before
+ * posting -- kept OFF the shared {@link WriteOptions} (which `delete`, `archive` and
+ * `unarchive` also use) so those three don't type-check a Markdown option they would
+ * silently ignore.
+ */
+export interface ArticleCreateOptions extends WriteOptions {
+  /** Interpret `data.content` as Markdown and convert it to HTML before sending. */
+  format?: ContentFormat;
+}
+
+/**
+ * Options of `update` only. `format`/`allowLossyMarkdown` are kept OFF the shared
+ * {@link MutationOptions} (used by every other resource's `update`) so a caller of, say,
+ * `companies.update` cannot pass `{ format: 'markdown' }` and have it silently ignored.
+ */
+export interface ArticleUpdateOptions extends MutationOptions {
+  /** Interpret `data.content` as Markdown and convert it to HTML before sending. */
+  format?: ContentFormat;
+  /**
+   * Proceed with a Markdown update that would destroy content in the STORED article.
+   * Read the `findings` on the {@link HuduContentLossError} first -- this is how a
+   * region the caller never edited gets overwritten.
+   */
+  allowLossyMarkdown?: boolean;
+}
+
+/** Options for reading a single article. */
+export interface ArticleGetOptions {
+  /**
+   * Return `content` as Markdown instead of HTML. A read destroys nothing, so no loss is
+   * reported here -- the guard belongs on the write path.
+   */
+  format?: ContentFormat;
+}
+
+/** Convert `content` in place when the caller asked for Markdown. */
+function projectContent<T extends { content?: string }>(record: T, format?: ContentFormat): T {
+  if (format !== 'markdown' || typeof record.content !== 'string') return record;
+  return { ...record, content: htmlToMarkdown(record.content) };
 }
 
 /** Helper `limit` bounds (policy §9): default 25, hard maximum 100. */
@@ -145,8 +189,8 @@ export class ArticlesResource extends BaseResource<Article> {
    * note that on write Hudu rewrites inline image `src` values to `/public_photo/<slug>`,
    * which is expected behaviour, not corruption.
    */
-  async get(id: number): Promise<Article> {
-    return this.getOne<Article>(id);
+  async get(id: number, opts?: ArticleGetOptions): Promise<Article> {
+    return projectContent(await this.getOne<Article>(id), opts?.format);
   }
   /** Stream articles across pages. */
   list(params?: ArticlesListParams): AsyncIterable<Article> {
@@ -159,25 +203,70 @@ export class ArticlesResource extends BaseResource<Article> {
 
   async create(data: ArticleCreate): Promise<Article>;
   /** Dry-run: describe the create without issuing it. */
-  async create(data: ArticleCreate, opts: { dryRun: true }): Promise<DryRunResult<Article>>;
-  async create(data: ArticleCreate, opts?: WriteOptions): Promise<Article | DryRunResult<Article>>;
+  async create(data: ArticleCreate, opts: ArticleCreateOptions & { dryRun: true }): Promise<DryRunResult<Article>>;
+  async create(data: ArticleCreate, opts?: ArticleCreateOptions): Promise<Article | DryRunResult<Article>>;
   /**
    * POST /articles. `{ dryRun: true }` describes the create without issuing it.
    * A create has no prior revision, so there is no `expectedUpdatedAt` guard and
    * the option is not part of this signature.
+   *
+   * `{ format: 'markdown' }` converts `data.content` (Markdown) to HTML before sending.
+   * A create has no STORED body to destroy, so unlike `update` this runs no loss guard
+   * and issues no extra fetch.
    */
-  async create(data: ArticleCreate, opts?: WriteOptions): Promise<Article | DryRunResult<Article>> {
-    return this.createOne<Article>(data, undefined, opts);
+  async create(data: ArticleCreate, opts?: ArticleCreateOptions): Promise<Article | DryRunResult<Article>> {
+    const payload =
+      opts?.format === 'markdown' && typeof data.content === 'string'
+        ? { ...data, content: markdownToHtml(data.content) }
+        : data;
+    return this.createOne<Article>(payload, undefined, opts);
   }
 
   async update(id: number, data: ArticleUpdate): Promise<Article>;
   /** Dry-run: describe the update without issuing it. */
-  async update(id: number, data: ArticleUpdate, opts: MutationOptions & { dryRun: true }): Promise<DryRunResult<Article>>;
+  async update(id: number, data: ArticleUpdate, opts: ArticleUpdateOptions & { dryRun: true }): Promise<DryRunResult<Article>>;
   /** Live update, optionally with the opt-in `expectedUpdatedAt` stale guard. */
-  async update(id: number, data: ArticleUpdate, opts: MutationOptions & { dryRun?: false }): Promise<Article>;
-  async update(id: number, data: ArticleUpdate, opts?: MutationOptions): Promise<Article | DryRunResult<Article>>;
-  async update(id: number, data: ArticleUpdate, opts?: MutationOptions): Promise<Article | DryRunResult<Article>> {
-    return this.updateOne<Article>(id, data, undefined, opts);
+  async update(id: number, data: ArticleUpdate, opts: ArticleUpdateOptions & { dryRun?: false }): Promise<Article>;
+  async update(id: number, data: ArticleUpdate, opts?: ArticleUpdateOptions): Promise<Article | DryRunResult<Article>>;
+  /**
+   * PUT /articles/:id. `{ format: 'markdown' }` interprets `data.content` as Markdown.
+   *
+   * Writing Markdown is lossy -- callouts, accordions and task lists have no Markdown
+   * representation -- so before converting anything this asks whether the article
+   * ALREADY STORED survives an HTML -> Markdown -> HTML round trip. That framing catches
+   * destruction of regions the caller never touched, independent of what they submitted.
+   * A round trip that would lose content throws {@link HuduContentLossError} unless the
+   * caller passes `allowLossyMarkdown: true`.
+   *
+   * The guard's fetch is reused for the `expectedUpdatedAt` stale check (at most ONE
+   * extra GET beyond the PUT, and zero when `format` is not `'markdown'` or `data` carries
+   * no `content`).
+   */
+  async update(id: number, data: ArticleUpdate, opts?: ArticleUpdateOptions): Promise<Article | DryRunResult<Article>> {
+    if (opts?.format !== 'markdown' || typeof data.content !== 'string') {
+      return this.updateOne<Article>(id, data, undefined, opts);
+    }
+
+    // ONE fetch serves both the loss guard and the stale check. updateOne would issue its
+    // own for expectedUpdatedAt, so the guard is run here and expectedUpdatedAt is consumed
+    // here too -- assertNotStale takes the fetch as a callback, so the same record feeds both.
+    const current = await this.getOne<Article>(id);
+    await this.assertNotStale('articles.update', this.resourcePath, id, opts.expectedUpdatedAt, () =>
+      Promise.resolve(current),
+    );
+
+    if (opts.allowLossyMarkdown !== true && typeof current.content === 'string') {
+      // The question is whether the STORED body survives the round trip: that catches
+      // destruction of the regions the caller never touched, independent of what they sent.
+      const findings = diffArticleRoundTrip(current.content, markdownToHtml(htmlToMarkdown(current.content)));
+      if (findings.some((f) => f.impact === 'content')) {
+        throw new HuduContentLossError('articles.update', findings);
+      }
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructured only to drop it from `rest`
+    const { expectedUpdatedAt: _checked, ...rest } = opts;
+    return this.updateOne<Article>(id, { ...data, content: markdownToHtml(data.content) }, undefined, rest);
   }
 
   async delete(id: number): Promise<void>;
@@ -300,17 +389,17 @@ export class ArticlesResource extends BaseResource<Article> {
    * which do have sub-lists). A related record that no longer exists is `null`, never
    * an error.
    */
-  async getContext(id: number, opts?: { expand?: boolean }): Promise<ArticleContext>;
+  async getContext(id: number, opts?: { expand?: boolean; format?: ContentFormat }): Promise<ArticleContext>;
   /** `expand: true` returns the full article record. */
-  async getContext(id: number, opts: { expand: true }): Promise<ArticleContextExpand>;
-  async getContext(id: number, opts?: { expand?: boolean }): Promise<ArticleContext | ArticleContextExpand>;
-  async getContext(id: number, opts?: { expand?: boolean }): Promise<ArticleContext | ArticleContextExpand> {
+  async getContext(id: number, opts: { expand: true; format?: ContentFormat }): Promise<ArticleContextExpand>;
+  async getContext(id: number, opts?: { expand?: boolean; format?: ContentFormat }): Promise<ArticleContext | ArticleContextExpand>;
+  async getContext(id: number, opts?: { expand?: boolean; format?: ContentFormat }): Promise<ArticleContext | ArticleContextExpand> {
     const article = await this.get(id);
     const companyId = typeof article.company_id === 'number' && article.company_id > 0 ? article.company_id : undefined;
     const folderId = typeof article.folder_id === 'number' && article.folder_id > 0 ? article.folder_id : undefined;
     const company = companyId === undefined ? null : await optionalGet(() => new CompaniesResource(this.http).get(companyId));
     const folder = folderId === undefined ? null : await optionalGet(() => new FoldersResource(this.http).get(folderId));
-    if (opts?.expand === true) return { article, company, folder };
+    if (opts?.expand === true) return { article: projectContent(article, opts?.format), company, folder };
     return {
       article: toArticleSummary(article),
       company: company === null ? null : toCompanySummary(company),

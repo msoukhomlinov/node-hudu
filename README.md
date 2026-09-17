@@ -5,8 +5,7 @@
 **Fully-typed TypeScript SDK for the [Hudu IT documentation API](https://hudu.com).**
 Designed from the ground up for building **MCP servers**, integrations, and ETL pipelines.
 
-- **Zero runtime dependencies.** Uses only native platform APIs (`fetch`, `FormData`,
-  `URLSearchParams`, `AbortSignal`).
+- **Three runtime dependencies.** `turndown`, `@joplin/turndown-plugin-gfm` and `marked`, all used only by the `./content` Markdown converter. Every other path uses native platform APIs alone.
 - **35 typed resource clients**, each exposing full CRUD plus Hudu's special operations.
 - **Plain typed data** — every read returns concrete JSON-serialisable arrays and objects,
   ready to feed into zod output schemas, MCP tools, or downstream sinks.
@@ -16,7 +15,7 @@ Designed from the ground up for building **MCP servers**, integrations, and ETL 
 npm install node-hudu
 ```
 
-> **Node.js ≥ 18** is required (native `fetch`).
+> **Node.js ≥ 24** is required.
 
 ---
 
@@ -205,14 +204,44 @@ are public API so you can check the age before trusting them — especially befo
 `normalizeArticleHtml` rewrite real articles. Editorial house style (section structure, tone, title
 patterns, list-nesting limits) is deliberately **not** encoded: that belongs to your style guide.
 
+### Reading and writing articles as Markdown
+
+An article body is HTML. `format: 'markdown'` converts it in both directions, which is
+materially cheaper to put in an LLM's context and far more reliable for one to edit.
+
+```ts
+const article = await hudu.articles.get(42, { format: 'markdown' });
+// article.content is Markdown
+
+await hudu.articles.update(42, { content: '## Updated\n\nNew steps.' }, { format: 'markdown' });
+```
+
+A Markdown **write** is refused when the *stored* article would not survive the round
+trip — a callout, an accordion or a task list, none of which Markdown can express. The
+check runs against what is already in Hudu, so it catches destruction of the regions you
+never edited:
+
+```ts
+try {
+  await hudu.articles.update(42, { content: md }, { format: 'markdown' });
+} catch (err) {
+  if (err instanceof HuduContentLossError) {
+    console.error(err.findings.filter((f) => f.impact === 'content'));
+    // Send HTML to keep everything, or pass { allowLossyMarkdown: true } to accept the loss.
+  }
+}
+```
+
+Reads are never refused — a read destroys nothing.
+
 ## Model Context Protocol (MCP) motivation
 
 `node-hudu` was built to power **MCP servers**. Three design decisions make it a natural fit:
 
 1. **`listAll()` returns plain `T[]`.** MCP tool output schemas need concrete, serialisable
    data — not streaming handles or `this`. One call, ready to map to your output schema.
-2. **Zero runtime deps.** MCP runtimes bundle their own validation (e.g. `zod`). The SDK
-   never ships a conflicting copy, so there is no dependency mismatch.
+2. **`zod` is never a dependency of the SDK.** MCP runtimes bundle their own validation
+   (e.g. `zod`). The SDK never ships a conflicting copy, so there is no dependency mismatch.
 3. **Typed errors** with machine-readable `code` values let your MCP tool report failures
    back to the model for self-correction (see Error handling below).
 

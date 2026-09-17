@@ -8,7 +8,7 @@ import {
   HuduError, HuduConfigError, HuduNetworkError, BadRequestError, UnauthorizedError,
   ForbiddenError, NotFoundError, MethodNotAllowedError, NotAcceptableError,
   UnprocessableEntityError, RateLimitError, ServerError, errorFromStatus, isHuduError,
-  ValidationFailedError, parseFieldErrors, UNKNOWN_FIELD,
+  ValidationFailedError, parseFieldErrors, UNKNOWN_FIELD, HuduContentLossError,
 } from '../src/errors.js';
 
 describe('errorFromStatus', () => {
@@ -269,5 +269,32 @@ describe('fieldErrors end-to-end through the transport (live body shapes, stubbe
     expect(err.fieldErrors).toEqual([
       { field: 'company', message: 'param is missing or the value is empty: company' },
     ]);
+  });
+});
+
+describe('HuduContentLossError', () => {
+  const finding = {
+    code: 'ROUNDTRIP_CALLOUT_FLATTENED' as const,
+    severity: 'error' as const,
+    impact: 'content' as const,
+    element: 'callout' as const,
+    message: 'Callout count changed across the round trip (1 -> 0).',
+  };
+
+  it('carries the findings and names both ways forward', () => {
+    const err = new HuduContentLossError('articles.update', [finding]);
+    expect(err).toBeInstanceOf(HuduError);
+    expect(err.code).toBe('CONTENT_LOSS');
+    expect(err.findings).toEqual([finding]);
+    expect(err.message).toContain('ROUNDTRIP_CALLOUT_FLATTENED');
+    expect(err.message).toContain('allowLossyMarkdown');
+    expect(err.message).toContain('HTML');
+  });
+
+  it('names every content-impact finding, not just the first', () => {
+    const second = { ...finding, code: 'ROUNDTRIP_TASK_STATE_LOST' as const, element: 'taskList' as const };
+    const err = new HuduContentLossError('articles.update', [finding, second]);
+    expect(err.message).toContain('ROUNDTRIP_CALLOUT_FLATTENED');
+    expect(err.message).toContain('ROUNDTRIP_TASK_STATE_LOST');
   });
 });

@@ -9,6 +9,9 @@
 /** Highest-impact effect of an operation (policy §7.1). Never combine properties in one value. */
 export type OperationEffect = 'read' | 'write' | 'destructive';
 
+/** Which representation a caller wants a rich-text field in. */
+export type ContentFormat = 'html' | 'markdown';
+
 /** Orthogonal flags; "destructive AND sensitive" must stay expressible. */
 export type OperationFlag = 'sensitive' | 'idempotent' | 'requiresApproval';
 

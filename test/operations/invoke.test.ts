@@ -391,7 +391,7 @@ describe('operations.invoke — refusals (each one request-free)', () => {
     expect(unknownField.error.message).toContain('name: unknown field');
     expect(unknownField.error.message).toContain('No request was issued');
     const declared = inputFields((getCapability('articles.get') as CapabilityRecord).inputSchema).map(nameOf);
-    expect(declared).toEqual(['id']);
+    expect(declared).toEqual(['id', 'opts']);
 
     const missing = await refusal('articles.get', {});
     expect(missing.error.message).toContain('id: required');

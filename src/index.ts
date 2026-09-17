@@ -20,6 +20,8 @@ export {
   // Agent-execution-layer additions (additive: no existing code value changed).
   ConflictError, StaleObjectError, ValidationFailedError, DuplicateFoundError,
   ResolutionError, PolicyDeniedError,
+  // Markdown-conversion addition (additive).
+  HuduContentLossError,
 } from './errors.js';
 export type { ErrorCategory, ResolutionErrorCode, HuduErrorOptions } from './errors.js';
 
