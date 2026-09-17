@@ -232,6 +232,21 @@ try {
 }
 ```
 
+**What the Markdown loss guard covers.** `diffArticleRoundTrip` spot-checks the
+structural spine of the stored body across the HTML → Markdown → HTML round trip:
+table structure, code blocks and their language classes, link hrefs, image presence
+and `alt` text, elements Markdown cannot express (`script`, `svg`, `input`, …), Hudu
+callouts, Hudu accordions, and task-list check state. A write is refused when any of
+these is lost.
+
+**What it does not cover.** The guard does not detect loss of inline presentational
+markup: `<kbd>` is dropped, `<u>` is dropped, `<s>` becomes `<del>`, and `align-*`
+classes on headings and images are removed — all with zero findings. For example,
+`<p>Press <kbd>Ctrl</kbd></p>` round-trips to `<p>Press Ctrl</p>` and the guard
+reports nothing. Image `src` values are never compared (Hudu rewrites them on write),
+and a bare `<pre>` without a `<code>` child is not counted. A clean result means
+"no structural loss detected", not "lossless".
+
 Reads are never refused — a read destroys nothing.
 
 ## Model Context Protocol (MCP) motivation

@@ -225,10 +225,10 @@ export interface ArticleHtmlRule {
  * - PRESENTATION when only appearance changes and the words survive: `align-*` classes the
  *   editor drops on resave; the `mce-accordion` class, which exists for caret/heading
  *   alignment CSS; a `rich_text_content__table-scroll` wrapper Hudu's renderer regenerates
- *   itself; `<kbd>`, which round-trips intact and is merely unstyled; a `<thead>` wrapper
- *   the editor has no node for, where the `<th>` cells (which carry the header semantics
- *   and styling) survive; and a task list's non-interactivity, where every item and its
- *   checked state still render.
+ *   itself; `<kbd>`, which the Hudu editor round-trips intact and leaves merely unstyled
+ *   (the Markdown conversion drops it); a `<thead>` wrapper the editor has no node for,
+ *   where the `<th>` cells (which carry the header semantics and styling) survive; and
+ *   a task list's non-interactivity, where every item and its checked state still render.
  */
 export const ARTICLE_HTML_RULES: Readonly<Record<ArticleHtmlCode, ArticleHtmlRule>> = {
   // The Markdown rule predates the editor audit: it is a property of the content field
@@ -998,6 +998,23 @@ function unwrapTableScroll(html: string): string {
  * shape coming out of a converter, and a caller gating a destructive write on an empty
  * result would be told nothing was lost. Keep every check symmetric in the two arguments
  * and free of assumptions about their provenance.
+ *
+ * ## What the Markdown loss guard covers — and what it does not
+ *
+ * **What the Markdown loss guard covers.** `diffArticleRoundTrip` spot-checks the
+ * structural spine of the stored body across the HTML → Markdown → HTML round trip:
+ * table structure, code blocks and their language classes, link hrefs, image presence
+ * and `alt` text, elements Markdown cannot express (`script`, `svg`, `input`, …), Hudu
+ * callouts, Hudu accordions, and task-list check state. A write is refused when any of
+ * these is lost.
+ *
+ * **What it does not cover.** The guard does not detect loss of inline presentational
+ * markup: `<kbd>` is dropped, `<u>` is dropped, `<s>` becomes `<del>`, and
+ * `align-*` classes on headings and images are removed — all with zero findings. For
+ * example, `<p>Press <kbd>Ctrl</kbd></p>` round-trips to `<p>Press Ctrl</p>` and the
+ * guard reports nothing. Image `src` values are never compared (Hudu rewrites them on
+ * write), and a bare `<pre>` without a `<code>` child is not counted. A clean result
+ * means "no structural loss detected", not "lossless".
  *
  * @param sent the HTML submitted in `content`
  * @param readBack the `content` Hudu returned (remember: the compact article summary drops

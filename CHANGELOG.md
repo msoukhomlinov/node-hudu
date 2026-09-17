@@ -27,6 +27,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Behaviour change:** because `diffArticleRoundTrip` detects four more families, a
   caller gating a write on `findings.some(f => f.impact === 'content')` may now refuse a
   write that previously passed. The previous silence was a missed loss, not a permission.
+- **The documented guarantee of the Markdown round-trip guard is now explicit.** On the
+  `format: 'markdown'` write path, `diffArticleRoundTrip` covers the structural spine of
+  the stored body — table structure, code blocks and their language classes, link hrefs,
+  image presence and `alt` text, elements Markdown cannot express, Hudu callouts, Hudu
+  accordions, task-list check state — and does not cover inline presentational markup
+  such as `<kbd>`, `<u>` or `align-*` classes, which the conversion changes or removes
+  with zero findings.
 
 ## [0.6.0] — 2026-09-17
 
