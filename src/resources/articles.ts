@@ -37,8 +37,33 @@ export interface ArticleSearchOptions {
  */
 export interface WriteOptions {
   dryRun?: boolean;
+}
+
+/**
+ * Options of `create` only. `format: 'markdown'` converts `data.content` to HTML before
+ * posting -- kept OFF the shared {@link WriteOptions} (which `delete`, `archive` and
+ * `unarchive` also use) so those three don't type-check a Markdown option they would
+ * silently ignore.
+ */
+export interface ArticleCreateOptions extends WriteOptions {
   /** Interpret `data.content` as Markdown and convert it to HTML before sending. */
   format?: ContentFormat;
+}
+
+/**
+ * Options of `update` only. `format`/`allowLossyMarkdown` are kept OFF the shared
+ * {@link MutationOptions} (used by every other resource's `update`) so a caller of, say,
+ * `companies.update` cannot pass `{ format: 'markdown' }` and have it silently ignored.
+ */
+export interface ArticleUpdateOptions extends MutationOptions {
+  /** Interpret `data.content` as Markdown and convert it to HTML before sending. */
+  format?: ContentFormat;
+  /**
+   * Proceed with a Markdown update that would destroy content in the STORED article.
+   * Read the `findings` on the {@link HuduContentLossError} first -- this is how a
+   * region the caller never edited gets overwritten.
+   */
+  allowLossyMarkdown?: boolean;
 }
 
 /** Options for reading a single article. */
@@ -178,8 +203,8 @@ export class ArticlesResource extends BaseResource<Article> {
 
   async create(data: ArticleCreate): Promise<Article>;
   /** Dry-run: describe the create without issuing it. */
-  async create(data: ArticleCreate, opts: WriteOptions & { dryRun: true }): Promise<DryRunResult<Article>>;
-  async create(data: ArticleCreate, opts?: WriteOptions): Promise<Article | DryRunResult<Article>>;
+  async create(data: ArticleCreate, opts: ArticleCreateOptions & { dryRun: true }): Promise<DryRunResult<Article>>;
+  async create(data: ArticleCreate, opts?: ArticleCreateOptions): Promise<Article | DryRunResult<Article>>;
   /**
    * POST /articles. `{ dryRun: true }` describes the create without issuing it.
    * A create has no prior revision, so there is no `expectedUpdatedAt` guard and
@@ -189,7 +214,7 @@ export class ArticlesResource extends BaseResource<Article> {
    * A create has no STORED body to destroy, so unlike `update` this runs no loss guard
    * and issues no extra fetch.
    */
-  async create(data: ArticleCreate, opts?: WriteOptions): Promise<Article | DryRunResult<Article>> {
+  async create(data: ArticleCreate, opts?: ArticleCreateOptions): Promise<Article | DryRunResult<Article>> {
     const payload =
       opts?.format === 'markdown' && typeof data.content === 'string'
         ? { ...data, content: markdownToHtml(data.content) }
@@ -199,10 +224,10 @@ export class ArticlesResource extends BaseResource<Article> {
 
   async update(id: number, data: ArticleUpdate): Promise<Article>;
   /** Dry-run: describe the update without issuing it. */
-  async update(id: number, data: ArticleUpdate, opts: MutationOptions & { dryRun: true }): Promise<DryRunResult<Article>>;
+  async update(id: number, data: ArticleUpdate, opts: ArticleUpdateOptions & { dryRun: true }): Promise<DryRunResult<Article>>;
   /** Live update, optionally with the opt-in `expectedUpdatedAt` stale guard. */
-  async update(id: number, data: ArticleUpdate, opts: MutationOptions & { dryRun?: false }): Promise<Article>;
-  async update(id: number, data: ArticleUpdate, opts?: MutationOptions): Promise<Article | DryRunResult<Article>>;
+  async update(id: number, data: ArticleUpdate, opts: ArticleUpdateOptions & { dryRun?: false }): Promise<Article>;
+  async update(id: number, data: ArticleUpdate, opts?: ArticleUpdateOptions): Promise<Article | DryRunResult<Article>>;
   /**
    * PUT /articles/:id. `{ format: 'markdown' }` interprets `data.content` as Markdown.
    *
@@ -217,7 +242,7 @@ export class ArticlesResource extends BaseResource<Article> {
    * extra GET beyond the PUT, and zero when `format` is not `'markdown'` or `data` carries
    * no `content`).
    */
-  async update(id: number, data: ArticleUpdate, opts?: MutationOptions): Promise<Article | DryRunResult<Article>> {
+  async update(id: number, data: ArticleUpdate, opts?: ArticleUpdateOptions): Promise<Article | DryRunResult<Article>> {
     if (opts?.format !== 'markdown' || typeof data.content !== 'string') {
       return this.updateOne<Article>(id, data, undefined, opts);
     }

@@ -2,11 +2,21 @@
  * ArticlesResource tests — primitives and agent-execution-layer helpers.
  * Titles marked "plan" are copied verbatim from capabilities.plan.json.
  */
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { HuduClient } from '../../src/client.js';
 import { stubFetch, json, empty, clearFetch } from '../helpers.js';
 import type { AuditEvent } from '../../src/types/common.js';
 import { HuduContentLossError, StaleObjectError } from '../../src/errors.js';
+import { diffArticleRoundTrip, type ArticleHtmlFinding } from '../../src/resources/article-html.js';
+
+// Wraps the REAL diffArticleRoundTrip so every other test in this file still exercises the
+// genuine converters; only the one test below that calls `.mockReturnValueOnce` sees a
+// fabricated findings array, to pin the impact === 'content' narrowing in articles.ts
+// independent of what the real converters can produce (see the test itself for why).
+vi.mock('../../src/resources/article-html.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/resources/article-html.js')>();
+  return { ...actual, diffArticleRoundTrip: vi.fn(actual.diffArticleRoundTrip) };
+});
 
 const article = {
   id: 1,
@@ -530,8 +540,11 @@ describe('writing an article as Markdown', () => {
     expect(sentBody(spy, 1).content).toContain('<h2');
   });
 
-  it('allows an update whose only losses are presentation', async () => {
-    // The calibration case: an ordinary article must stay editable as Markdown.
+  it('allows an update whose stored body round-trips cleanly', async () => {
+    // The calibration case: an ordinary article must stay editable as Markdown. (This
+    // fixture round-trips to ZERO findings, not presentation-only ones -- the gate that
+    // distinguishes content from presentation findings is pinned separately below,
+    // because this fixture cannot exercise it.)
     const spy = stubFetch((_url, init) => {
       if (init.method === 'GET') {
         return json({ article: { ...article, content: '<h2 class="text-left">Setup</h2><p style="color:#333">Run it.</p>' } });
@@ -540,6 +553,37 @@ describe('writing an article as Markdown', () => {
     });
     await makeClient().articles.update(1, { content: '## Setup\n\nRun it.' }, { format: 'markdown' });
     expect(spy.calls).toHaveLength(2);
+  });
+
+  it('throws only for a content-impact finding, never for a presentation-only one', async () => {
+    // diffArticleRoundTrip has exactly one presentation-impact code
+    // (ROUNDTRIP_THEAD_DROPPED), and it is unreachable through markdownToHtml(htmlToMarkdown(x))
+    // because marked always re-emits <thead> for a GFM table -- so no HTTP-level fixture can
+    // exercise the impact === 'content' narrowing at articles.ts. This pins it directly by
+    // fabricating the findings diffArticleRoundTrip returns, which also proves the gate reads
+    // `impact`, not `severity` (the fabricated presentation finding below deliberately carries
+    // severity: 'error', the combination a `findings.some((f) => f.severity === 'error')`
+    // regression would wrongly treat as loss).
+    const mockDiff = vi.mocked(diffArticleRoundTrip);
+    const presentationOnly: ArticleHtmlFinding[] = [
+      { code: 'CALLOUT_TYPE_UNKNOWN', severity: 'error', impact: 'presentation', element: 'callout', message: 'cosmetic only' },
+    ];
+    const withContentLoss: ArticleHtmlFinding[] = [
+      { code: 'CALLOUT_BASE_CLASS_MISSING', severity: 'error', impact: 'content', element: 'callout', message: 'destroys the callout' },
+    ];
+
+    mockDiff.mockReturnValueOnce(presentationOnly);
+    const allowSpy = stubFetch((_url, init) => (init.method === 'GET' ? json({ article }) : json({ article })));
+    await expect(makeClient().articles.update(1, { content: '## New' }, { format: 'markdown' })).resolves.toBeDefined();
+    expect(allowSpy.calls).toHaveLength(2); // presentation-only: proceeds to the PUT
+    clearFetch();
+
+    mockDiff.mockReturnValueOnce(withContentLoss);
+    const refuseSpy = stubFetch(() => json({ article }));
+    await expect(
+      makeClient().articles.update(1, { content: '## New' }, { format: 'markdown' }),
+    ).rejects.toThrow(HuduContentLossError);
+    expect(refuseSpy.calls).toHaveLength(1); // content loss: refuses before any PUT
   });
 
   it('issues no extra fetch when data carries no content key', async () => {
