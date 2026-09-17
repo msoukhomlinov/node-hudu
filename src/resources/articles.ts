@@ -7,8 +7,9 @@ import { BaseResource } from './base.js';
 import type { ListParams, Page } from '../pagination.js';
 import type { Article, ArticleCreate, ArticleUpdate } from '../types/index.js';
 import type { ArticleContext, ArticleContextExpand, ArticleIdentifier, ArticleSummary } from '../types/article.js';
-import type { DryRunResult, HelperOptions, MutationOptions, Resolution, ResolutionCandidate } from '../types/common.js';
+import type { ContentFormat, DryRunResult, HelperOptions, MutationOptions, Resolution, ResolutionCandidate } from '../types/common.js';
 import { HuduConfigError, HuduError, ResolutionError } from '../errors.js';
+import { htmlToMarkdown } from '../content/markdown.js';
 import { CompaniesResource, toCompanySummary } from './companies.js';
 import { FoldersResource } from './folders.js';
 
@@ -35,6 +36,21 @@ export interface ArticleSearchOptions {
  */
 export interface WriteOptions {
   dryRun?: boolean;
+}
+
+/** Options for reading a single article. */
+export interface ArticleGetOptions {
+  /**
+   * Return `content` as Markdown instead of HTML. A read destroys nothing, so no loss is
+   * reported here -- the guard belongs on the write path.
+   */
+  format?: ContentFormat;
+}
+
+/** Convert `content` in place when the caller asked for Markdown. */
+function projectContent<T extends { content?: string }>(record: T, format?: ContentFormat): T {
+  if (format !== 'markdown' || typeof record.content !== 'string') return record;
+  return { ...record, content: htmlToMarkdown(record.content) };
 }
 
 /** Helper `limit` bounds (policy §9): default 25, hard maximum 100. */
@@ -145,8 +161,8 @@ export class ArticlesResource extends BaseResource<Article> {
    * note that on write Hudu rewrites inline image `src` values to `/public_photo/<slug>`,
    * which is expected behaviour, not corruption.
    */
-  async get(id: number): Promise<Article> {
-    return this.getOne<Article>(id);
+  async get(id: number, opts?: ArticleGetOptions): Promise<Article> {
+    return projectContent(await this.getOne<Article>(id), opts?.format);
   }
   /** Stream articles across pages. */
   list(params?: ArticlesListParams): AsyncIterable<Article> {
@@ -300,17 +316,17 @@ export class ArticlesResource extends BaseResource<Article> {
    * which do have sub-lists). A related record that no longer exists is `null`, never
    * an error.
    */
-  async getContext(id: number, opts?: { expand?: boolean }): Promise<ArticleContext>;
+  async getContext(id: number, opts?: { expand?: boolean; format?: ContentFormat }): Promise<ArticleContext>;
   /** `expand: true` returns the full article record. */
-  async getContext(id: number, opts: { expand: true }): Promise<ArticleContextExpand>;
-  async getContext(id: number, opts?: { expand?: boolean }): Promise<ArticleContext | ArticleContextExpand>;
-  async getContext(id: number, opts?: { expand?: boolean }): Promise<ArticleContext | ArticleContextExpand> {
+  async getContext(id: number, opts: { expand: true; format?: ContentFormat }): Promise<ArticleContextExpand>;
+  async getContext(id: number, opts?: { expand?: boolean; format?: ContentFormat }): Promise<ArticleContext | ArticleContextExpand>;
+  async getContext(id: number, opts?: { expand?: boolean; format?: ContentFormat }): Promise<ArticleContext | ArticleContextExpand> {
     const article = await this.get(id);
     const companyId = typeof article.company_id === 'number' && article.company_id > 0 ? article.company_id : undefined;
     const folderId = typeof article.folder_id === 'number' && article.folder_id > 0 ? article.folder_id : undefined;
     const company = companyId === undefined ? null : await optionalGet(() => new CompaniesResource(this.http).get(companyId));
     const folder = folderId === undefined ? null : await optionalGet(() => new FoldersResource(this.http).get(folderId));
-    if (opts?.expand === true) return { article, company, folder };
+    if (opts?.expand === true) return { article: projectContent(article, opts?.format), company, folder };
     return {
       article: toArticleSummary(article),
       company: company === null ? null : toCompanySummary(company),

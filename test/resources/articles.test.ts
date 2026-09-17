@@ -456,3 +456,38 @@ describe('ArticlesResource helper edge branches and validation', () => {
   });
 
 });
+
+describe('reading an article as Markdown', () => {
+  afterEach(clearFetch);
+
+  it('returns content as Markdown when format is markdown', async () => {
+    stubFetch(() => json({ article: { ...article, content: '<h2>Setup</h2><p>Run it.</p>' } }));
+    const result = await makeClient().articles.get(1, { format: 'markdown' });
+    expect(result.content).toBe('## Setup\n\nRun it.');
+  });
+
+  it('returns HTML by default, unchanged', async () => {
+    stubFetch(() => json({ article: { ...article, content: '<h2>Setup</h2>' } }));
+    expect((await makeClient().articles.get(1)).content).toBe('<h2>Setup</h2>');
+  });
+
+  it('converts inside getContext when expand is set', async () => {
+    stubFetch((url) => {
+      if (url.includes('/articles/1')) return json({ article: { ...article, content: '<p>Body</p>' } });
+      if (url.includes('/companies/7')) return json({ company });
+      return json({ folder });
+    });
+    const ctx = await makeClient().articles.getContext(1, { expand: true, format: 'markdown' });
+    expect(asRecord(ctx.article).content).toBe('Body');
+  });
+
+  it('leaves the compact getContext tier alone -- it already drops content', async () => {
+    stubFetch((url) => {
+      if (url.includes('/articles/1')) return json({ article });
+      if (url.includes('/companies/7')) return json({ company });
+      return json({ folder });
+    });
+    const ctx = await makeClient().articles.getContext(1, { format: 'markdown' });
+    expect(asRecord(ctx.article).content).toBeUndefined();
+  });
+});
