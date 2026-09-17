@@ -1109,10 +1109,13 @@ export function diffArticleRoundTrip(sent: string, readBack: string): ArticleHtm
  * code regions) also covers a sample written outside `<pre>`.
  */
 function diffEscaped(before: string, after: string, add: Add): void {
+  // issue #43 item #25: exact boundary, same shape as the #13 RAW_ELEMENTS fix — `\b`
+  // counted `&lt;form-row` as an escaped `form` sample.
   const escapedCount = (html: string, name: string): number =>
-    (html.match(new RegExp(`&lt;/?${name}\\b`, 'gi')) ?? []).length;
+    (html.match(new RegExp(`&lt;/?${name}(?![\\w-])`, 'gi')) ?? []).length;
+  // issue #43 item #25: same exact boundary — `\b` counted `<form-row` as a real `<form>`.
   const realCount = (html: string, name: string): number =>
-    (html.match(new RegExp(`<${name}\\b`, 'gi')) ?? []).length;
+    (html.match(new RegExp(`<${name}(?![\\w-])`, 'gi')) ?? []).length;
   const scoped = new Set<string>();
   for (const m of before.matchAll(/&lt;\/?([a-z][a-z0-9-]*)\b/gi)) scoped.add((m[1] ?? '').toLowerCase());
   for (const m of after.matchAll(/&lt;\/?([a-z][a-z0-9-]*)\b/gi)) scoped.add((m[1] ?? '').toLowerCase());
@@ -1121,7 +1124,8 @@ function diffEscaped(before: string, after: string, add: Add): void {
   const decreased = new Set<string>();
   const escPair = new Map<string, [number, number]>();
   for (const name of scoped) {
-    if (!new RegExp(`<${name}\\b`, 'i').test(before) && !new RegExp(`<${name}\\b`, 'i').test(after)) continue;
+    // issue #43 item #25: same exact boundary — a real `<form-row>` must not scope `form`.
+    if (!new RegExp(`<${name}(?![\\w-])`, 'i').test(before) && !new RegExp(`<${name}(?![\\w-])`, 'i').test(after)) continue;
     const a = escapedCount(before, name);
     const b = escapedCount(after, name);
     if (b > a || (a > b && realCount(after, name) > realCount(before, name))) {
@@ -1159,7 +1163,8 @@ function diffEscaped(before: string, after: string, add: Add): void {
     add(
       'ROUNDTRIP_CONTENT_ESCAPED',
       `${sentences.join('. ')}. Content may have been lost — verify before accepting the write.`,
-      { index: before.search(new RegExp(`&lt;/?${[...decreased][0]}\\b`, 'i')), detail: names },
+      // issue #43 item #25: same exact boundary — the index must point at the named element's sample.
+      { index: before.search(new RegExp(`&lt;/?${[...decreased][0]}(?![\\w-])`, 'i')), detail: names },
     );
   }
 }

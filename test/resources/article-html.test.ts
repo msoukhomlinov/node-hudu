@@ -776,6 +776,44 @@ describe('diffArticleRoundTrip', () => {
     expect(finding?.message.toLowerCase()).not.toMatch(/re-materialis|stored as text/);
   });
 
+  // T4 #25 (issue #43 deferred item 25) — the escaped path's `\b` boundary had the same
+  // custom-element misattribution shape as finding #13 (fixed in the RAW_ELEMENTS count in
+  // batch 1): `&lt;form-row` matches `&lt;form\b`, and `<form-row` matches `<form\b`,
+  // because `-` is a non-word character. Both contract directions pinned — increase and
+  // materialisation (per the per-code direction policy: symmetric).
+  it('increase direction names the correct element, not a custom name sharing its word prefix (T4 #25)', () => {
+    // The <form-row> escaped sample churns 0->1 (markup stored as escaped text); its own
+    // <form> sample is unchanged. Pre-fix the form-row sample leaked into the `form` count
+    // (`&lt;form\b`), so `form` fired too and the message named the prefix element:
+    // detail ['form', 'form-row'], message '<form>, <form-row>'. Post-fix only the correct
+    // element is named. (This pin fails pre-fix: that is the regression proof.)
+    const sent = '<p>doc &lt;form&gt;s&lt;/form&gt;</p><form-row>a</form-row>';
+    const readBack = '<p>doc &lt;form&gt;s&lt;/form&gt; &lt;form-row&gt;r&lt;/form-row&gt;</p><form-row>a</form-row>';
+    const finding = find(diffArticleRoundTrip(sent, readBack), 'ROUNDTRIP_CONTENT_ESCAPED');
+    expect(finding !== undefined).toBe(true);
+    expect(finding?.detail).toEqual(['form-row']);
+    expect(finding?.message).toContain('<form-row>');
+    expect(finding?.message).not.toContain('<form>');
+    expect(finding?.index).toBe(sent.indexOf('<form-row>'));
+  });
+
+  it('materialisation direction names the correct element, not a custom name sharing its word prefix (T4 #25)', () => {
+    // The <form-row> escaped sample churns 2->0 (open + close matches) while real
+    // <form-row> tags go 1->2; the <form> samples are unchanged. Pre-fix the form-row
+    // samples leaked into the `form` count (`&lt;form\b`), so `form` fired with an apparent
+    // 3->2 decrease and was named in the message; the index also pointed at the <form>
+    // sample instead of the form-row one. Post-fix only `form-row` is named, and the index
+    // sits at the form-row sample. (Fails pre-fix: the regression proof.)
+    const sent = '<p>doc &lt;form&gt;s&lt;/form&gt; &lt;form-row&gt;r&lt;/form-row&gt;</p><form-row>a</form-row>';
+    const readBack = '<p>doc &lt;form&gt;s&lt;/form&gt;</p><form-row>a</form-row><form-row>r</form-row>';
+    const finding = find(diffArticleRoundTrip(sent, readBack), 'ROUNDTRIP_CONTENT_ESCAPED');
+    expect(finding !== undefined).toBe(true);
+    expect(finding?.detail).toEqual(['form-row']);
+    expect(finding?.message).toContain('<form-row> (escaped count 2->0, real tag count 1->2)');
+    expect(finding?.message).not.toContain('<form> (');
+    expect(finding?.index).toBe(sent.indexOf('&lt;form-row'));
+  });
+
   it('is clean for any byte-identical round trip', () => {
     for (const html of [
       '<p>plain</p>',
