@@ -503,7 +503,7 @@ const handle = serveStdio(() => {
           tier: args.tier ?? 'index', // the TOOL's default: a complete answer, not a body-blind one
         } as Parameters<Operations['searchKnowledge']>[1]);
         const incomplete = result.meta.complete ? '' : ` (partial: ${(result.meta.reasons ?? []).join(', ')})`;
-        const bodyBlind = result.meta.degraded ? ` DEGRADED (${result.meta.degraded.kind}): ${result.meta.degraded.advice}` : '';
+        const bodyBlind = result.meta.degraded ? ` DEGRADED (${result.meta.degraded.reason}): ${result.meta.degraded.advice}` : '';
         return ok(
           `Found ${result.hits.length} ranked match(es)${incomplete}.${bodyBlind}`,
           { mode: 'search', query: args.query, hits: result.hits as unknown[], meta: { ...result.meta, mode: 'search' } },
@@ -567,10 +567,7 @@ const handle = serveStdio(() => {
     },
     async (args) => {
       try {
-        const limit = args.opts?.limit ?? DEFAULT_LIMIT;
-        const result = await hudu.apiInfo.resolve(args.identifier, args.opts);
-        const rows = Array.isArray(result) ? result : [];
-        return oneResult('api info', record);
+        return oneResult('api info', await hudu.apiInfo.resolve(args.identifier, args.opts));
       } catch (err) {
         return errorContent(err);
       }
@@ -624,9 +621,7 @@ const handle = serveStdio(() => {
     },
     async (args) => {
       try {
-        const limit = args.opts?.limit ?? DEFAULT_LIMIT;
         const result = await hudu.articles.getContext(args.id, args.opts);
-        const rows = Array.isArray(result) ? result : [];
         return ok('Article context returned.', { context: result });
       } catch (err) {
         return errorContent(err);
@@ -681,9 +676,7 @@ const handle = serveStdio(() => {
     },
     async (args) => {
       try {
-        const limit = args.opts?.limit ?? DEFAULT_LIMIT;
         const result = await hudu.assetLayouts.resolve(args.identifier, args.opts);
-        const rows = Array.isArray(result) ? result : [];
         return oneResult('asset layout', result);
       } catch (err) {
         return errorContent(err);
@@ -707,9 +700,7 @@ const handle = serveStdio(() => {
     },
     async (args) => {
       try {
-        const limit = args.opts?.limit ?? DEFAULT_LIMIT;
         const result = await hudu.folders.resolve(args.identifier, args.opts);
-        const rows = Array.isArray(result) ? result : [];
         return oneResult('folder', result);
       } catch (err) {
         return errorContent(err);
