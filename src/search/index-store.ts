@@ -13,7 +13,7 @@
  * Honesty rules carried by this file:
  *   - a body longer than `maxDocBytes` of RAW HTML is truncated and the document is flagged
  *     `longTruncated`, so a term past the cut is reported as not found rather than found;
- *   - extracted text is capped at `maxIndexTextBytes`; over the cap the least-recently-used
+ *   - extracted text is capped at `maxIndexTextBytes`; over the cap the least-recently-read
  *     document drops its TEXT as a UNIT — `longText` and the field string that holds the same
  *     text (`body` for an article, `cfield` for an asset) are released together, because keeping
  *     the field string keeps the whole text alive (the eviction would free nothing) and lets the
@@ -23,6 +23,16 @@
  *     `bodiesTruncated`/the `body-truncated` reason). Keeping the tokens instead would be no
  *     cheaper than keeping the text — a measured token array costs several times the text it came
  *     from — so the bound would be a claim, not a limit;
+ *   - the eviction is split per declared long-text SOURCE instead of treating every long text as
+ *     common land: each source named in `LONG_TEXT_FIELD` may hold `maxIndexTextBytes / <declared
+ *     source count>` of its own, PLUS whatever the other source leaves unused. A victim is
+ *     therefore a document whose own source holds MORE than that limit (`ensureTextBudget` carries
+ *     the invariant). The defect this replaces was measured, not theoretical: a build inserts
+ *     articles first and assets second, the LRU clock is empty during a build, so the article
+ *     bodies were by construction the oldest documents and an asset corpus that overflowed the
+ *     bound evicted EVERY article body before a single asset text was considered. What this does
+ *     NOT promise: a source over its OWN share still loses its own text, and the account may stay
+ *     ABOVE the bound when the text left is text no eviction can free;
  *   - `maxDocs` is applied in `updated_at` descending order, so the documents that are indexed
  *     are the freshest ones, and `partial` is reported rather than implied.
  */
@@ -58,6 +68,17 @@ const LONG_TEXT_FIELD: Partial<Record<LongTextSource, IndexField>> = {
   'article.content': 'body',
   'asset.fields': 'cfield',
 };
+
+/**
+ * How many DECLARED long-text sources share `maxIndexTextBytes` — the divisor of a source's share.
+ *
+ * It is deliberately STATIC rather than "the sources currently in the index": a divisor that moved
+ * when a document of one source left the index would make every share oscillate between builds, so
+ * the retention a build produces would depend on the order its own earlier builds happened to end
+ * in. A single-source tenant is not penalised by this: the other source's share is BORROWED while it
+ * holds nothing, so `limit(R)` is still the whole bound (see `limitOf`).
+ */
+const LONG_TEXT_SOURCE_COUNT = Object.keys(LONG_TEXT_FIELD).length;
 
 /** One indexed document (a record, reduced to what search needs). */
 export interface SearchDoc {
@@ -156,6 +177,19 @@ export class KnowledgeIndex {
   private readonly accessClock = new Map<number, number>();
   private clock = 0;
   private textBytes = 0;
+  /**
+   * Long text held per declared source, in bytes. It is updated together with `textBytes`, AT THE
+   * SAME FOUR SITES — `holdText`, `withoutText`, `releaseTextAccount` and the `replaceDocs` re-hold
+   * — so the two accounts can never disagree. That is the property to keep when editing this file:
+   * moving one of those four and not the other leaves the shares wrong, and the eviction rule
+   * silently wrong with them. The two accounts are not equal by construction (`'title'` long text is
+   * charged to no share, because it holds no field string an eviction could free).
+   *
+   * Keyed by the LONG-TEXT SOURCE, not by `resource`: the share's divisor is the declared source set
+   * (`LONG_TEXT_FIELD`), and the two are in step one-to-one (`article.content` is held by
+   * `articles`, `asset.fields` by `assets`).
+   */
+  private readonly textBytesBySource = new Map<LongTextSource, number>();
   private dirty = true;
 
   constructor(readonly bounds: IndexBounds = DEFAULT_INDEX_BOUNDS) {}
@@ -293,6 +327,9 @@ export class KnowledgeIndex {
     this.detachedForReaders = false;
     this.byKey.clear();
     this.textBytes = 0;
+    // The per-source account moves WITH `textBytes` (see `textBytesBySource`): a re-hold that reset
+    // only one of them would charge the shares to a source that holds nothing.
+    this.textBytesBySource.clear();
     this.accessClock.clear();
     this.dirty = true;
     this.contentVersion += 1;
@@ -480,8 +517,22 @@ export class KnowledgeIndex {
   }
 
   private holdText(doc: SearchDoc): void {
-    if (doc.longText !== null) this.textBytes += utf8Bytes(doc.longText);
+    const bytes = doc.longText === null ? 0 : utf8Bytes(doc.longText);
+    this.textBytes += bytes;
+    this.creditText(doc.longSource, bytes);
     this.ensureTextBudget();
+  }
+
+  /**
+   * Charge (or release, with a negative `bytes`) long text to the source that holds it.
+   *
+   * An undeclared source (`'title'`) holds no field string of its own, so it is charged to NO share:
+   * it is never a victim either (`isEvictable`), and letting it widen a limit would hand eviction a
+   * budget it can never actually free.
+   */
+  private creditText(source: LongTextSource, bytes: number): void {
+    if (LONG_TEXT_FIELD[source] === undefined) return;
+    this.textBytesBySource.set(source, Math.max(0, (this.textBytesBySource.get(source) ?? 0) + bytes));
   }
 
   /**
@@ -503,6 +554,7 @@ export class KnowledgeIndex {
     // the string reachable while the account claimed it was freed.
     this.textBytes -= freed;
     if (this.textBytes < 0) this.textBytes = 0;
+    this.creditText(doc.longSource, -freed);
     const copy: SearchDoc = { ...doc, longText: null, fields: { ...doc.fields } };
     const longField = LONG_TEXT_FIELD[doc.longSource];
     if (longField !== undefined) {
@@ -519,8 +571,10 @@ export class KnowledgeIndex {
   /** Take a document that is LEAVING the index out of the text account (it is not mutated). */
   private releaseTextAccount(doc: SearchDoc): void {
     if (doc.longText === null) return;
-    this.textBytes -= utf8Bytes(doc.longText);
+    const freed = utf8Bytes(doc.longText);
+    this.textBytes -= freed;
     if (this.textBytes < 0) this.textBytes = 0;
+    this.creditText(doc.longSource, -freed);
   }
 
   /**
@@ -540,14 +594,62 @@ export class KnowledgeIndex {
     return doc.longText !== null && LONG_TEXT_FIELD[doc.longSource] !== undefined;
   }
 
+  /** Share of `maxIndexTextBytes` that each DECLARED long-text source may hold on its own. */
+  private shareOfBudget(): number {
+    return this.bounds.maxIndexTextBytes / LONG_TEXT_SOURCE_COUNT;
+  }
+
   /**
-   * Drop the least-recently-read documents' TEXT until the account is back inside
-   * `maxIndexTextBytes`. The text is what the bound measures and what the eviction really frees;
-   * the recall that goes with it is recorded in `evictedDocs` and reported by the engine.
+   * `limit(R)` — the source's own share, plus every OTHER source's unused share.
+   *
+   * The borrowed part is what keeps a single-source tenant whole (`hold(articles) === 0` makes
+   * `limit(assets)` the full bound) while still making the overflow land on the source that caused
+   * it. It is computed per call rather than cached: it is a two-entry loop, and a cache is the kind
+   * of state that goes stale exactly when an editor forgets one of the four accounting sites.
+   */
+  private limitOf(source: LongTextSource): number {
+    const share = this.shareOfBudget();
+    let limit = share;
+    for (const other of Object.keys(LONG_TEXT_FIELD) as LongTextSource[]) {
+      if (other === source) continue;
+      limit += Math.max(0, share - (this.textBytesBySource.get(other) ?? 0));
+    }
+    return limit;
+  }
+
+  /** True when this source holds MORE than its limit, i.e. when it may be asked to release text. */
+  private overLimit(source: LongTextSource): boolean {
+    return (this.textBytesBySource.get(source) ?? 0) > this.limitOf(source);
+  }
+
+  /**
+   * Drop the least-recently-read document's TEXT until the account is back inside
+   * `maxIndexTextBytes`, taking victims ONLY from a source that is over its limit. The text is what
+   * the bound measures and what the eviction really frees; the recall that goes with it is recorded
+   * in `evictedDocs` and reported by the engine.
+   *
+   * INVARIANT (falsifiable). With `share(R) = maxIndexTextBytes / LONG_TEXT_SOURCE_COUNT` for every
+   * declared source `R`, `spare(R) = max(0, share(R) - held(R))` and
+   * `limit(R) = share(R) + Σ_{R' ≠ R} spare(R')`:
+   *
+   *     after every `upsert`, for each declared source R that holds evictable long text, either
+   *     `held(R) <= limit(R)`, or no evictable document of R remains.
+   *
+   * The consequence to hold this rule to: on a build whose article corpus fits inside
+   * `share(articles)` and whose asset corpus does not, `articles.bodiesEvicted` is 0 while
+   * `assets.bodiesEvicted` is > 0 — the asset overflow is paid with asset text, never with the
+   * bodies that merely happened to be inserted first.
+   *
+   * This narrows the ELIGIBLE SET; it does not change the order inside it (`leastRecentlyRead` keeps
+   * its tie-break, so in-resource LRU behaviour and the store-level tests that pin it are intact).
+   *
+   * The bound is a limit on what eviction may TAKE, not a promise that the account ends inside it:
+   * when no document of an over-limit source remains, the loop stops and the account may stay above
+   * the bound — unreleasable `'title'` text, or a source that cannot be drained any further.
    */
   private ensureTextBudget(): void {
     while (this.textBytes > this.bounds.maxIndexTextBytes) {
-      const victim = this.leastRecentlyRead((doc) => KnowledgeIndex.isEvictable(doc));
+      const victim = this.leastRecentlyRead((doc) => KnowledgeIndex.isEvictable(doc) && this.overLimit(doc.longSource));
       if (victim < 0) return;
       // This is a WRITE to the document array, so it detaches first like every other write: a reader
       // must never see an element of its snapshot replaced, whoever triggered the eviction.

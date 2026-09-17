@@ -184,3 +184,138 @@ describe('search config bounds', () => {
     );
   });
 });
+
+describe('text shares per declared long-text source (issue #46)', () => {
+  /** A single long-text source gets the whole bound, not its own share: no half-cut for one resource. */
+  const articleDoc = (id: number, bytes: number): SearchDoc => {
+    const body = 'a'.repeat(bytes);
+    return {
+      resource: 'articles', id, title: `Article ${id}`, slug: `article-${id}`, url: '', company_id: 1,
+      company_name: null, updated_at: `2026-01-0${id}T00:00:00.000Z`,
+      fields: { title: `Article ${id}`, body }, longText: body, longSource: 'article.content', longTruncated: false,
+    };
+  };
+  const assetDoc = (id: number, bytes: number): SearchDoc => {
+    const value = 'b'.repeat(bytes);
+    return {
+      resource: 'assets', id, title: `Asset ${id}`, slug: `asset-${id}`, url: '', company_id: 1,
+      company_name: null, updated_at: `2026-02-0${id}T00:00:00.000Z`,
+      fields: { title: `Asset ${id}`, cfield: value }, longText: value, longSource: 'asset.fields', longTruncated: false,
+    };
+  };
+  /** A `title` long source has no field of its own: it holds no separate string and is never a victim. */
+  const titleLongDoc = (id: number, bytes: number): SearchDoc => {
+    const text = 'c'.repeat(bytes);
+    return {
+      resource: 'articles', id, title: text, slug: `title-${id}`, url: '', company_id: 1,
+      company_name: null, updated_at: `2026-03-0${id}T00:00:00.000Z`,
+      fields: { title: text, body: text }, longText: text, longSource: 'title', longTruncated: false,
+    };
+  };
+  const heldTextDocs = (index: KnowledgeIndex) => index.docs.filter((doc) => doc.longText !== null);
+
+  it('charges an overflow to the resource that holds MORE than its limit, not to one inside its share', () => {
+    // 2000 bytes of budget: 1000 per declared long-text source. The article body fits its share, so
+    // every asset that pushes the account over the bound pays with asset text of its own.
+    const index = new KnowledgeIndex({ maxDocBytes: 1024, maxIndexTextBytes: 2000, maxDocs: 10 });
+    index.upsert(articleDoc(1, 800));
+    index.upsert(assetDoc(1, 800));
+    index.upsert(assetDoc(2, 800)); // account 2400 > 2000, and only the ASSETS are over their limit
+    index.upsert(assetDoc(3, 800));
+
+    expect(index.docs[0]?.longText).not.toBeNull();
+    expect(index.docs[0]?.fields.body).toBeDefined();
+    expect(index.textBytesHeld).toBe(1600); // 800 article + 800 asset, never 0 + 1600
+    expect(heldTextDocs(index).length).toBe(2);
+    expect(index.docs.filter((doc) => doc.resource === 'assets' && doc.longText === null).length).toBe(2);
+  });
+
+  it('reclaims an article body inserted last by evicting an ASSET that was borrowing the article share', () => {
+    const index = new KnowledgeIndex({ maxDocBytes: 1024, maxIndexTextBytes: 2000, maxDocs: 10 });
+    // Assets alone borrow the unused article share: with no article text, `limit(assets)` is the
+    // whole bound, so three 800-byte texts leave the account at 1600 (above the 1000-byte share).
+    index.upsert(assetDoc(1, 800));
+    index.upsert(assetDoc(2, 800));
+    index.upsert(assetDoc(3, 800));
+    expect(index.textBytesHeld).toBe(1600);
+
+    index.upsert(articleDoc(1, 800)); // 2400 > 2000 -> the article is inside its limit; an ASSET pays
+    expect(index.docs.find((doc) => doc.resource === 'articles')?.longText).not.toBeNull();
+    expect(index.docs.find((doc) => doc.resource === 'articles')?.fields.body).toBeDefined();
+    expect(index.docs.filter((doc) => doc.resource === 'assets' && doc.longText === null).length).toBe(2);
+    expect(index.textBytesHeld).toBe(1600);
+  });
+
+  it('never cuts a single-resource tenant to its own share', () => {
+    const index = new KnowledgeIndex({ maxDocBytes: 1024, maxIndexTextBytes: 2000, maxDocs: 10 });
+    index.upsert(assetDoc(1, 800));
+    index.upsert(assetDoc(2, 800));
+    index.upsert(assetDoc(3, 800));
+
+    // limit(assets) = share + the WHOLE unused article share = 2000 = the bound, so two of the three
+    // texts stay. Cutting the resource to its own 1000-byte share would leave 800.
+    expect(index.textBytesHeld).toBe(1600);
+    expect(index.textBytesHeld).toBeGreaterThan(index.bounds.maxIndexTextBytes / 2);
+    expect(index.evicted).toBe(1);
+  });
+
+  it('still evicts an article corpus that overflows the bound on its own, and touches no asset text', () => {
+    const index = new KnowledgeIndex({ maxDocBytes: 1024, maxIndexTextBytes: 2000, maxDocs: 10 });
+    index.upsert(articleDoc(1, 800));
+    index.upsert(articleDoc(2, 800));
+    index.upsert(articleDoc(3, 800));
+
+    expect(index.textBytesHeld).toBe(1600);
+    expect(index.evicted).toBe(1);
+    expect(heldTextDocs(index).length).toBe(2);
+    expect(heldTextDocs(index).every((doc) => doc.fields.body !== undefined)).toBe(true);
+  });
+
+  it('never evicts unreleasable `title` long text, and lets the account stay above the bound when it is the only text left', () => {
+    const index = new KnowledgeIndex({ maxDocBytes: 1024, maxIndexTextBytes: 100, maxDocs: 10 });
+    index.upsert(titleLongDoc(1, 500)); // no separate field string: evicting it would free nothing
+    index.upsert(assetDoc(1, 800));
+
+    // The asset is the only releasable text, so it pays for the overflow; what remains is 500 bytes
+    // of text no eviction can free, which is exactly the state the bound documents rather than hides.
+    expect(index.textBytesHeld).toBe(500);
+    expect(index.docs[0]?.longText).not.toBeNull();
+    expect(index.docs[0]?.fields.title).toBeDefined();
+    expect(index.evicted).toBe(1);
+  });
+
+  it('does not double-count a two-phase re-hold, and matches a fresh index built from the same documents', () => {
+    const index = new KnowledgeIndex({ maxDocBytes: 1024, maxIndexTextBytes: 2000, maxDocs: 10 });
+    index.upsert(articleDoc(1, 800));
+    index.upsert(assetDoc(1, 800));
+    index.upsert(assetDoc(2, 800));
+
+    // `retain` swaps the array and RE-HOLDS every surviving document: each held text is released
+    // again first, so neither account may end up counting a document twice.
+    const removed = index.retain(new Set(['articles:1', 'assets:1']));
+    expect(removed).toBe(1);
+    expect(index.textBytesHeld).toBe(800);
+
+    const fresh = new KnowledgeIndex({ maxDocBytes: 1024, maxIndexTextBytes: 2000, maxDocs: 10 });
+    for (const doc of index.docs) fresh.upsert(doc);
+    expect(fresh.textBytesHeld).toBe(index.textBytesHeld);
+  });
+
+  it('keeps the in-resource LRU order: a touched document is not the next victim', () => {
+    const index = new KnowledgeIndex({ maxDocBytes: 1024, maxIndexTextBytes: 2400, maxDocs: 10 });
+    index.upsert(articleDoc(1, 800));
+    index.upsert(articleDoc(2, 800));
+    index.upsert(articleDoc(3, 800)); // 2400 == bound, nothing evicted yet
+    expect(index.evicted).toBe(0);
+
+    index.touchDocument('articles', 3); // document 3 (index 2) was read: it is now the newest
+    index.upsert(articleDoc(4, 800)); // 3200 > 2400 -> one victim, by the LRU clock
+
+    // The clock is only advanced by a read, so the empty-clock tie-break (lowest index) still applies
+    // inside the resource: index 0 goes first, and index 2 - the touched document - is kept.
+    expect(index.docs[0]?.longText).toBeNull();
+    expect(index.docs[2]?.longText).not.toBeNull();
+    expect(index.docs[3]?.longText).not.toBeNull();
+    expect(index.evicted).toBe(1);
+  });
+});

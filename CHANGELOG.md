@@ -5,6 +5,27 @@ All notable changes to **node-hudu** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Fixed
+
+- **`tier: 'index'` no longer answers body-blind on an asset-heavy tenant.** Text-budget eviction
+  (`search.maxIndexTextBytes`) was plain least-recently-read over every document, and a build inserts
+  articles first and assets second while the access clock is empty — so the article bodies were by
+  construction the oldest documents, and an asset corpus that overflowed the default 64 MiB budget
+  evicted **every** article body before a single asset text was considered. Measured on the
+  reporter's tenant (issue #46): `articles.bodiesIndexed 0`, `articles.bodiesEvicted 2950`, assets
+  still holding 14,467 texts, `meta.degraded` `body-not-indexed`. Eviction is now split per declared
+  long-text source: each source (`article.content`, `asset.fields`) may hold
+  `maxIndexTextBytes / 2` of its own and **borrows** whatever the other source leaves unused, and
+  only a source holding more than that limit is asked to release text. An article corpus that fits
+  inside its share is therefore never evicted to pay for an asset overflow, and a tenant whose text
+  is a single resource still gets the whole bound. Nothing to configure: `maxIndexTextBytes` keeps
+  its meaning as the global bound, and the per-resource counts in `meta.index.docs.<resource>`
+  (`bodiesIndexed` / `bodiesEvicted`) report which resource paid.
+  `meta.reasons` keeps its flat `body-evicted` value — it says that *something* lost its text, and
+  the per-resource counts say whose.
+
 ## [0.8.0] — 2026-09-17
 
 ### Fixed
