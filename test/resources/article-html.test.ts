@@ -805,6 +805,29 @@ describe('round-trip diff: the families a Markdown converter destroys', () => {
     const back = '<h2>Setup</h2><p>Run it.</p>';
     expect(diffArticleRoundTrip(sent, back).filter((f) => f.impact === 'content')).toEqual([]);
   });
+
+  // Regression coverage: these three fixtures are chosen specifically to trip on the
+  // `[^>]*`-spanning regexes the brief itself proposed and this file discarded in favour of
+  // the quote-aware `openTags`/`classOf`/`hasClass` helpers. Confirmed by executing the
+  // brief's original regex-based `countCallouts`/`countAccordions` against these exact
+  // fixtures: the first two silently count 0 callouts in both `sent` and `readBack` (so no
+  // finding would fire), and the third double-counts the accordion to 2 instead of 1 (so the
+  // finding's `detail` would read "accordion: 2 -> 0", not "accordion: 1 -> 0").
+  it('reports a callout dropped even when a preceding attribute contains ">"', () => {
+    const sent = '<div title="a > b" class="callout"><p>Back up first.</p></div>';
+    expect(has(diffArticleRoundTrip(sent, '<p>Back up first.</p>'), 'ROUNDTRIP_CALLOUT_FLATTENED')).toBe(true);
+  });
+
+  it('reports a callout dropped when its class attribute is single-quoted', () => {
+    const sent = "<div class='callout'><p>Back up first.</p></div>";
+    expect(has(diffArticleRoundTrip(sent, '<p>Back up first.</p>'), 'ROUNDTRIP_CALLOUT_FLATTENED')).toBe(true);
+  });
+
+  it('counts an accordion once, not twice, for its own body wrapper', () => {
+    const sent = '<div class="mce-accordion"><summary>More<div class="mce-accordion-body"><p>Detail</p></div></div>';
+    const f = find(diffArticleRoundTrip(sent, '<p>More</p><p>Detail</p>'), 'ROUNDTRIP_ACCORDION_FLATTENED');
+    expect(f?.detail).toEqual(['accordion: 1 -> 0']);
+  });
 });
 
 describe('the module is reachable from the package barrels', () => {

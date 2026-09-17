@@ -1197,7 +1197,7 @@ function diffRawElements(before: string, after: string, add: Add): void {
     add(
       'ROUNDTRIP_RAW_ELEMENT_LOST',
       `<${tag}> count changed across the round trip (${b} -> ${a}). Markdown cannot represent this element, so a transform through it silently drops the whole node.`,
-      { detail: [tag] },
+      { index: before.search(new RegExp(`<${tag}\\b`, 'i')), detail: [tag] },
     );
   }
 }
@@ -1221,25 +1221,29 @@ function diffCallouts(before: string, after: string, add: Add): void {
   add(
     'ROUNDTRIP_CALLOUT_FLATTENED',
     `Callout count changed across the round trip (${b} -> ${a}). A flattened callout keeps its words and loses the signal that they are a warning.`,
-    { detail: [`callout: ${b} -> ${a}`] },
+    { index: indexOfTag(before, 'div', (t) => hasClass(classOf(t.attrs), 'callout')), detail: [`callout: ${b} -> ${a}`] },
   );
 }
 
 /**
- * Accordions: any `<div>`/`<details>` carrying the exact `mce-accordion` class token, plus a
- * bare `<details>` with no such class at all (still an accordion structurally -- Hudu's own
- * check only warns about the missing class, it does not disqualify the element). `hasClass`
- * does an exact token match, so a body wrapper's `mce-accordion-body` class is never
- * mistaken for a second accordion the way a `\bmce-accordion\b` substring test would (`-` is
- * a non-word character, so that word boundary sits INSIDE `-body` too).
+ * Whether an already-scanned `<div>`/`<details>` tag counts as an accordion: a `<div>` needs
+ * the exact `mce-accordion` class token, and a `<details>` counts either way (Hudu's own
+ * check only warns when it lacks the class, it does not disqualify the element). One
+ * predicate checked once per tag -- rather than two additive passes -- so there is no way for
+ * a details element to be matched by both and double-counted.
+ *
+ * The exact-token match matters: a body wrapper's `mce-accordion-body` class must never be
+ * mistaken for a second accordion, which is exactly what a `\bmce-accordion\b` SUBSTRING test
+ * would do (`-` is a non-word character, so that word boundary sits INSIDE `-body` too).
  */
+function isAccordionTag(tag: OpenTag): boolean {
+  return hasClass(classOf(tag.attrs), 'mce-accordion') || /^<details\b/i.test(tag.tag);
+}
+
 function countAccordions(html: string): number {
   let count = 0;
   for (const tag of openTags(html, '(?:div|details)')) {
-    if (hasClass(classOf(tag.attrs), 'mce-accordion')) count += 1;
-  }
-  for (const tag of openTags(html, 'details')) {
-    if (!hasClass(classOf(tag.attrs), 'mce-accordion')) count += 1;
+    if (isAccordionTag(tag)) count += 1;
   }
   return count;
 }
@@ -1251,7 +1255,7 @@ function diffAccordions(before: string, after: string, add: Add): void {
   add(
     'ROUNDTRIP_ACCORDION_FLATTENED',
     `Accordion count changed across the round trip (${b} -> ${a}). Flattening one reveals collapsed content and loses the summary/body split.`,
-    { detail: [`accordion: ${b} -> ${a}`] },
+    { index: indexOfTag(before, '(?:div|details)', isAccordionTag), detail: [`accordion: ${b} -> ${a}`] },
   );
 }
 
@@ -1259,11 +1263,17 @@ function diffAccordions(before: string, after: string, add: Add): void {
  * Task-list check state: item count and checked count. Read through `attrOf` (quote-aware,
  * and bounded by the tag's real end) rather than a `[^>]*`-spanning regex, so a preceding
  * attribute's `>` or a single-quoted `data-checked`/`type` value cannot hide the state.
+ *
+ * `data-checked` is compared case-insensitively (`data-checked="TRUE"` still counts, and
+ * still counts as checked) -- Hudu itself always emits lower case, but the brief's own regex
+ * carried `/i`, and a value comparison that silently stopped matching on case would be exactly
+ * the kind of silent miss this guard exists to prevent.
  */
 function countTaskItems(html: string): number {
   let count = 0;
   for (const tag of openTags(html, 'li')) {
-    if (attrOf(tag.attrs, 'data-checked') !== undefined) count += 1;
+    const state = attrOf(tag.attrs, 'data-checked')?.toLowerCase();
+    if (state === 'true' || state === 'false') count += 1;
   }
   for (const tag of openTags(html, 'input')) {
     if (attrOf(tag.attrs, 'type') === 'checkbox') count += 1;
@@ -1274,7 +1284,7 @@ function countTaskItems(html: string): number {
 function countChecked(html: string): number {
   let count = 0;
   for (const tag of openTags(html, 'li')) {
-    if (attrOf(tag.attrs, 'data-checked') === 'true') count += 1;
+    if (attrOf(tag.attrs, 'data-checked')?.toLowerCase() === 'true') count += 1;
   }
   for (const tag of openTags(html, 'input')) {
     if (attrOf(tag.attrs, 'type') === 'checkbox' && attrOf(tag.attrs, 'checked') !== undefined) count += 1;
@@ -1289,6 +1299,9 @@ function diffTaskState(before: string, after: string, add: Add): void {
   add(
     'ROUNDTRIP_TASK_STATE_LOST',
     `Task-list state changed across the round trip (${items.b} item(s)/${checked.b} checked -> ${items.a}/${checked.a}). Which steps are done is content, not decoration.`,
-    { detail: [`taskItems: ${items.b} -> ${items.a}; checked: ${checked.b} -> ${checked.a}`] },
+    {
+      index: indexOfTag(before, 'li', (t) => attrOf(t.attrs, 'data-checked') !== undefined),
+      detail: [`taskItems: ${items.b} -> ${items.a}; checked: ${checked.b} -> ${checked.a}`],
+    },
   );
 }
