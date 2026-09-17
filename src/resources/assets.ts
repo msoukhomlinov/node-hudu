@@ -257,7 +257,7 @@ export class AssetsResource extends BaseResource<Asset> {
     : [T] extends [undefined]
       ? AsyncIterable<Asset>
       : AsyncIterable<Asset | AssetWithIncludes>;
-  list(companyId: number, params?: CompanyAssetsListParams & { include?: readonly string[] }): AsyncIterable<Asset | AssetWithIncludes> {
+  list(companyId: number, params?: CompanyAssetsListParams & { include?: readonly AssetIncludeGroup[] }): AsyncIterable<Asset | AssetWithIncludes> {
     requireCompanyId(companyId, 'assets.list');
     const groups = validateIncludeGroups(params?.include, 'assets.list');
     const vendor = this.vendorParams(params);
@@ -288,7 +288,7 @@ export class AssetsResource extends BaseResource<Asset> {
         ? Asset[]
         : Asset[] | AssetWithIncludes[]
   >;
-  async listAll(companyId: number, params?: CompanyAssetsListParams & { include?: readonly string[] }): Promise<Asset[] | AssetWithIncludes[]> {
+  async listAll(companyId: number, params?: CompanyAssetsListParams & { include?: readonly AssetIncludeGroup[] }): Promise<Asset[] | AssetWithIncludes[]> {
     requireCompanyId(companyId, 'assets.listAll');
     const groups = validateIncludeGroups(params?.include, 'assets.listAll');
     const vendor = this.vendorParams(params);
@@ -309,7 +309,7 @@ export class AssetsResource extends BaseResource<Asset> {
     : [T] extends [undefined]
       ? AsyncIterable<Page<Asset>>
       : AsyncIterable<Page<Asset> | Page<AssetWithIncludes>>;
-  listPages(companyId: number, params?: CompanyAssetsListParams & { include?: readonly string[] }): AsyncIterable<Page<Asset> | Page<AssetWithIncludes>> {
+  listPages(companyId: number, params?: CompanyAssetsListParams & { include?: readonly AssetIncludeGroup[] }): AsyncIterable<Page<Asset> | Page<AssetWithIncludes>> {
     requireCompanyId(companyId, 'assets.listPages');
     const groups = validateIncludeGroups(params?.include, 'assets.listPages');
     const vendor = this.vendorParams(params);
@@ -465,7 +465,7 @@ export class AssetsResource extends BaseResource<Asset> {
         ? Asset[]
         : Asset[] | AssetWithIncludes[]
   >;
-  async listAllAcrossCompanies(params?: AccountAssetsListParams & { include?: readonly string[] }): Promise<Asset[] | AssetWithIncludes[]> {
+  async listAllAcrossCompanies(params?: AccountAssetsListParams & { include?: readonly AssetIncludeGroup[] }): Promise<Asset[] | AssetWithIncludes[]> {
     // The account-wide list accepts a `company_id` narrowing; a supplied one is
     // validated like a company-scoped path segment so a caller bug is named here.
     if (params !== undefined && 'company_id' in params) {
@@ -488,7 +488,7 @@ export class AssetsResource extends BaseResource<Asset> {
     : [T] extends [undefined]
       ? AsyncIterable<Asset>
       : AsyncIterable<Asset | AssetWithIncludes>;
-  listAcrossCompanies(params?: AccountAssetsListParams & { include?: readonly string[] }): AsyncIterable<Asset | AssetWithIncludes> {
+  listAcrossCompanies(params?: AccountAssetsListParams & { include?: readonly AssetIncludeGroup[] }): AsyncIterable<Asset | AssetWithIncludes> {
     const groups = validateIncludeGroups(params?.include, 'assets.listAcrossCompanies');
     const vendor = this.vendorParams(params);
     const base = paginateItems<Asset>((page, pageSize) => this.fetchAccountPage(vendor, page, pageSize), this.accountPaginationOpts(vendor));
@@ -506,7 +506,7 @@ export class AssetsResource extends BaseResource<Asset> {
     : [T] extends [undefined]
       ? AsyncIterable<Page<Asset>>
       : AsyncIterable<Page<Asset> | Page<AssetWithIncludes>>;
-  listAcrossCompaniesPages(params?: AccountAssetsListParams & { include?: readonly string[] }): AsyncIterable<Page<Asset> | Page<AssetWithIncludes>> {
+  listAcrossCompaniesPages(params?: AccountAssetsListParams & { include?: readonly AssetIncludeGroup[] }): AsyncIterable<Page<Asset> | Page<AssetWithIncludes>> {
     const groups = validateIncludeGroups(params?.include, 'assets.listAcrossCompaniesPages');
     const vendor = this.vendorParams(params);
     const base = paginate<Asset>((page, pageSize) => this.fetchAccountPage(vendor, page, pageSize), this.accountPaginationOpts(vendor));
@@ -606,7 +606,7 @@ export class AssetsResource extends BaseResource<Asset> {
             ? Asset[] | AssetWithIncludes[]
             : AssetSummary[] | Asset[] | AssetSummaryWithIncludes[] | AssetWithIncludes[]
   >;
-  async search(query: string, opts?: AssetSearchOptions & { include?: readonly string[] }): Promise<AssetSummary[] | Asset[] | AssetSummaryWithIncludes[] | AssetWithIncludes[]> {
+  async search(query: string, opts?: AssetSearchOptions & { include?: readonly AssetIncludeGroup[] }): Promise<AssetSummary[] | Asset[] | AssetSummaryWithIncludes[] | AssetWithIncludes[]> {
     const size = helperLimit(opts?.limit);
     if (typeof query !== 'string' || query.trim().length === 0) {
       throw new HuduConfigError('assets.search requires a non-empty query');
